@@ -1,0 +1,33 @@
+:toc:
+:toc-placement!:
+
+= WildFly Galleon Plugins
+
+ifdef::env-github[]
+[link=https://travis-ci.org/aloubyansky/pm]
+image:https://travis-ci.org/aloubyansky/pm.svg?branch=master["Build Status", link="https://travis-ci.org/aloubyansky/pm"]
+endif::[]
+
+toc::[]
+
+= Project Modules
+
+== Module `wildfly-provisioning-parent`
+
+Defines main version and common dependencies of the project.
+
+== Module `wildfly-galleon-plugins`
+
+Contains implementations of Galleon WildFly-specific provisioning plugins.
+
+== Module `wildfly-galleon-maven-plugins`
+
+Maven plugins that create and install WildFly feature-packs.
+
+== Module `wildfly-config-gen`
+
+Contains WildFly configuration generator.
+
+== Module `wildfly-feature-spec-gen`
+
+Contains WildFly feature spec generator.
