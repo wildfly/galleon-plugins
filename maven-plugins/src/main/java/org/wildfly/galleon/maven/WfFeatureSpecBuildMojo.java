@@ -77,7 +77,7 @@ import org.eclipse.aether.resolution.ArtifactResolutionException;
  *
  * @author Emmanuel Hugonnet (c) 2017 Red Hat, inc.
  */
-@Mojo(name = "wf-spec", requiresDependencyResolution = ResolutionScope.RUNTIME, defaultPhase = LifecyclePhase.GENERATE_RESOURCES)
+@Mojo(name = "generate-feature-specs", requiresDependencyResolution = ResolutionScope.RUNTIME, defaultPhase = LifecyclePhase.GENERATE_RESOURCES)
 public class WfFeatureSpecBuildMojo extends AbstractMojo {
 
     private static final String MODULES = "modules";
@@ -88,22 +88,22 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
     @Parameter(defaultValue = "${session}", readonly = true, required = true)
     protected MavenSession session;
 
-    @Parameter(required = true)
+    @Parameter(alias = "output-dir", required = true)
     private File outputDirectory;
 
-    @Parameter(required = false)
+    @Parameter(alias = "feature-packs", required = false)
     private List<ArtifactItem> featurePacks;
 
-    @Parameter(required = false)
+    @Parameter(alias = "external-artifacts", required = false)
     private List<ExternalArtifact> externalArtifacts;
 
-    @Parameter(required = true)
+    @Parameter(alias = "standalone-extensions", required = true)
     private List<String> standaloneExtensions;
 
-    @Parameter(required = true)
+    @Parameter(alias = "domain-extensions", required = true)
     private List<String> domainExtensions;
 
-    @Parameter(required = true)
+    @Parameter(alias = "host-extensions", required = true)
     private List<String> hostExtensions;
 
     @Component
