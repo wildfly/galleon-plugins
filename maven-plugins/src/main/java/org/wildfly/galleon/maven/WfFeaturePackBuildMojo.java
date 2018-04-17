@@ -89,7 +89,7 @@ import org.wildfly.galleon.maven.ModuleParseResult.ModuleDependency;
  *
  * @author Alexey Loubyansky
  */
-@Mojo(name = "wf-build", requiresDependencyResolution = ResolutionScope.RUNTIME, defaultPhase = LifecyclePhase.COMPILE)
+@Mojo(name = "build-feature-pack", requiresDependencyResolution = ResolutionScope.RUNTIME, defaultPhase = LifecyclePhase.COMPILE)
 public class WfFeaturePackBuildMojo extends AbstractMojo {
 
     private static final boolean OS_WINDOWS = PropertyUtils.isWindows();
@@ -141,8 +141,8 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
     /**
      * The release name
      */
-    @Parameter(alias="feature-pack-name", defaultValue = "${project.artifactId}", required=false)
-    private String featurePackName;
+    @Parameter(alias="feature-pack-artifact-id", defaultValue = "${project.artifactId}", required=false)
+    private String fpArtifactId;
 
     @Inject
     private MavenPluginUtil mavenPluginUtil;
@@ -190,12 +190,12 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         final Path workDir = Paths.get(buildName, WfConstants.LAYOUT);
 //        getLog().info("WfFeaturePackBuildMojo.execute " + workDir);
         IoUtils.recursiveDelete(workDir);
-        final Path fpDir = workDir.resolve(project.getGroupId()).resolve(featurePackName).resolve(project.getVersion());
+        final Path fpDir = workDir.resolve(project.getGroupId()).resolve(fpArtifactId).resolve(project.getVersion());
         final Path fpPackagesDir = fpDir.resolve(Constants.PACKAGES);
 
         // feature-pack builder
         final FeaturePackLayout.Builder fpBuilder = FeaturePackLayout.builder(
-                FeaturePackSpec.builder(ArtifactCoords.newGav(project.getGroupId(), featurePackName, project.getVersion())));
+                FeaturePackSpec.builder(ArtifactCoords.newGav(project.getGroupId(), fpArtifactId, project.getVersion())));
 
         // feature-pack build config
         try {
