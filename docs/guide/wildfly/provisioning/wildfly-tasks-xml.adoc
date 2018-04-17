@@ -1,0 +1,37 @@
+#### wildfly-tasks.xml
+
+WildFly feature-packs may include *wildfly-tasks.xml* file into their *resources/wildfly* directory. The currently supported tasks include:
+
+** set filesystem permissions on the specified paths;
+
+** create empty directories;
+
+** correct line endings for the target operating system for the specified files.
+
+Here is an example of *wildfly-tasks.xml*:
+
+[options="nowrap"]
+ <tasks xmlns="urn:wildfly:wildfly-feature-pack-tasks:2.0">
+    <mkdirs>
+        <dir name="domain/data/content"/>
+        <dir name="standalone/lib/ext"/>
+        <dir name="domain/tmp/auth"/>
+        <dir name="standalone/tmp/auth"/>
+        <dir name=".installation"/>
+    </mkdirs>
+    <file-permissions>
+        <permission value="755">
+            <filter pattern="*.sh" include="true"/>
+            <filter pattern="*" include="false"/>
+        </permission>
+        <permission value="700">
+            <filter pattern="*/tmp/auth" include="true"/>
+            <filter pattern="*" include="false"/>
+        </permission>
+        <permission value="600">
+            <filter pattern="*-users.properties" include="true"/>
+            <filter pattern="*/.installation" include="true"/>
+            <filter pattern="*" include="false"/>
+        </permission>
+    </file-permissions>
+ </tasks>
