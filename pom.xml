@@ -29,7 +29,7 @@
 
   <groupId>org.wildfly.galleon-plugins</groupId>
   <artifactId>wildfly-provisioning-parent</artifactId>
-  <version>1.0.0.Alpha2</version>
+  <version>1.0.0.Alpha3-SNAPSHOT</version>
   <packaging>pom</packaging>
 
   <name>WildFly Galleon Plugins Parent</name>
@@ -75,7 +75,7 @@
     <version.org.eclipse.aether>1.1.0</version.org.eclipse.aether>
     <version.org.aesh>1.2-SNAPSHOT</version.org.aesh>
     <version.org.aesh-extensions>1.1</version.org.aesh-extensions>
-    <version.org.jboss.galleon>1.0.0.Alpha2</version.org.jboss.galleon>
+    <version.org.jboss.galleon>1.0.0.Alpha3-SNAPSHOT</version.org.jboss.galleon>
     <version.org.jboss.dmr>1.5.0.Final</version.org.jboss.dmr>
     <version.org.jboss.jandex>2.0.3.Final</version.org.jboss.jandex>
     <version.org.jboss.modules.jboss-modules>1.7.0.Final</version.org.jboss.modules.jboss-modules>
