@@ -94,6 +94,12 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
 
     private static final boolean OS_WINDOWS = PropertyUtils.isWindows();
 
+    private static boolean isProvided(String module) {
+        return module.startsWith("java.") ||
+                module.startsWith("jdk.") ||
+                module.equals("org.jboss.modules.main");
+    }
+
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
     protected MavenProject project;
 
@@ -663,7 +669,7 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
                         }
                         if (depSrc != null) {
                             pkgSpecBuilder.addPackageDep(depSrc.getKey(), depName, moduleDep.isOptional());
-                        } else if (moduleDep.isOptional()) {
+                        } else if (moduleDep.isOptional() || isProvided(depName)) {
                             // getLog().warn("UNSATISFIED EXTERNAL OPTIONAL DEPENDENCY " + packageName + " -> " + depName);
                         } else {
                             throw new MojoExecutionException(
