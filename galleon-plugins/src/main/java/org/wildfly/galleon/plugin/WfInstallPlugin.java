@@ -439,6 +439,9 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private void copyArtifacts(final WildFlyPackageTasks tasks) throws ProvisioningException {
         for(CopyArtifact copyArtifact : tasks.getCopyArtifacts()) {
             final String gavString = versionResolver.resolveProperty(copyArtifact.getArtifact());
+            if(gavString == null) {
+                throw new ProvisioningException("Failed to resolve the version of " + copyArtifact.getArtifact());
+            }
             try {
                 final ArtifactCoords coords = fromJBossModules(gavString, "jar");
                 final Path jarSrc = runtime.resolveArtifact(coords);

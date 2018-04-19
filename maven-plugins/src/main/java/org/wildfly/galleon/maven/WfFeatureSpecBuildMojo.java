@@ -235,6 +235,11 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
         lines.add("<domain-controller>");
         lines.add("<local />");
         lines.add("</domain-controller>");
+        lines.add("<interfaces>");
+        lines.add("<interface name=\"management\">");
+        lines.add("<inet-address value=\"127.0.0.1\"/>");
+        lines.add("</interface>");
+        lines.add("</interfaces>");
         lines.add("</host>");
         Files.write(wildfly.resolve("domain").resolve("configuration").resolve("host.xml"), lines);
     }
