@@ -425,7 +425,7 @@ public class WfProvisionedConfigHandler implements ProvisionedConfigHandler {
         }
 
 //        try {
-//            writer = Files.newBufferedWriter(Paths.get(System.getProperty("user.home")).resolve("pm-scripts").resolve(config.getName()));
+//            writer = Files.newBufferedWriter(Paths.get(System.getProperty("user.home")).resolve("galleon-scripts").resolve(config.getName()));
 //        } catch (IOException e) {
 //            // TODO Auto-generated catch block
 //            e.printStackTrace();

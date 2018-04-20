@@ -352,63 +352,60 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 final Element element = artifacts.get(i);
                 assert element.getLocalName().equals("artifact");
                 final Attribute attribute = element.getAttribute("name");
-                final String nameExpr = attribute.getValue();
-                if (nameExpr.startsWith("${") && nameExpr.endsWith("}")) {
-                    final String exprBody = nameExpr.substring(2, nameExpr.length() - 1);
-                    final int optionsIndex = exprBody.indexOf('?');
-                    final String artifactName;
-                    final boolean jandex;
+                String coordsStr = attribute.getValue();
+                boolean jandex = false;
+                if (coordsStr.startsWith("${") && coordsStr.endsWith("}")) {
+                    coordsStr = coordsStr.substring(2, coordsStr.length() - 1);
+                    final int optionsIndex = coordsStr.indexOf('?');
                     if (optionsIndex >= 0) {
-                        artifactName = exprBody.substring(0, optionsIndex);
-                        jandex = nameExpr.indexOf("jandex", optionsIndex) >= 0;
-                    } else {
-                        artifactName = exprBody;
-                        jandex = false;
+                        jandex = coordsStr.indexOf("jandex", optionsIndex) >= 0;
+                        coordsStr = coordsStr.substring(0, optionsIndex);
                     }
-                    final String resolved = versionResolver.resolveProperty(artifactName);
-                    if (resolved != null) {
-                        final ArtifactCoords coords = fromJBossModules(resolved, "jar");
-                        final Path moduleArtifact;
-
-                        try {
-                            moduleArtifact = runtime.resolveArtifact(coords);
-                        } catch (ProvisioningException e) {
-                            throw new IOException(e);
-                        }
-                        if (thinServer) {
-                            // ignore jandex variable, just resolve coordinates to a string
-                            attribute.setValue(resolved);
-                            addToInstallationCp(moduleArtifact);
-                        } else {
-                            final Path targetDir = installDir.resolve(fpModuleDir.relativize(moduleTemplate.getParent()));
-                            final String artifactFileName = moduleArtifact.getFileName().toString();
-                            final String finalFileName;
-
-                            if (jandex) {
-                                final int lastDot = artifactFileName.lastIndexOf(".");
-                                final File target = new File(targetDir.toFile(), new StringBuilder()
-                                    .append(artifactFileName.substring(0, lastDot))
-                                    .append("-jandex")
-                                    .append(artifactFileName.substring(lastDot)).toString()
-                                );
-                                JandexIndexer.createIndex(moduleArtifact.toFile(), new FileOutputStream(target), runtime.getMessageWriter());
-                                finalFileName = target.getName();
-                            } else {
-                                finalFileName = artifactFileName;
-                                final Path targetModulePath = targetDir.resolve(artifactFileName);
-                                Files.copy(moduleArtifact, targetModulePath, StandardCopyOption.REPLACE_EXISTING);
-                                addToInstallationCp(targetModulePath);
-                            }
-                            element.setLocalName("resource-root");
-                            attribute.setLocalName("path");
-                            attribute.setValue(finalFileName);
-                        }
-                        if (schemaGroups.contains(coords.getGroupId())) {
-                            extractSchemas(moduleArtifact);
-                        }
-                    }
+                    coordsStr = versionResolver.resolveProperty(coordsStr);
                 }
-                // if any step fails, don't change anything at all for that artifact
+
+                if(coordsStr == null) {
+                    continue;
+                }
+
+                final ArtifactCoords coords = fromJBossModules(coordsStr, "jar");
+                final Path moduleArtifact;
+
+                try {
+                    moduleArtifact = runtime.resolveArtifact(coords);
+                } catch (ProvisioningException e) {
+                    throw new IOException(e);
+                }
+                if (thinServer) {
+                    // ignore jandex variable, just resolve coordinates to a string
+                    attribute.setValue(coordsStr);
+                    addToInstallationCp(moduleArtifact);
+                } else {
+                    final Path targetDir = installDir.resolve(fpModuleDir.relativize(moduleTemplate.getParent()));
+                    final String artifactFileName = moduleArtifact.getFileName().toString();
+                    final String finalFileName;
+
+                    if (jandex) {
+                        final int lastDot = artifactFileName.lastIndexOf(".");
+                        final File target = new File(targetDir.toFile(),
+                                new StringBuilder().append(artifactFileName.substring(0, lastDot)).append("-jandex")
+                                        .append(artifactFileName.substring(lastDot)).toString());
+                        JandexIndexer.createIndex(moduleArtifact.toFile(), new FileOutputStream(target),
+                                runtime.getMessageWriter());
+                        finalFileName = target.getName();
+                    } else {
+                        finalFileName = artifactFileName;
+                        final Path targetModulePath = targetDir.resolve(artifactFileName);
+                        Files.copy(moduleArtifact, targetModulePath, StandardCopyOption.REPLACE_EXISTING);
+                        addToInstallationCp(targetModulePath);
+                    }
+                    element.setLocalName("resource-root");
+                    attribute.setLocalName("path");
+                    attribute.setValue(finalFileName);
+                }
+                if (schemaGroups.contains(coords.getGroupId())) {
+                    extractSchemas(moduleArtifact);
+                }
             }
         }
         // now serialize the result

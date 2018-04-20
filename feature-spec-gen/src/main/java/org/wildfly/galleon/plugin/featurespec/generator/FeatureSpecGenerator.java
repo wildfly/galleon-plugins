@@ -189,7 +189,7 @@ public class FeatureSpecGenerator {
 
    private static ModelNode readFeatures(ModelControllerClient client) throws IOException, ProvisioningDescriptionException, XMLStreamException {
        ModelNode address = new ModelNode().setEmptyList();
-       ModelNode op = Operations.createOperation("read-feature", address);
+       ModelNode op = Operations.createOperation("read-feature-description", address);
        op.get("recursive").set(true);
        ModelNode result = client.execute(op);
        checkOutcome(result);
