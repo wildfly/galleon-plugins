@@ -28,6 +28,7 @@ public interface WfConstants {
     String CONFIG = "config";
     String CONTENT = "content";
     String DOCS = "docs";
+    String DOCS_LICENSES = "docs.licenses";
     String DOCS_SCHEMA = "docs.schema";
     String DOMAIN = "domain";
     String HOST = "host";
