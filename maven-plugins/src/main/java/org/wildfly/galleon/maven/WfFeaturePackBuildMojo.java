@@ -260,6 +260,7 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
 
         if(docsBuilder != null) {
             if(docsLicensesBuilder != null) {
+                docsLicensesBuilder.addPackageDep("docs.licenses.xsl");
                 addPackage(fpPackagesDir, fpBuilder, docsLicensesBuilder);
             }
             if(docsSchemasBuilder != null) {

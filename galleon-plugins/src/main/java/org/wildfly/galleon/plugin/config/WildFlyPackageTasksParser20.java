@@ -56,6 +56,7 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
         TASKS("tasks"),
         UNIX("unix"),
         WINDOWS("windows"),
+        XSL("xsl"),
 
         // default unknown element
         UNKNOWN(null);
@@ -75,6 +76,7 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
             elementsMap.put(new QName(NAMESPACE_2_0, Element.TASKS.getLocalName()), Element.TASKS);
             elementsMap.put(new QName(NAMESPACE_2_0, Element.UNIX.getLocalName()), Element.UNIX);
             elementsMap.put(new QName(NAMESPACE_2_0, Element.WINDOWS.getLocalName()), Element.WINDOWS);
+            elementsMap.put(new QName(NAMESPACE_2_0, Element.XSL.getLocalName()), Element.XSL);
             elements = elementsMap;
         }
 
@@ -152,6 +154,7 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
     private final FileFilterModelParser20 fileFilterModelParser;
     private final FilePermissionsModelParser20 filePermissionsModelParser;
     private final DeletePathsModelParser20 deletePathsModelParser;
+    private final XslTransformModelParser20 xslModelParser;
 
     WildFlyPackageTasksParser20() {
         this.fileFilterModelParser = new FileFilterModelParser20();
@@ -159,6 +162,7 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
         this.copyPathsModelParser = new CopyPathsModelParser20();
         this.filePermissionsModelParser = new FilePermissionsModelParser20(this.fileFilterModelParser);
         this.deletePathsModelParser = new DeletePathsModelParser20();
+        this.xslModelParser = new XslTransformModelParser20();
     }
 
     @Override
@@ -189,6 +193,9 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
                             break;
                         case DELETE_PATHS:
                             builder.addDeletePaths(deletePathsModelParser.parseDeletePaths(reader));
+                            break;
+                        case XSL:
+                            builder.addXslTransform(xslModelParser.parseCopyPaths(reader));
                             break;
                         case FILE_PERMISSIONS:
                             builder.addFilePermissions(filePermissionsModelParser.parseFilePermissions(reader));
