@@ -41,6 +41,7 @@ public class WildFlyPackageTasks {
         private List<CopyArtifact> copyArtifacts = Collections.emptyList();
         private List<CopyPath> copyPaths = Collections.emptyList();
         private List<DeletePath> deletePaths = Collections.emptyList();
+        private List<XslTransform> xslTransform = Collections.emptyList();
         private List<FilePermission> filePermissions = Collections.emptyList();
         private List<String> mkDirs = Collections.emptyList();
         private List<FileFilter> windowsLineEndFilters = Collections.emptyList();
@@ -54,22 +55,18 @@ public class WildFlyPackageTasks {
             return this;
         }
 
+        public Builder addCopyArtifacts(List<CopyArtifact> copyArtifacts) {
+            this.copyArtifacts = CollectionUtils.addAll(this.copyArtifacts, copyArtifacts);
+            return this;
+        }
+
         public Builder addCopyPath(CopyPath copy) {
             copyPaths = CollectionUtils.add(copyPaths, copy);
             return this;
         }
 
-        public Builder addCopyArtifacts(List<CopyArtifact> copyArtifacts) {
-            for(CopyArtifact ca : copyArtifacts) {
-                addCopyArtifact(ca);
-            }
-            return this;
-        }
-
         public Builder addCopyPaths(List<CopyPath> copyPaths) {
-            for(CopyPath ca : copyPaths) {
-                addCopyPath(ca);
-            }
+            this.copyPaths = CollectionUtils.addAll(this.copyPaths, copyPaths);
             return this;
         }
 
@@ -79,9 +76,7 @@ public class WildFlyPackageTasks {
         }
 
         public Builder addDeletePaths(List<DeletePath> deletePaths) {
-            for(DeletePath dp : deletePaths) {
-                addDeletePath(dp);
-            }
+            this.deletePaths = CollectionUtils.addAll(this.deletePaths, deletePaths);
             return this;
         }
 
@@ -91,9 +86,7 @@ public class WildFlyPackageTasks {
         }
 
         public Builder addFilePermissions(List<FilePermission> filePermissions) {
-            for(FilePermission fp : filePermissions) {
-                addFilePermissions(fp);
-            }
+            this.filePermissions = CollectionUtils.addAll(this.filePermissions, filePermissions);
             return this;
         }
 
@@ -103,10 +96,12 @@ public class WildFlyPackageTasks {
         }
 
         public Builder addMkDirs(List<String> mkdirs) {
-            for(String mkdir : mkdirs) {
-                addMkDirs(mkdir);
-            }
+            this.mkDirs = CollectionUtils.addAll(mkDirs, mkdirs);
             return this;
+        }
+
+        public void addXslTransform(List<XslTransform> xslTransform) {
+            this.xslTransform = CollectionUtils.addAll(this.xslTransform, xslTransform);
         }
 
         public Builder addWindowsLineEndFilter(FileFilter filter) {
@@ -115,9 +110,7 @@ public class WildFlyPackageTasks {
         }
 
         public Builder addWindowsLineEndFilters(List<FileFilter> filters) {
-            for(FileFilter filter : filters) {
-                addWindowsLineEndFilter(filter);
-            }
+            this.windowsLineEndFilters = CollectionUtils.addAll(windowsLineEndFilters, filters);
             return this;
         }
 
@@ -127,9 +120,7 @@ public class WildFlyPackageTasks {
         }
 
         public Builder addUnixLineEndFilters(List<FileFilter> filters) {
-            for(FileFilter filter : filters) {
-                addUnixLineEndFilter(filter);
-            }
+            unixLineEndFilters = CollectionUtils.addAll(unixLineEndFilters, filters);
             return this;
         }
 
@@ -155,6 +146,7 @@ public class WildFlyPackageTasks {
     private final List<CopyArtifact> copyArtifacts;
     private final List<CopyPath> copyPaths;
     private final List<DeletePath> deletePaths;
+    private final List<XslTransform> xslTransform;
     private final List<FilePermission> filePermissions;
     private final List<String> mkDirs;
     private final List<FileFilter> windowsLineEndFilters;
@@ -164,6 +156,7 @@ public class WildFlyPackageTasks {
         this.copyArtifacts = CollectionUtils.unmodifiable(builder.copyArtifacts);
         this.copyPaths = CollectionUtils.unmodifiable(builder.copyPaths);
         this.deletePaths = CollectionUtils.unmodifiable(builder.deletePaths);
+        this.xslTransform = CollectionUtils.unmodifiable(builder.xslTransform);
         this.filePermissions = CollectionUtils.unmodifiable(builder.filePermissions);
         this.mkDirs = CollectionUtils.unmodifiable(builder.mkDirs);
         this.windowsLineEndFilters = CollectionUtils.unmodifiable(builder.windowsLineEndFilters);
@@ -192,6 +185,14 @@ public class WildFlyPackageTasks {
 
     public List<DeletePath> getDeletePaths() {
         return deletePaths;
+    }
+
+    public boolean hasXslTransform() {
+        return !xslTransform.isEmpty();
+    }
+
+    public List<XslTransform> getXslTransform() {
+        return xslTransform;
     }
 
     public boolean hasFilePermissions() {

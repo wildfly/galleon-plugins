@@ -49,6 +49,14 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Stream;
 
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
+import javax.xml.transform.stream.StreamSource;
+
 import nu.xom.Attribute;
 import nu.xom.Builder;
 import nu.xom.Document;
@@ -76,6 +84,7 @@ import org.wildfly.galleon.plugin.config.CopyPath;
 import org.wildfly.galleon.plugin.config.DeletePath;
 import org.wildfly.galleon.plugin.config.FilePermission;
 import org.wildfly.galleon.plugin.config.WildFlyPackageTasks;
+import org.wildfly.galleon.plugin.config.XslTransform;
 import org.wildfly.galleon.plugin.server.CliScriptRunner;
 
 /**
@@ -92,7 +101,9 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private PropertyResolver versionResolver;
     private List<Path> installationClassPath = new ArrayList<>();
 
-    private PropertyResolver tasksProps;
+    private Map<ArtifactCoords.Gav, Properties> fpTasksProps = Collections.emptyMap();
+    private Properties mergedTaskProps = new Properties();
+    private PropertyResolver mergedTaskPropsResolver;
 
     private boolean thinServer;
     private Set<String> schemaGroups = Collections.emptySet();
@@ -100,6 +111,10 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private final PluginOption mavenDistOption = PluginOption.builder("jboss-maven-dist").hasNoValue().build();
 
     private List<DeletePath> pathsToDelete = Collections.emptyList();
+
+    private DocumentBuilderFactory docBuilderFactory;
+    private TransformerFactory xsltFactory;
+    private Map<String, Transformer> xslTransformers = Collections.emptyMap();
 
     @Override
     protected List<PluginOption> initPluginOptions() {
@@ -118,7 +133,6 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         this.runtime = runtime;
         thinServer = runtime.isOptionSet(mavenDistOption);
 
-        Properties provisioningProps = new Properties();
         final Map<String, String> artifactVersions = new HashMap<>();
         for(FeaturePackRuntime fp : runtime.getFeaturePacks()) {
             final Path wfRes = fp.getResource(WfConstants.WILDFLY);
@@ -145,14 +159,14 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
             final Path tasksPropsPath = wfRes.resolve(WfConstants.WILDFLY_TASKS_PROPS);
             if(Files.exists(tasksPropsPath)) {
-                if(!provisioningProps.isEmpty()) {
-                    provisioningProps = new Properties(provisioningProps);
-                }
+                final Properties fpProps = new Properties();
                 try(InputStream in = Files.newInputStream(tasksPropsPath)) {
-                    provisioningProps.load(in);
+                    fpProps.load(in);
                 } catch (IOException e) {
                     throw new ProvisioningException(Errors.readFile(tasksPropsPath), e);
                 }
+                fpTasksProps = CollectionUtils.put(fpTasksProps, fp.getGav(), fpProps);
+                mergedTaskProps.putAll(fpProps);
             }
 
             if(fp.containsPackage(WfConstants.DOCS_SCHEMA)) {
@@ -169,7 +183,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 }
             }
         }
-        tasksProps = new MapPropertyResolver(provisioningProps);
+        mergedTaskPropsResolver = new MapPropertyResolver(mergedTaskProps);
         versionResolver = new MapPropertyResolver(artifactVersions);
 
         for(FeaturePackRuntime fp : runtime.getFeaturePacks()) {
@@ -258,6 +272,9 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 if(pkgTasks.hasCopyPaths()) {
                     copyPaths(pkgTasks, pmWfDir);
                 }
+                if(pkgTasks.hasXslTransform()) {
+                    xslTransform(fp, pkgTasks, pmWfDir);
+                }
                 if(pkgTasks.hasMkDirs()) {
                     mkdirs(pkgTasks, this.runtime.getStagedDir());
                 }
@@ -273,6 +290,71 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 }
             }
         }
+    }
+
+    private void xslTransform(FeaturePackRuntime fp, WildFlyPackageTasks pkgTasks, Path pmWfDir) throws ProvisioningException {
+
+        if(docBuilderFactory == null) {
+            docBuilderFactory = DocumentBuilderFactory.newInstance();
+        }
+
+        for(XslTransform xslt : pkgTasks.getXslTransform()) {
+            final Path src = runtime.getStagedDir().resolve(xslt.getSrc());
+            if(!Files.exists(src)) {
+                throw new ProvisioningException(Errors.pathDoesNotExist(src));
+            }
+            final Path output = runtime.getStagedDir().resolve(xslt.getOutput());
+            if(Files.exists(output)) {
+                throw new ProvisioningException(Errors.pathAlreadyExists(output));
+            }
+
+            try (InputStream srcInput = Files.newInputStream(src);
+                    OutputStream outStream = Files.newOutputStream(output)) {
+                final DocumentBuilder builder = docBuilderFactory.newDocumentBuilder();
+                final org.w3c.dom.Document document = builder.parse(srcInput);
+                final Transformer transformer = getXslTransformer(xslt.getStylesheet());
+                if(xslt.hasParams()) {
+                    for(Map.Entry<String, String> param : xslt.getParams().entrySet()) {
+                        transformer.setParameter(param.getKey(), param.getValue());
+                    }
+                }
+                final Properties taskProps = fpTasksProps.get(fp.getGav());
+                if(taskProps != null) {
+                    for (Map.Entry<Object, Object> prop : taskProps.entrySet()) {
+                        transformer.setParameter(prop.getKey().toString(), prop.getValue());
+                    }
+                }
+                final DOMSource source = new DOMSource(document);
+                final StreamResult result = new StreamResult(outStream);
+                transformer.transform(source, result);
+            } catch(ProvisioningException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new ProvisioningException("Failed to transform " + xslt.getSrc() + " with " + xslt.getStylesheet() + " to " + xslt.getOutput(), e);
+            }
+        }
+    }
+
+    private Transformer getXslTransformer(String stylesheet) throws ProvisioningException {
+        Transformer transformer = xslTransformers.get(stylesheet);
+        if(transformer != null) {
+            return transformer;
+        }
+        final Path p = runtime.getStagedDir().resolve(stylesheet);
+        if(!Files.exists(p)) {
+            throw new ProvisioningException(Errors.pathDoesNotExist(p));
+        }
+        try (InputStream styleInput = Files.newInputStream(p)) {
+            final StreamSource stylesource = new StreamSource(styleInput);
+            if(xsltFactory == null) {
+                xsltFactory = TransformerFactory.newInstance();
+            }
+            transformer = xsltFactory.newTransformer(stylesource);
+        } catch (Exception e) {
+            throw new ProvisioningException("Failed to initialize a transformer for " + stylesheet, e);
+        }
+        xslTransformers = CollectionUtils.put(xslTransformers, stylesheet, transformer);
+        return transformer;
     }
 
     private void processModules(ArtifactCoords.Gav fp, String pkgName, Path fpModuleDir) throws ProvisioningException {
@@ -501,7 +583,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
                                 @Override
                                 public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-                                    PropertyReplacer.copy(file, target.resolve(src.relativize(file)), tasksProps);
+                                    PropertyReplacer.copy(file, target.resolve(src.relativize(file)), mergedTaskPropsResolver);
                                     return FileVisitResult.CONTINUE;
                                 }
                             });
