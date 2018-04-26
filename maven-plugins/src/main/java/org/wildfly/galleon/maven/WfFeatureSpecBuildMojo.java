@@ -120,19 +120,21 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
 
         final long startTime = System.currentTimeMillis();
 
-        Path tmpModules = null;
+        Path modulesDir = null;
+        Path wildflyDir = null;
         Properties props = new Properties();
         int specsTotal = -1;
         try {
-            tmpModules = Files.createTempDirectory(MODULES);
-            specsTotal = doExecute(tmpModules);
+            modulesDir = Files.createTempDirectory(MODULES);
+            wildflyDir = Files.createTempDirectory("wildfly-specs-dist");
+            specsTotal = doExecute(wildflyDir, modulesDir);
         } catch (RuntimeException | Error | MojoExecutionException | MojoFailureException e) {
             throw e;
         } catch (IOException | MavenFilteringException ex) {
             throw new MojoExecutionException(ex.getMessage(), ex);
         } finally {
             clearXMLConfiguration(props);
-            IoUtils.recursiveDelete(tmpModules);
+            IoUtils.recursiveDelete(modulesDir);
 
             if(getLog().isDebugEnabled() && specsTotal >= 0) {
                 final long totalTime = System.currentTimeMillis() - startTime;
@@ -142,27 +144,26 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
         }
     }
 
-    private int doExecute(Path tmpModules) throws MojoExecutionException, MojoFailureException, MavenFilteringException, IOException {
+    private int doExecute(Path wildflyDir, Path modulesDir) throws MojoExecutionException, MojoFailureException, MavenFilteringException, IOException {
 
-        final Path wildfly = outputDirectory.toPath().resolve("wildfly");
-        Files.createDirectories(wildfly.resolve("standalone").resolve("configuration"));
-        Files.createDirectories(wildfly.resolve("domain").resolve("configuration"));
-        Files.createDirectories(wildfly.resolve("bin"));
-        Files.createFile(wildfly.resolve("bin").resolve("jboss-cli-logging.properties"));
-        copyJbossModule(wildfly);
+        Files.createDirectories(wildflyDir.resolve("standalone").resolve("configuration"));
+        Files.createDirectories(wildflyDir.resolve("domain").resolve("configuration"));
+        Files.createDirectories(wildflyDir.resolve("bin"));
+        Files.createFile(wildflyDir.resolve("bin").resolve("jboss-cli-logging.properties"));
+        copyJbossModule(wildflyDir);
 
         final List<Artifact> featurePackArtifacts = new ArrayList<>();
-        final Set<String> inheritedFeatures = getInheritedFeatures(tmpModules, featurePackArtifacts);
-        final Map<String, Artifact> buildArtifacts = collectBuildArtifacts(tmpModules, featurePackArtifacts);
+        final Set<String> inheritedFeatures = getInheritedFeatures(modulesDir, featurePackArtifacts);
+        final Map<String, Artifact> buildArtifacts = collectBuildArtifacts(modulesDir, featurePackArtifacts);
 
-        ModuleXmlVersionResolver.filterAndConvertModules(tmpModules, wildfly.resolve(MODULES), buildArtifacts, getLog());
+        ModuleXmlVersionResolver.filterAndConvertModules(modulesDir, wildflyDir.resolve(MODULES), buildArtifacts, getLog());
         for (Resource resource : project.getResources()) {
             Path resourceDir = Paths.get(resource.getDirectory());
             if (Files.exists(resourceDir.resolve(MODULES))) {
-                ModuleXmlVersionResolver.filterAndConvertModules(resourceDir.resolve(MODULES), wildfly.resolve(MODULES), buildArtifacts, getLog());
+                ModuleXmlVersionResolver.filterAndConvertModules(resourceDir.resolve(MODULES), wildflyDir.resolve(MODULES), buildArtifacts, getLog());
             }
         }
-        addBasicConfigs(wildfly);
+        addBasicConfigs(wildflyDir);
 
         final Artifact pluginArtifact = project.getPluginArtifactMap().get("org.wildfly.galleon-plugins:wildfly-galleon-maven-plugins");
         final ArtifactItem item = new ArtifactItem();
@@ -182,13 +183,11 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
         }
 
         try {
-            return FeatureSpecGeneratorInvoker.generateSpecs(wildfly, inheritedFeatures, outputDirectory.toPath(),
+            return FeatureSpecGeneratorInvoker.generateSpecs(wildflyDir, inheritedFeatures, outputDirectory.toPath(),
                     buildCp.toArray(new URL[buildCp.size()]),
                     getLog());
         } catch (ProvisioningException e) {
             throw new MojoExecutionException("Feature spec generator failed", e);
-        } finally {
-            IoUtils.recursiveDelete(wildfly);
         }
     }
 
