@@ -313,7 +313,7 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
             }
             featurePackArtifacts.add(fpArtifact);
             File archive = fpArtifact.getFile();
-            Path tmpArchive = Files.createTempDirectory(fp.toString());
+            Path tmpArchive = Files.createTempDirectory(fp.getGroupId() + '_' + fp.getArtifactId() + '_' + fp.getVersion());
             try {
                 UnArchiver unArchiver;
                 try {
