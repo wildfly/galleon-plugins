@@ -100,6 +100,10 @@ public class WildFlyPackageTasks {
             return this;
         }
 
+        public void addXslTransform(XslTransform xslTransform) {
+            this.xslTransform = CollectionUtils.add(this.xslTransform, xslTransform);
+        }
+
         public void addXslTransform(List<XslTransform> xslTransform) {
             this.xslTransform = CollectionUtils.addAll(this.xslTransform, xslTransform);
         }
