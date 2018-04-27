@@ -22,7 +22,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
-
 import javax.xml.stream.XMLStreamException;
 
 import org.jboss.galleon.Errors;
@@ -46,6 +45,7 @@ public class WildFlyPackageTasks {
         private List<String> mkDirs = Collections.emptyList();
         private List<FileFilter> windowsLineEndFilters = Collections.emptyList();
         private List<FileFilter> unixLineEndFilters = Collections.emptyList();
+        private List<ExampleFpConfigs> exampleConfigs = Collections.emptyList();
 
         private Builder() {
         }
@@ -128,6 +128,10 @@ public class WildFlyPackageTasks {
             return this;
         }
 
+        public void addExampleConfigs(ExampleFpConfigs exampleConfigs) {
+            this.exampleConfigs = CollectionUtils.add(this.exampleConfigs, exampleConfigs);
+        }
+
         public WildFlyPackageTasks build() {
             return new WildFlyPackageTasks(this);
         }
@@ -155,6 +159,7 @@ public class WildFlyPackageTasks {
     private final List<String> mkDirs;
     private final List<FileFilter> windowsLineEndFilters;
     private final List<FileFilter> unixLineEndFilters;
+    private final List<ExampleFpConfigs> exampleConfigs;
 
     private WildFlyPackageTasks(Builder builder) {
         this.copyArtifacts = CollectionUtils.unmodifiable(builder.copyArtifacts);
@@ -165,6 +170,7 @@ public class WildFlyPackageTasks {
         this.mkDirs = CollectionUtils.unmodifiable(builder.mkDirs);
         this.windowsLineEndFilters = CollectionUtils.unmodifiable(builder.windowsLineEndFilters);
         this.unixLineEndFilters = CollectionUtils.unmodifiable(builder.unixLineEndFilters);
+        this.exampleConfigs = CollectionUtils.unmodifiable(builder.exampleConfigs);
     }
 
     public boolean hasCopyArtifacts() {
@@ -221,5 +227,13 @@ public class WildFlyPackageTasks {
 
     public List<FileFilter> getUnixLineEndFilters() {
         return unixLineEndFilters;
+    }
+
+    public boolean hasExampleConfigs() {
+        return !exampleConfigs.isEmpty();
+    }
+
+    public List<ExampleFpConfigs> getExampleConfigs() {
+        return exampleConfigs;
     }
 }

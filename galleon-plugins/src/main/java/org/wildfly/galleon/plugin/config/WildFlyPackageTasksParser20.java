@@ -16,6 +16,7 @@
  */
 package org.wildfly.galleon.plugin.config;
 
+import org.jboss.galleon.config.ConfigId;
 import org.jboss.galleon.util.ParsingUtils;
 import org.jboss.galleon.xml.XmlNameProvider;
 import org.jboss.staxmapper.XMLElementReader;
@@ -45,12 +46,14 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
 
     enum Element {
 
+        CONFIG("config"),
         COPY_ARTIFACT("copy-artifact"),
         COPY_ARTIFACTS("copy-artifacts"),
         COPY_PATHS("copy-paths"),
         DELETE("delete"),
         DELETE_PATHS("delete-paths"),
         DIR("dir"),
+        EXAMPLE_CONFIGS("example-configs"),
         FILE_PERMISSIONS("file-permissions"),
         FILTER("filter"),
         LINE_ENDINGS("line-endings"),
@@ -72,12 +75,14 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
 
         static {
             Map<QName, Element> elementsMap = new HashMap<QName, Element>();
+            elementsMap.put(new QName(NAMESPACE_2_0, Element.CONFIG.getLocalName()), Element.CONFIG);
             elementsMap.put(new QName(NAMESPACE_2_0, Element.COPY_ARTIFACT.getLocalName()), Element.COPY_ARTIFACT);
             elementsMap.put(new QName(NAMESPACE_2_0, Element.COPY_ARTIFACTS.getLocalName()), Element.COPY_ARTIFACTS);
             elementsMap.put(new QName(NAMESPACE_2_0, Element.COPY_PATHS.getLocalName()), Element.COPY_PATHS);
             elementsMap.put(new QName(NAMESPACE_2_0, Element.DELETE.getLocalName()), Element.DELETE);
             elementsMap.put(new QName(NAMESPACE_2_0, Element.DELETE_PATHS.getLocalName()), Element.DELETE_PATHS);
             elementsMap.put(new QName(NAMESPACE_2_0, Element.DIR.getLocalName()), Element.DIR);
+            elementsMap.put(new QName(NAMESPACE_2_0, Element.EXAMPLE_CONFIGS.getLocalName()), Element.EXAMPLE_CONFIGS);
             elementsMap.put(new QName(NAMESPACE_2_0, Element.FILE_PERMISSIONS.getLocalName()), Element.FILE_PERMISSIONS);
             elementsMap.put(new QName(NAMESPACE_2_0, Element.FILTER.getLocalName()), Element.FILTER);
             elementsMap.put(new QName(NAMESPACE_2_0, Element.LINE_ENDINGS.getLocalName()), Element.LINE_ENDINGS);
@@ -125,8 +130,11 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
 
         ARTIFACT("artifact"),
         EXTRACT("extract"),
+        GROUP("group"),
         INCLUDE("include"),
+        MODEL("model"),
         NAME("name"),
+        ORIGIN("origin"),
         OUTPUT("output"),
         PATH("path"),
         PATTERN("pattern"),
@@ -147,8 +155,11 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
             Map<QName, Attribute> attributesMap = new HashMap<QName, Attribute>();
             attributesMap.put(new QName(ARTIFACT.getLocalName()), ARTIFACT);
             attributesMap.put(new QName(EXTRACT.getLocalName()), EXTRACT);
+            attributesMap.put(new QName(GROUP.getLocalName()), GROUP);
             attributesMap.put(new QName(INCLUDE.getLocalName()), INCLUDE);
+            attributesMap.put(new QName(MODEL.getLocalName()), MODEL);
             attributesMap.put(new QName(NAME.getLocalName()), NAME);
+            attributesMap.put(new QName(ORIGIN.getLocalName()), ORIGIN);
             attributesMap.put(new QName(OUTPUT.getLocalName()), OUTPUT);
             attributesMap.put(new QName(PATH.getLocalName()), PATH);
             attributesMap.put(new QName(PATTERN.getLocalName()), PATTERN);
@@ -218,6 +229,9 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
                         case DELETE_PATHS:
                             parseDeletePaths(reader, builder);
                             break;
+                        case EXAMPLE_CONFIGS:
+                            parseExampleConfigs(reader, builder);
+                            break;
                         case XSL:
                             parseXsl(reader, builder);
                             break;
@@ -241,6 +255,73 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
             }
         }
         throw ParsingUtils.endOfDocument(reader.getLocation());
+    }
+
+    private void parseExampleConfigs(final XMLExtendedStreamReader reader, final WildFlyPackageTasks.Builder builder) throws XMLStreamException {
+        String origin = null;
+        final int count = reader.getAttributeCount();
+        for (int i = 0; i < count; i++) {
+            final Attribute attribute = Attribute.of(reader.getAttributeName(i));
+            switch (attribute) {
+                case ORIGIN:
+                    origin = reader.getAttributeValue(i);
+                    break;
+                default:
+                    throw ParsingUtils.unexpectedContent(reader);
+            }
+        }
+        final ExampleFpConfigs.Builder exampleConfigs = ExampleFpConfigs.builder(origin);
+        while (reader.hasNext()) {
+            switch (reader.nextTag()) {
+                case XMLStreamConstants.END_ELEMENT: {
+                    builder.addExampleConfigs(exampleConfigs.build());
+                    return;
+                }
+                case XMLStreamConstants.START_ELEMENT: {
+                    final Element element = Element.of(reader.getName());
+                    switch (element) {
+                        case CONFIG:
+                            parseExampleConfigs(reader, exampleConfigs);
+                            break;
+                        default:
+                            throw ParsingUtils.unexpectedContent(reader);
+                    }
+                    break;
+                }
+                default: {
+                    throw ParsingUtils.unexpectedContent(reader);
+                }
+            }
+        }
+        throw ParsingUtils.endOfDocument(reader.getLocation());
+    }
+
+    private void parseExampleConfigs(final XMLExtendedStreamReader reader, ExampleFpConfigs.Builder builder) throws XMLStreamException {
+        String model = null;
+        String name = null;
+        String group = null;
+        final int count = reader.getAttributeCount();
+        for (int i = 0; i < count; i++) {
+            final Attribute attribute = Attribute.of(reader.getAttributeName(i));
+            switch (attribute) {
+                case MODEL:
+                    model = reader.getAttributeValue(i);
+                    break;
+                case NAME:
+                    name = reader.getAttributeValue(i);
+                    break;
+                case GROUP:
+                    group = reader.getAttributeValue(i);
+                    break;
+                default:
+                    throw ParsingUtils.unexpectedAttribute(reader, i);
+            }
+        }
+        if (model == null || name == null) {
+            throw ParsingUtils.missingOneOfAttributes(reader.getLocation(), Attribute.MODEL, Attribute.NAME);
+        }
+        builder.addConfig(new ConfigId(model, name), group);
+        ParsingUtils.parseNoContent(reader);
     }
 
     private String parseName(final XMLStreamReader reader) throws XMLStreamException {

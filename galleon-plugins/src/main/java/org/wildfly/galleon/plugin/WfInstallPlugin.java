@@ -28,6 +28,7 @@ import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.DirectoryStream;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
@@ -66,9 +67,18 @@ import nu.xom.ParsingException;
 import nu.xom.Serializer;
 
 import org.jboss.galleon.ArtifactCoords;
+import org.jboss.galleon.ArtifactException;
+import org.jboss.galleon.ArtifactRepositoryManager;
 import org.jboss.galleon.Errors;
 import org.jboss.galleon.MessageWriter;
+import org.jboss.galleon.ProvisioningDescriptionException;
 import org.jboss.galleon.ProvisioningException;
+import org.jboss.galleon.ProvisioningManager;
+import org.jboss.galleon.config.ConfigId;
+import org.jboss.galleon.config.ConfigModel;
+import org.jboss.galleon.config.FeatureGroup;
+import org.jboss.galleon.config.FeaturePackConfig;
+import org.jboss.galleon.config.ProvisioningConfig;
 import org.jboss.galleon.plugin.InstallPlugin;
 import org.jboss.galleon.plugin.PluginOption;
 import org.jboss.galleon.plugin.ProvisioningPluginWithOptions;
@@ -82,6 +92,7 @@ import org.jboss.galleon.util.ZipUtils;
 import org.wildfly.galleon.plugin.config.CopyArtifact;
 import org.wildfly.galleon.plugin.config.CopyPath;
 import org.wildfly.galleon.plugin.config.DeletePath;
+import org.wildfly.galleon.plugin.config.ExampleFpConfigs;
 import org.wildfly.galleon.plugin.config.FilePermission;
 import org.wildfly.galleon.plugin.config.WildFlyPackageTasks;
 import org.wildfly.galleon.plugin.config.XslTransform;
@@ -115,6 +126,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private DocumentBuilderFactory docBuilderFactory;
     private TransformerFactory xsltFactory;
     private Map<String, Transformer> xslTransformers = Collections.emptyMap();
+
+    private Map<ArtifactCoords.Gav, ExampleFpConfigs> exampleConfigs = Collections.emptyMap();
 
     @Override
     protected List<PluginOption> initPluginOptions() {
@@ -200,8 +213,91 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             }
         }
 
+        if(!exampleConfigs.isEmpty()) {
+            provisionExampleConfigs();
+        }
+
         if(!pathsToDelete.isEmpty()) {
             deletePaths();
+        }
+    }
+
+    private void provisionExampleConfigs() throws ProvisioningException {
+
+        final Path examplesTmp = runtime.getTmpPath("example-configs");
+        final ProvisioningManager pm = ProvisioningManager.builder()
+                .setInstallationHome(examplesTmp)
+                .setMessageWriter(runtime.getMessageWriter())
+                .setArtifactResolver(new ArtifactRepositoryManager() {
+                    @Override
+                    public Path resolve(ArtifactCoords coords) throws ArtifactException {
+                        return runtime.resolveArtifact(coords);
+                    }
+
+                    @Override
+                    public void install(ArtifactCoords coords, Path artifact) throws ArtifactException {
+                        throw new UnsupportedOperationException();
+                    }
+
+                    @Override
+                    public void deploy(ArtifactCoords coords, Path artifact) throws ArtifactException {
+                        throw new UnsupportedOperationException();
+                    }
+
+                    @Override
+                    public String getHighestVersion(ArtifactCoords coords, String range) throws ArtifactException {
+                        throw new UnsupportedOperationException();
+                    }})
+                .build();
+
+        final ProvisioningConfig.Builder configBuilder = ProvisioningConfig.builder();
+        for(Map.Entry<ArtifactCoords.Gav, ExampleFpConfigs> entry : exampleConfigs.entrySet()) {
+            final FeaturePackConfig.Builder fpBuilder = FeaturePackConfig.builder(entry.getKey())
+                    .setInheritConfigs(false)
+                    .setInheritPackages(false);
+            for(Map.Entry<ConfigId, String> config : entry.getValue().getConfigs().entrySet()) {
+                if(config.getValue() != null) {
+                    final ConfigId id = config.getKey();
+                    fpBuilder.addConfig(ConfigModel.builder(id.getModel(), id.getName())
+                            .setProperty("--server-config", id.getName())
+                            .addFeatureGroup(FeatureGroup.forGroup(config.getValue()))
+                            .build())
+                            .excludePackage(WfConstants.DOCS);
+                } else {
+                    fpBuilder.includeDefaultConfig(config.getKey());
+                }
+            }
+            configBuilder.addFeaturePackDep(fpBuilder.build());
+        }
+        try {
+            runtime.getMessageWriter().print("Generating example configs");
+            ProvisioningConfig config = configBuilder.build();
+            pm.provision(config, Collections.singletonMap(mavenDistOption.getName(), null));
+        } catch(ProvisioningException e) {
+            throw new ProvisioningException("Failed to generate example configs", e);
+        }
+
+        copyExampleConfigs(examplesTmp.resolve(WfConstants.STANDALONE).resolve("configuration"));
+        copyExampleConfigs(examplesTmp.resolve(WfConstants.DOMAIN).resolve("configuration"));
+    }
+
+    private void copyExampleConfigs(Path configDir) throws ProvisioningException {
+        if(!Files.exists(configDir)) {
+            return;
+        }
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(configDir)) {
+            final Iterator<Path> i = stream.iterator();
+            while (i.hasNext()) {
+                final Path p = i.next();
+                final String name = p.getFileName().toString();
+                if (name.endsWith(".xml")) {
+                    Path target = runtime.getStagedDir().resolve(WfConstants.DOCS).resolve("examples").resolve("configs")
+                            .resolve(name);
+                    IoUtils.copy(p, target);
+                }
+            }
+        } catch (IOException e) {
+            throw new ProvisioningException("Failed to copy example configs", e);
         }
     }
 
@@ -274,6 +370,11 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 }
                 if(pkgTasks.hasXslTransform()) {
                     xslTransform(fp, pkgTasks, pmWfDir);
+                }
+                if(pkgTasks.hasExampleConfigs()) {
+                    for(ExampleFpConfigs configs : pkgTasks.getExampleConfigs()) {
+                        addExampleConfigs(fp, configs);
+                    }
                 }
                 if(pkgTasks.hasMkDirs()) {
                     mkdirs(pkgTasks, this.runtime.getStagedDir());
@@ -501,6 +602,21 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 throw t2;
             }
             throw t;
+        }
+    }
+
+    private void addExampleConfigs(FeaturePackRuntime fp, ExampleFpConfigs exampleConfigs) throws ProvisioningDescriptionException {
+        final ArtifactCoords.Gav originGav;
+        if(exampleConfigs.getOrigin() != null) {
+            originGav = fp.getSpec().getFeaturePackDep(exampleConfigs.getOrigin()).getGav();
+        } else {
+            originGav = fp.getGav();
+        }
+        ExampleFpConfigs existingConfigs = this.exampleConfigs.get(originGav);
+        if(existingConfigs == null) {
+            this.exampleConfigs = CollectionUtils.put(this.exampleConfigs, originGav, exampleConfigs);
+        } else {
+            existingConfigs.addAll(exampleConfigs);
         }
     }
 
