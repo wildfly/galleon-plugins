@@ -18,6 +18,7 @@ package org.wildfly.galleon.maven;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -27,6 +28,8 @@ import java.nio.file.FileVisitor;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Collections;
 import java.util.HashMap;
@@ -35,9 +38,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.inject.Inject;
 import javax.xml.stream.XMLStreamException;
+
 import nu.xom.ParsingException;
 
 import org.apache.maven.artifact.Artifact;
@@ -74,7 +80,7 @@ import org.jboss.galleon.spec.FeaturePackSpec;
 import org.jboss.galleon.spec.PackageSpec;
 import org.jboss.galleon.util.IoUtils;
 import org.jboss.galleon.util.CollectionUtils;
-import org.jboss.galleon.util.PropertyUtils;
+import org.jboss.galleon.util.PathFilter;
 import org.jboss.galleon.util.StringUtils;
 import org.jboss.galleon.xml.FeaturePackXmlWriter;
 import org.jboss.galleon.xml.PackageXmlParser;
@@ -92,7 +98,19 @@ import org.wildfly.galleon.maven.ModuleParseResult.ModuleDependency;
 @Mojo(name = "build-feature-pack", requiresDependencyResolution = ResolutionScope.RUNTIME, defaultPhase = LifecyclePhase.COMPILE)
 public class WfFeaturePackBuildMojo extends AbstractMojo {
 
-    private static final boolean OS_WINDOWS = PropertyUtils.isWindows();
+    private static Pattern windowsLineEndingPattern = Pattern.compile("(?<!\\r)\\n", Pattern.MULTILINE);
+    private static Pattern linuxLineEndingPattern = Pattern.compile("\\r\\n", Pattern.MULTILINE);
+    private static PathFilter windowsLineEndingsPathFilter = new PathFilter() {
+        @Override
+        public boolean accept(Path path) {
+            return path.getFileName().toString().endsWith(".bat");
+        }};
+    private static PathFilter linuxLineEndingsPathFilter = new PathFilter() {
+            @Override
+            public boolean accept(Path path) {
+                final String name = path.getFileName().toString();
+                return name.endsWith(".sh") || name.endsWith(".conf");
+            }};
 
     private static boolean isProvided(String module) {
         return module.startsWith("java.") ||
@@ -596,6 +614,10 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
                         }
                     }
 
+                    ensureLineEndings(binPkgDir);
+                    ensureLineEndings(binStandalonePkgDir);
+                    ensureLineEndings(binDomainPkgDir);
+
                     PackageSpec binSpec = binBuilder.build();
                     fpBuilder.addPackage(binSpec);
                     writeXml(binSpec, packagesDir.resolve(pkgName));
@@ -718,10 +740,6 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
             }
             modulesAll.addPackageDep(packageName, true);
             fpBuilder.addPackage(pkgSpec);
-
-            if (!OS_WINDOWS) {
-                Files.setPosixFilePermissions(targetXml, Files.getPosixFilePermissions(moduleXml));
-            }
         }
     }
 
@@ -770,5 +788,35 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         req.setArtifact(new DefaultArtifact(coords.getGroupId(), coords.getArtifactId(), coords.getClassifier(), coords.getExtension(), coords.getVersion()));
         req.setRepositories(remoteRepos);
         return req;
+    }
+
+    private static void ensureLineEndings(Path file) throws MojoExecutionException {
+        try {
+            Files.walkFileTree(file, new SimpleFileVisitor<Path>() {
+                @Override
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                    if(linuxLineEndingsPathFilter.accept(file)) {
+                        ensureLineEndings(file, linuxLineEndingPattern, "\n");
+                    } else if(windowsLineEndingsPathFilter.accept(file)) {
+                        ensureLineEndings(file, windowsLineEndingPattern, "\r\n");
+                    }
+                    return FileVisitResult.CONTINUE;
+                }
+            });
+        } catch (IOException e) {
+            throw new MojoExecutionException("Failed to adjust line endings for " + file, e);
+        }
+    }
+
+    private static void ensureLineEndings(Path file, Pattern pattern, String lineEnding) throws IOException {
+        final String content = IoUtils.readFile(file);
+        final Matcher matcher = pattern.matcher(content);
+        final String fixedContent = matcher.replaceAll(lineEnding);
+        if(content.equals(fixedContent)) {
+            return;
+        }
+        try(ByteArrayInputStream in = new ByteArrayInputStream(fixedContent.getBytes(WfConstants.UTF8))) {
+            Files.copy(in, file, StandardCopyOption.REPLACE_EXISTING);
+        }
     }
 }
