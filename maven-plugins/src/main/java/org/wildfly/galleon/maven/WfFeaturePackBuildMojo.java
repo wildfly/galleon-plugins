@@ -563,20 +563,23 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         try(DirectoryStream<Path> stream = Files.newDirectoryStream(contentDir)) {
             for(Path p : stream) {
                 final String pkgName = p.getFileName().toString();
+                final Path pkgDir = packagesDir.resolve(pkgName);
+                final Path pkgContentDir = pkgDir.resolve(Constants.CONTENT).resolve(pkgName);
+                final PackageSpec.Builder pkgBuilder = getExtendedPackage(pkgName, true);
                 if(pkgName.equals(WfConstants.DOCS)) {
-                    final PackageSpec.Builder docsBuilder = getExtendedPackage(WfConstants.DOCS, true);
                     try(DirectoryStream<Path> docsStream = Files.newDirectoryStream(p)) {
                         for(Path docPath : docsStream) {
                             final String docName = docPath.getFileName().toString();
                             final String docPkgName = WfConstants.DOCS + '.' + docName;
-                            final Path pkgDir = packagesDir.resolve(docPkgName);
+                            final Path docDir = packagesDir.resolve(docPkgName);
                             getExtendedPackage(docPkgName, true);
-                            IoUtils.copy(docPath, pkgDir.resolve(Constants.CONTENT).resolve(WfConstants.DOCS).resolve(docName));
-                            docsBuilder.addPackageDep(docPkgName, true);
+                            final Path docContentDir = docDir.resolve(Constants.CONTENT).resolve(WfConstants.DOCS).resolve(docName);
+                            IoUtils.copy(docPath, docContentDir);
+                            pkgBuilder.addPackageDep(docPkgName, true);
+                            ensureLineEndings(docContentDir);
                         }
                     }
                 } else if(pkgName.equals("bin")) {
-                    final Path binPkgDir = packagesDir.resolve(pkgName).resolve(Constants.CONTENT).resolve(pkgName);
                     final Path binStandalonePkgDir = packagesDir.resolve("bin.standalone").resolve(Constants.CONTENT).resolve(pkgName);
                     final Path binDomainPkgDir = packagesDir.resolve("bin.domain").resolve(Constants.CONTENT).resolve(pkgName);
                     try (DirectoryStream<Path> binStream = Files.newDirectoryStream(p)) {
@@ -587,13 +590,10 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
                             } else if(fileName.startsWith(WfConstants.DOMAIN)) {
                                 IoUtils.copy(binPath, binDomainPkgDir.resolve(fileName));
                             } else {
-                                IoUtils.copy(binPath, binPkgDir.resolve(fileName));
+                                IoUtils.copy(binPath, pkgContentDir.resolve(fileName));
                             }
                         }
                     }
-
-                    ensureLineEndings(binPkgDir);
-                    getExtendedPackage(pkgName, true);
 
                     if(Files.exists(binStandalonePkgDir)) {
                         ensureLineEndings(binStandalonePkgDir);
@@ -604,11 +604,10 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
                         getExtendedPackage("bin.domain", true).addPackageDep(pkgName);
                     }
                 } else {
-                    final Path pkgDir = packagesDir.resolve(pkgName);
-                    IoUtils.copy(p, pkgDir.resolve(Constants.CONTENT).resolve(pkgName));
-                    final PackageSpec pkgSpec = PackageSpec.builder(pkgName).build();
-                    writeXml(pkgSpec, pkgDir);
-                    fpBuilder.addPackage(pkgSpec);
+                    IoUtils.copy(p, pkgContentDir);
+                }
+                if(Files.exists(pkgContentDir)) {
+                    ensureLineEndings(pkgContentDir);
                 }
             }
         }
