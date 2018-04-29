@@ -261,8 +261,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                     fpBuilder.addConfig(ConfigModel.builder(id.getModel(), id.getName())
                             .setProperty("--server-config", id.getName())
                             .addFeatureGroup(FeatureGroup.forGroup(config.getValue()))
-                            .build())
-                            .excludePackage(WfConstants.DOCS);
+                            .build());
                 } else {
                     fpBuilder.includeDefaultConfig(config.getKey());
                 }
@@ -270,7 +269,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             configBuilder.addFeaturePackDep(fpBuilder.build());
         }
         try {
-            runtime.getMessageWriter().print("Generating example configs");
+            runtime.getMessageWriter().verbose("Generating example configs");
             ProvisioningConfig config = configBuilder.build();
             pm.provision(config, Collections.singletonMap(mavenDistOption.getName(), null));
         } catch(ProvisioningException e) {

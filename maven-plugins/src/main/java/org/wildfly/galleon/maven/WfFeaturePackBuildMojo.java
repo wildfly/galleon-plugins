@@ -175,9 +175,7 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
 
     private WildFlyFeaturePackBuild wfFpConfig;
     private Map<String, FeaturePackLayout> fpDependencies = Collections.emptyMap();
-    private PackageSpec.Builder docsBuilder;
-    private PackageSpec.Builder docsLicensesBuilder;
-    private PackageSpec.Builder docsSchemasBuilder;
+    private Map<String, PackageSpec.Builder> extendedPackages = Collections.emptyMap();
 
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
@@ -261,33 +259,33 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
             addDocsSchemas(fpPackagesDir, fpBuilder);
         }
 
-        if (!fpDependencies.isEmpty() && docsBuilder != null) {
+        addConfigPackages(targetResources.resolve(WfConstants.CONFIG).resolve(Constants.PACKAGES), fpDir.resolve(Constants.PACKAGES), fpBuilder);
+
+        final PackageSpec.Builder docsBuilder = getExtendedPackage(WfConstants.DOCS, false);
+        if(docsBuilder != null) {
+            fpBuilder.getSpecBuilder().addDefaultPackage(addPackage(fpPackagesDir, fpBuilder, docsBuilder).getName());
+            if(fpBuilder.hasPackage("docs.licenses.xsl")) {
+                getExtendedPackage(WfConstants.DOCS_LICENSES, false).addPackageDep("docs.licenses.xsl");
+            }
+            if(fpBuilder.hasPackage("docs.examples.configs")) {
+                getExtendedPackage("docs.examples", true).addPackageDep("docs.examples.configs", true);
+            }
+        }
+
+        if (!fpDependencies.isEmpty() && !extendedPackages.isEmpty()) {
             for (Map.Entry<String, FeaturePackLayout> fpDep : fpDependencies.entrySet()) {
                 final FeaturePackLayout fpDepLayout = fpDep.getValue();
-                if (fpDepLayout.hasPackage(WfConstants.DOCS)) {
-                    docsBuilder.addPackageDep(fpDep.getKey(), WfConstants.DOCS);
-                }
-                if(docsLicensesBuilder != null && fpDepLayout.hasPackage(WfConstants.DOCS_LICENSES)) {
-                    docsLicensesBuilder.addPackageDep(fpDep.getKey(), WfConstants.DOCS_LICENSES);
-                }
-                if(docsSchemasBuilder != null && fpDepLayout.hasPackage(WfConstants.DOCS_SCHEMA)) {
-                    docsSchemasBuilder.addPackageDep(fpDep.getKey(), WfConstants.DOCS_LICENSES);
+                for(Map.Entry<String, PackageSpec.Builder> entry : extendedPackages.entrySet()) {
+                    if(fpDepLayout.hasPackage(entry.getKey())) {
+                        entry.getValue().addPackageDep(fpDep.getKey(), entry.getKey());
+                    }
                 }
             }
         }
 
-        if(docsBuilder != null) {
-            if(docsLicensesBuilder != null) {
-                docsLicensesBuilder.addPackageDep("docs.licenses.xsl");
-                addPackage(fpPackagesDir, fpBuilder, docsLicensesBuilder);
-            }
-            if(docsSchemasBuilder != null) {
-                addPackage(fpPackagesDir, fpBuilder, docsSchemasBuilder);
-            }
-            fpBuilder.getSpecBuilder().addDefaultPackage(addPackage(fpPackagesDir, fpBuilder, docsBuilder).getName());
+        for(Map.Entry<String, PackageSpec.Builder> entry : extendedPackages.entrySet()) {
+            addPackage(fpPackagesDir, fpBuilder, entry.getValue());
         }
-
-        addConfigPackages(targetResources.resolve(WfConstants.CONFIG).resolve(Constants.PACKAGES), fpDir.resolve(Constants.PACKAGES), fpBuilder);
 
         if(wfFpConfig.hasConfigs()) {
             for(ConfigModel config : wfFpConfig.getConfigs()) {
@@ -360,16 +358,21 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         return pkg;
     }
 
-    private PackageSpec.Builder getDocsBuilder() {
-        if(docsBuilder == null) {
-            docsBuilder = PackageSpec.builder(WfConstants.DOCS);
+    private PackageSpec.Builder getExtendedPackage(String name, boolean create) {
+        PackageSpec.Builder pkgBuilder = extendedPackages.get(name);
+        if(pkgBuilder == null) {
+            if(!create) {
+                return null;
+            }
+            pkgBuilder = PackageSpec.builder(name);
+            extendedPackages = CollectionUtils.put(extendedPackages, name, pkgBuilder);
         }
-        return docsBuilder;
+        return pkgBuilder;
     }
 
     private void addModulesAll(final Path srcModulesDir, final FeaturePackLayout.Builder fpBuilder, final Path targetResources, final Path fpPackagesDir) throws MojoExecutionException {
         getLog().debug("WfFeaturePackBuildMojo adding modules.all");
-        final PackageSpec.Builder modulesAll = PackageSpec.builder(WfConstants.MODULES_ALL);
+        final PackageSpec.Builder modulesAll = getExtendedPackage(WfConstants.MODULES_ALL, true);
         try {
             final Map<String, Path> moduleXmlByPkgName = findModules(srcModulesDir);
             if (moduleXmlByPkgName.isEmpty()) {
@@ -378,21 +381,6 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
             packageModules(fpBuilder, targetResources, moduleXmlByPkgName, fpPackagesDir, modulesAll);
         } catch (IOException e) {
             throw new MojoExecutionException("Failed to process modules content", e);
-        }
-        if (!fpDependencies.isEmpty()) {
-            for (Map.Entry<String, FeaturePackLayout> fpDep : fpDependencies.entrySet()) {
-                final FeaturePackLayout fpDepLayout = fpDep.getValue();
-                if (fpDepLayout.hasPackage(WfConstants.MODULES_ALL)) {
-                    modulesAll.addPackageDep(fpDep.getKey(), WfConstants.MODULES_ALL);
-                }
-            }
-        }
-        try {
-            final PackageSpec modulesAllPkg = modulesAll.build();
-            PackageXmlWriter.getInstance().write(modulesAllPkg, fpPackagesDir.resolve(modulesAllPkg.getName()).resolve(Constants.PACKAGE_XML));
-            fpBuilder.addPackage(modulesAllPkg);
-        } catch (XMLStreamException | IOException e) {
-            throw new MojoExecutionException("Failed to add package", e);
         }
     }
 
@@ -448,13 +436,13 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
 
     private void addDocsSchemas(final Path fpPackagesDir, final FeaturePackLayout.Builder fpBuilder)
             throws MojoExecutionException {
-        getDocsBuilder().addPackageDep(WfConstants.DOCS_SCHEMA, true);
+        getExtendedPackage(WfConstants.DOCS_SCHEMA, true);
+        getExtendedPackage(WfConstants.DOCS, true).addPackageDep(WfConstants.DOCS_SCHEMA, true);
         final Path schemasPackageDir = fpPackagesDir.resolve(WfConstants.DOCS_SCHEMA);
         final Path schemaGroupsTxt = schemasPackageDir.resolve(WfConstants.PM).resolve(WfConstants.WILDFLY).resolve(WfConstants.SCHEMA_GROUPS_TXT);
         BufferedWriter writer = null;
         try {
             mkdirs(schemasPackageDir);
-            docsSchemasBuilder = PackageSpec.builder(WfConstants.DOCS_SCHEMA);
             mkdirs(schemaGroupsTxt.getParent());
             writer = Files.newBufferedWriter(schemaGroupsTxt);
             for (String group : wfFpConfig.getSchemaGroups()) {
@@ -576,30 +564,20 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
             for(Path p : stream) {
                 final String pkgName = p.getFileName().toString();
                 if(pkgName.equals(WfConstants.DOCS)) {
+                    final PackageSpec.Builder docsBuilder = getExtendedPackage(WfConstants.DOCS, true);
                     try(DirectoryStream<Path> docsStream = Files.newDirectoryStream(p)) {
                         for(Path docPath : docsStream) {
                             final String docName = docPath.getFileName().toString();
                             final String docPkgName = WfConstants.DOCS + '.' + docName;
                             final Path pkgDir = packagesDir.resolve(docPkgName);
-                            final PackageSpec.Builder pkgBuilder = PackageSpec.builder(docPkgName);
-                            Path pkgContentDir = pkgDir;
-                            if(docPath.getFileName().toString().equals("licenses")) {
-                                docsLicensesBuilder = pkgBuilder;
-                            } else {
-                                final PackageSpec docSpec = pkgBuilder.build();
-                                fpBuilder.addPackage(docSpec);
-                                writeXml(docSpec, pkgDir);
-                            }
-                            IoUtils.copy(docPath, pkgContentDir.resolve(Constants.CONTENT).resolve(WfConstants.DOCS).resolve(docName));
-                            getDocsBuilder().addPackageDep(docPkgName, true);
+                            getExtendedPackage(docPkgName, true);
+                            IoUtils.copy(docPath, pkgDir.resolve(Constants.CONTENT).resolve(WfConstants.DOCS).resolve(docName));
+                            docsBuilder.addPackageDep(docPkgName, true);
                         }
                     }
                 } else if(pkgName.equals("bin")) {
-                    final PackageSpec.Builder binBuilder = PackageSpec.builder(pkgName);
                     final Path binPkgDir = packagesDir.resolve(pkgName).resolve(Constants.CONTENT).resolve(pkgName);
-                    final PackageSpec.Builder standaloneBinBuilder = PackageSpec.builder("bin.standalone");
                     final Path binStandalonePkgDir = packagesDir.resolve("bin.standalone").resolve(Constants.CONTENT).resolve(pkgName);
-                    final PackageSpec.Builder domainBinBuilder = PackageSpec.builder("bin.domain");
                     final Path binDomainPkgDir = packagesDir.resolve("bin.domain").resolve(Constants.CONTENT).resolve(pkgName);
                     try (DirectoryStream<Path> binStream = Files.newDirectoryStream(p)) {
                         for (Path binPath : binStream) {
@@ -615,20 +593,16 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
                     }
 
                     ensureLineEndings(binPkgDir);
-                    ensureLineEndings(binStandalonePkgDir);
-                    ensureLineEndings(binDomainPkgDir);
+                    getExtendedPackage(pkgName, true);
 
-                    PackageSpec binSpec = binBuilder.build();
-                    fpBuilder.addPackage(binSpec);
-                    writeXml(binSpec, packagesDir.resolve(pkgName));
-
-                    binSpec = standaloneBinBuilder.addPackageDep(pkgName).build();
-                    fpBuilder.addPackage(binSpec);
-                    writeXml(binSpec, packagesDir.resolve(binSpec.getName()));
-
-                    binSpec = domainBinBuilder.addPackageDep(pkgName).build();
-                    fpBuilder.addPackage(binSpec);
-                    writeXml(binSpec, packagesDir.resolve(binSpec.getName()));
+                    if(Files.exists(binStandalonePkgDir)) {
+                        ensureLineEndings(binStandalonePkgDir);
+                        getExtendedPackage("bin.standalone", true).addPackageDep(pkgName);
+                    }
+                    if(Files.exists(binDomainPkgDir)) {
+                        ensureLineEndings(binDomainPkgDir);
+                        getExtendedPackage("bin.domain", true).addPackageDep(pkgName);
+                    }
                 } else {
                     final Path pkgDir = packagesDir.resolve(pkgName);
                     IoUtils.copy(p, pkgDir.resolve(Constants.CONTENT).resolve(pkgName));
