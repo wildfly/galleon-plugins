@@ -259,7 +259,7 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
             addDocsSchemas(fpPackagesDir, fpBuilder);
         }
 
-        addConfigPackages(targetResources.resolve(WfConstants.CONFIG).resolve(Constants.PACKAGES), fpDir.resolve(Constants.PACKAGES), fpBuilder);
+        addConfigPackages(targetResources.resolve(Constants.PACKAGES), fpDir.resolve(Constants.PACKAGES), fpBuilder);
 
         final PackageSpec.Builder docsBuilder = getExtendedPackage(WfConstants.DOCS, false);
         if(docsBuilder != null) {

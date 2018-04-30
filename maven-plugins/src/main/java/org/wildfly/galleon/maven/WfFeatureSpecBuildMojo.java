@@ -38,7 +38,6 @@ import java.util.stream.Stream;
 import org.apache.maven.RepositoryUtils;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.execution.MavenSession;
-import org.apache.maven.model.Resource;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
@@ -157,11 +156,9 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
         final Map<String, Artifact> buildArtifacts = collectBuildArtifacts(modulesDir, featurePackArtifacts);
 
         ModuleXmlVersionResolver.filterAndConvertModules(modulesDir, wildflyDir.resolve(MODULES), buildArtifacts, getLog());
-        for (Resource resource : project.getResources()) {
-            Path resourceDir = Paths.get(resource.getDirectory());
-            if (Files.exists(resourceDir.resolve(MODULES))) {
-                ModuleXmlVersionResolver.filterAndConvertModules(resourceDir.resolve(MODULES), wildflyDir.resolve(MODULES), buildArtifacts, getLog());
-            }
+        final Path modulesTemplates = Paths.get(project.getBuild().getDirectory()).resolve("resources").resolve(MODULES);
+        if (Files.exists(modulesTemplates)) {
+            ModuleXmlVersionResolver.filterAndConvertModules(modulesTemplates, wildflyDir.resolve(MODULES), buildArtifacts, getLog());
         }
         addBasicConfigs(wildflyDir);
 
