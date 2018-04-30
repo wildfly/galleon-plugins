@@ -528,15 +528,34 @@ public class WfProvisionedConfigHandler implements ProvisionedConfigHandler {
         }
     }
 
-    private String[] getEmbeddedArgs(ProvisionedConfig config) {
+    private String[] getEmbeddedArgs(ProvisionedConfig config) throws ProvisioningException {
         final List<String> embeddedArgs = new ArrayList<>(config.getProperties().size());
+        final String configNameProp;
+        if(WfConstants.STANDALONE.equals(config.getModel())) {
+            configNameProp = "--server-config";
+        } else if(WfConstants.DOMAIN.equals(config.getModel())) {
+            configNameProp = "--domain-config";
+        } else if(WfConstants.HOST.equals(config.getModel())) {
+            configNameProp = "--host-config";
+        } else {
+            throw new ProvisioningException("Unexpected config model " + config.getModel());
+        }
+        boolean explicitlyNamed = false;
         for(Map.Entry<String, String> prop : config.getProperties().entrySet()) {
-            if(prop.getKey().startsWith("--")) {
-                embeddedArgs.add(prop.getKey());
-                if(!prop.getValue().isEmpty()) {
-                    embeddedArgs.add(prop.getValue());
-                }
+            if(!prop.getKey().startsWith("--")) {
+                continue;
             }
+            embeddedArgs.add(prop.getKey());
+            if(!prop.getValue().isEmpty()) {
+                embeddedArgs.add(prop.getValue());
+            }
+            if(!explicitlyNamed) {
+                explicitlyNamed = prop.getValue().equals(configNameProp);
+            }
+        }
+        if(!explicitlyNamed) {
+            embeddedArgs.add(configNameProp);
+            embeddedArgs.add(config.getName());
         }
         return embeddedArgs.toArray(new String[embeddedArgs.size()]);
     }
