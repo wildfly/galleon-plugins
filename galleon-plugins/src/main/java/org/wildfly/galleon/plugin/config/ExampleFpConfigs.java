@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.Map;
 
 import org.jboss.galleon.config.ConfigId;
+import org.jboss.galleon.config.ConfigModel;
 import org.jboss.galleon.util.CollectionUtils;
 
 /**
@@ -34,14 +35,14 @@ public class ExampleFpConfigs {
     public static class Builder {
 
         private final String origin;
-        private Map<ConfigId, String> configs = Collections.emptyMap();
+        private Map<ConfigId, ConfigModel> configs = Collections.emptyMap();
 
         private Builder(String origin) {
             this.origin = origin;
         }
 
-        public Builder addConfig(ConfigId configId, String group) {
-            configs = CollectionUtils.put(configs, configId, group);
+        public Builder addConfig(ConfigModel config) {
+            configs = CollectionUtils.put(configs, config.getId(), config);
             return this;
         }
 
@@ -59,7 +60,7 @@ public class ExampleFpConfigs {
     }
 
     private final String origin;
-    private Map<ConfigId, String> configs;
+    private Map<ConfigId, ConfigModel> configs;
 
     private ExampleFpConfigs(Builder builder) {
         this.origin = builder.origin;
@@ -70,12 +71,12 @@ public class ExampleFpConfigs {
         return origin;
     }
 
-    public Map<ConfigId, String> getConfigs() {
+    public Map<ConfigId, ConfigModel> getConfigs() {
         return configs;
     }
 
     public void addAll(ExampleFpConfigs exampleConfigs) {
-        for(Map.Entry<ConfigId, String> config : exampleConfigs.configs.entrySet()) {
+        for(Map.Entry<ConfigId, ConfigModel> config : exampleConfigs.configs.entrySet()) {
             configs = CollectionUtils.put(configs, config.getKey(), config.getValue());
         }
     }

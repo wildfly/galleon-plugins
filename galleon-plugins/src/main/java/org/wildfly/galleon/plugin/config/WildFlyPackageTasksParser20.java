@@ -16,8 +16,10 @@
  */
 package org.wildfly.galleon.plugin.config;
 
-import org.jboss.galleon.config.ConfigId;
+import org.jboss.galleon.ProvisioningDescriptionException;
+import org.jboss.galleon.config.ConfigModel;
 import org.jboss.galleon.util.ParsingUtils;
+import org.jboss.galleon.xml.ConfigXml;
 import org.jboss.galleon.xml.XmlNameProvider;
 import org.jboss.staxmapper.XMLElementReader;
 import org.jboss.staxmapper.XMLExtendedStreamReader;
@@ -297,31 +299,13 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
     }
 
     private void parseExampleConfigs(final XMLExtendedStreamReader reader, ExampleFpConfigs.Builder builder) throws XMLStreamException {
-        String model = null;
-        String name = null;
-        String group = null;
-        final int count = reader.getAttributeCount();
-        for (int i = 0; i < count; i++) {
-            final Attribute attribute = Attribute.of(reader.getAttributeName(i));
-            switch (attribute) {
-                case MODEL:
-                    model = reader.getAttributeValue(i);
-                    break;
-                case NAME:
-                    name = reader.getAttributeValue(i);
-                    break;
-                case GROUP:
-                    group = reader.getAttributeValue(i);
-                    break;
-                default:
-                    throw ParsingUtils.unexpectedAttribute(reader, i);
-            }
+        final ConfigModel.Builder configBuilder = ConfigModel.builder();
+        ConfigXml.readConfig(reader, configBuilder);
+        try {
+            builder.addConfig(configBuilder.build());
+        } catch (ProvisioningDescriptionException e) {
+            throw new XMLStreamException("Failed to instantiate config model", e);
         }
-        if (model == null || name == null) {
-            throw ParsingUtils.missingOneOfAttributes(reader.getLocation(), Attribute.MODEL, Attribute.NAME);
-        }
-        builder.addConfig(new ConfigId(model, name), group);
-        ParsingUtils.parseNoContent(reader);
     }
 
     private String parseName(final XMLStreamReader reader) throws XMLStreamException {

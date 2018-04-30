@@ -76,7 +76,6 @@ import org.jboss.galleon.ProvisioningException;
 import org.jboss.galleon.ProvisioningManager;
 import org.jboss.galleon.config.ConfigId;
 import org.jboss.galleon.config.ConfigModel;
-import org.jboss.galleon.config.FeatureGroup;
 import org.jboss.galleon.config.FeaturePackConfig;
 import org.jboss.galleon.config.ProvisioningConfig;
 import org.jboss.galleon.plugin.InstallPlugin;
@@ -255,13 +254,9 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             final FeaturePackConfig.Builder fpBuilder = FeaturePackConfig.builder(entry.getKey())
                     .setInheritConfigs(false)
                     .setInheritPackages(false);
-            for(Map.Entry<ConfigId, String> config : entry.getValue().getConfigs().entrySet()) {
+            for(Map.Entry<ConfigId, ConfigModel> config : entry.getValue().getConfigs().entrySet()) {
                 if(config.getValue() != null) {
-                    final ConfigId id = config.getKey();
-                    fpBuilder.addConfig(ConfigModel.builder(id.getModel(), id.getName())
-                            .setProperty("--server-config", id.getName())
-                            .addFeatureGroup(FeatureGroup.forGroup(config.getValue()))
-                            .build());
+                    fpBuilder.addConfig(config.getValue());
                 } else {
                     fpBuilder.includeDefaultConfig(config.getKey());
                 }
