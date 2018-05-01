@@ -25,6 +25,7 @@ import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 
 import org.jboss.staxmapper.XMLMapper;
+import org.wildfly.galleon.plugin.WildFlyPackageTasks;
 
 /**
  * @author Alexey Loubyansky

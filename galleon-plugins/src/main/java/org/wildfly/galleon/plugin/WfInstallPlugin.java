@@ -93,7 +93,6 @@ import org.wildfly.galleon.plugin.config.CopyPath;
 import org.wildfly.galleon.plugin.config.DeletePath;
 import org.wildfly.galleon.plugin.config.ExampleFpConfigs;
 import org.wildfly.galleon.plugin.config.FilePermission;
-import org.wildfly.galleon.plugin.config.WildFlyPackageTasks;
 import org.wildfly.galleon.plugin.config.XslTransform;
 import org.wildfly.galleon.plugin.server.CliScriptRunner;
 
@@ -120,7 +119,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
     private final PluginOption mavenDistOption = PluginOption.builder("jboss-maven-dist").hasNoValue().build();
 
-    private List<DeletePath> pathsToDelete = Collections.emptyList();
+    private List<WildFlyPackageTask> finalizingTasks = Collections.emptyList();
+    private List<PackageRuntime> finalizingTasksPkgs = Collections.emptyList();
 
     private DocumentBuilderFactory docBuilderFactory;
     private TransformerFactory xsltFactory;
@@ -212,12 +212,14 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             }
         }
 
-        if(!exampleConfigs.isEmpty()) {
-            provisionExampleConfigs();
+        if(!finalizingTasks.isEmpty()) {
+            for(int i = 0; i < finalizingTasks.size(); ++i) {
+                finalizingTasks.get(i).execute(this, finalizingTasksPkgs.get(i));
+            }
         }
 
-        if(!pathsToDelete.isEmpty()) {
-            deletePaths();
+        if(!exampleConfigs.isEmpty()) {
+            provisionExampleConfigs();
         }
     }
 
@@ -348,85 +350,72 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             if(!Files.exists(pmWfDir)) {
                 continue;
             }
-
             final Path moduleDir = pmWfDir.resolve(WfConstants.MODULE);
             if(Files.exists(moduleDir)) {
                 processModules(fp.getGav(), pkg.getName(), moduleDir);
             }
             final Path tasksXml = pmWfDir.resolve(WfConstants.TASKS_XML);
-            if(Files.exists(tasksXml)) {
-                final WildFlyPackageTasks pkgTasks = WildFlyPackageTasks.load(tasksXml);
-                if(pkgTasks.hasCopyArtifacts()) {
-                    copyArtifacts(pkgTasks);
-                }
-                if(pkgTasks.hasCopyPaths()) {
-                    copyPaths(pkgTasks, pmWfDir);
-                }
-                if(pkgTasks.hasXslTransform()) {
-                    xslTransform(fp, pkgTasks, pmWfDir);
-                }
-                if(pkgTasks.hasExampleConfigs()) {
-                    for(ExampleFpConfigs configs : pkgTasks.getExampleConfigs()) {
-                        addExampleConfigs(fp, configs);
-                    }
-                }
-                if(pkgTasks.hasMkDirs()) {
-                    mkdirs(pkgTasks, this.runtime.getStagedDir());
-                }
-                if (pkgTasks.hasFilePermissions() && !PropertyUtils.isWindows()) {
-                    processFeaturePackFilePermissions(pkgTasks, this.runtime.getStagedDir());
-                }
-                if(pkgTasks.hasDeletePaths()) {
-                    if(pathsToDelete.isEmpty()) {
-                        pathsToDelete = new ArrayList<>(pkgTasks.getDeletePaths());
+            if(!Files.exists(tasksXml)) {
+                continue;
+            }
+            final WildFlyPackageTasks pkgTasks = WildFlyPackageTasks.load(tasksXml);
+            if (pkgTasks.hasTasks()) {
+                for(WildFlyPackageTask task : pkgTasks.getTasks()) {
+                    if(task.getPhase() == WildFlyPackageTask.Phase.PROCESSING) {
+                        task.execute(this, pkg);
                     } else {
-                        pathsToDelete.addAll(pkgTasks.getDeletePaths());
+                        finalizingTasks = CollectionUtils.add(finalizingTasks, task);
+                        finalizingTasksPkgs = CollectionUtils.add(finalizingTasksPkgs, pkg);
                     }
                 }
+            }
+            if (pkgTasks.hasMkDirs()) {
+                mkdirs(pkgTasks, this.runtime.getStagedDir());
+            }
+            if (pkgTasks.hasFilePermissions() && !PropertyUtils.isWindows()) {
+                processFeaturePackFilePermissions(pkgTasks, this.runtime.getStagedDir());
             }
         }
     }
 
-    private void xslTransform(FeaturePackRuntime fp, WildFlyPackageTasks pkgTasks, Path pmWfDir) throws ProvisioningException {
+    public void xslTransform(FeaturePackRuntime fp, XslTransform xslt, Path pmWfDir) throws ProvisioningException {
 
         if(docBuilderFactory == null) {
             docBuilderFactory = DocumentBuilderFactory.newInstance();
         }
 
-        for(XslTransform xslt : pkgTasks.getXslTransform()) {
-            final Path src = runtime.getStagedDir().resolve(xslt.getSrc());
-            if(!Files.exists(src)) {
-                throw new ProvisioningException(Errors.pathDoesNotExist(src));
-            }
-            final Path output = runtime.getStagedDir().resolve(xslt.getOutput());
-            if(Files.exists(output)) {
-                throw new ProvisioningException(Errors.pathAlreadyExists(output));
-            }
+        final Path src = runtime.getStagedDir().resolve(xslt.getSrc());
+        if (!Files.exists(src)) {
+            throw new ProvisioningException(Errors.pathDoesNotExist(src));
+        }
+        final Path output = runtime.getStagedDir().resolve(xslt.getOutput());
+        if (Files.exists(output)) {
+            throw new ProvisioningException(Errors.pathAlreadyExists(output));
+        }
 
-            try (InputStream srcInput = Files.newInputStream(src);
-                    OutputStream outStream = Files.newOutputStream(output)) {
-                final DocumentBuilder builder = docBuilderFactory.newDocumentBuilder();
-                final org.w3c.dom.Document document = builder.parse(srcInput);
-                final Transformer transformer = getXslTransformer(xslt.getStylesheet());
-                if(xslt.hasParams()) {
-                    for(Map.Entry<String, String> param : xslt.getParams().entrySet()) {
-                        transformer.setParameter(param.getKey(), param.getValue());
-                    }
+        try (InputStream srcInput = Files.newInputStream(src); OutputStream outStream = Files.newOutputStream(output)) {
+            final DocumentBuilder builder = docBuilderFactory.newDocumentBuilder();
+            final org.w3c.dom.Document document = builder.parse(srcInput);
+            final Transformer transformer = getXslTransformer(xslt.getStylesheet());
+            if (xslt.hasParams()) {
+                for (Map.Entry<String, String> param : xslt.getParams().entrySet()) {
+                    transformer.setParameter(param.getKey(), param.getValue());
                 }
-                final Properties taskProps = fpTasksProps.get(fp.getGav());
-                if(taskProps != null) {
-                    for (Map.Entry<Object, Object> prop : taskProps.entrySet()) {
-                        transformer.setParameter(prop.getKey().toString(), prop.getValue());
-                    }
-                }
-                final DOMSource source = new DOMSource(document);
-                final StreamResult result = new StreamResult(outStream);
-                transformer.transform(source, result);
-            } catch(ProvisioningException e) {
-                throw e;
-            } catch (Exception e) {
-                throw new ProvisioningException("Failed to transform " + xslt.getSrc() + " with " + xslt.getStylesheet() + " to " + xslt.getOutput(), e);
             }
+            final Properties taskProps = fpTasksProps.get(fp.getGav());
+            if (taskProps != null) {
+                for (Map.Entry<Object, Object> prop : taskProps.entrySet()) {
+                    transformer.setParameter(prop.getKey().toString(), prop.getValue());
+                }
+            }
+            final DOMSource source = new DOMSource(document);
+            final StreamResult result = new StreamResult(outStream);
+            transformer.transform(source, result);
+        } catch (ProvisioningException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ProvisioningException(
+                    "Failed to transform " + xslt.getSrc() + " with " + xslt.getStylesheet() + " to " + xslt.getOutput(), e);
         }
     }
 
@@ -599,7 +588,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
     }
 
-    private void addExampleConfigs(FeaturePackRuntime fp, ExampleFpConfigs exampleConfigs) throws ProvisioningDescriptionException {
+    public void addExampleConfigs(FeaturePackRuntime fp, ExampleFpConfigs exampleConfigs) throws ProvisioningDescriptionException {
         final ArtifactCoords.Gav originGav;
         if(exampleConfigs.getOrigin() != null) {
             originGav = fp.getSpec().getFeaturePackDep(exampleConfigs.getOrigin()).getGav();
@@ -625,105 +614,100 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
     }
 
-    private void copyArtifacts(final WildFlyPackageTasks tasks) throws ProvisioningException {
-        for(CopyArtifact copyArtifact : tasks.getCopyArtifacts()) {
-            final String gavString = versionResolver.resolveProperty(copyArtifact.getArtifact());
-            if(gavString == null) {
-                throw new ProvisioningException("Failed to resolve the version of " + copyArtifact.getArtifact());
+    public void copyArtifact(CopyArtifact copyArtifact) throws ProvisioningException, ArtifactException {
+        final String artifactStr = copyArtifact.getArtifact();
+        final String gavString = versionResolver.resolveProperty(artifactStr);
+        if(gavString == null) {
+            throw new ProvisioningException("Failed to resolve the version of " + artifactStr);
+        }
+        try {
+            final ArtifactCoords coords = fromJBossModules(gavString, "jar");
+            final Path jarSrc = runtime.resolveArtifact(coords);
+            String location = copyArtifact.getToLocation();
+            if (!location.isEmpty() && location.charAt(location.length() - 1) == '/') {
+                // if the to location ends with a / then it is a directory
+                // so we need to append the artifact name
+                location += jarSrc.getFileName();
+            }
+
+            final Path jarTarget = runtime.getStagedDir().resolve(location);
+
+            Files.createDirectories(jarTarget.getParent());
+            if (copyArtifact.isExtract()) {
+                extractArtifact(jarSrc, jarTarget, copyArtifact);
+            } else {
+                IoUtils.copy(jarSrc, jarTarget);
+                addToInstallationCp(jarTarget);
+            }
+            runtime.getMessageWriter().verbose("    Copying artifact %s to %s", jarSrc, jarTarget);
+            if(schemaGroups.contains(coords.getGroupId())) {
+                extractSchemas(jarSrc);
+            }
+        } catch (IOException e) {
+            throw new ProvisioningException("Failed to copy artifact " + gavString, e);
+        }
+    }
+
+    public void copyPath(final Path pmWfDir, CopyPath copyPath) throws ProvisioningException {
+        final Path src = pmWfDir.resolve(copyPath.getSrc());
+        if (!Files.exists(src)) {
+            throw new ProvisioningException(Errors.pathDoesNotExist(src));
+        }
+        final Path target = copyPath.getTarget() == null ? runtime.getStagedDir() : runtime.getStagedDir().resolve(copyPath.getTarget());
+        if (copyPath.isReplaceProperties()) {
+            if (!Files.exists(target.getParent())) {
+                try {
+                    Files.createDirectories(target.getParent());
+                } catch (IOException e) {
+                    throw new ProvisioningException(Errors.mkdirs(target.getParent()), e);
+                }
             }
             try {
-                final ArtifactCoords coords = fromJBossModules(gavString, "jar");
-                final Path jarSrc = runtime.resolveArtifact(coords);
-                String location = copyArtifact.getToLocation();
-                if (!location.isEmpty() && location.charAt(location.length() - 1) == '/') {
-                    // if the to location ends with a / then it is a directory
-                    // so we need to append the artifact name
-                    location += jarSrc.getFileName();
-                }
-
-                final Path jarTarget = runtime.getStagedDir().resolve(location);
-
-                Files.createDirectories(jarTarget.getParent());
-                if (copyArtifact.isExtract()) {
-                    extractArtifact(jarSrc, jarTarget, copyArtifact);
-                } else {
-                    IoUtils.copy(jarSrc, jarTarget);
-                    addToInstallationCp(jarTarget);
-                }
-                runtime.getMessageWriter().verbose("    Copying artifact %s to %s", jarSrc, jarTarget);
-                if(schemaGroups.contains(coords.getGroupId())) {
-                    extractSchemas(jarSrc);
-                }
-            } catch (IOException e) {
-                throw new ProvisioningException("Failed to copy artifact " + gavString, e);
-            }
-        }
-    }
-
-    private void copyPaths(final WildFlyPackageTasks tasks, final Path pmWfDir) throws ProvisioningException {
-        for(CopyPath copyPath : tasks.getCopyPaths()) {
-            final Path src = pmWfDir.resolve(copyPath.getSrc());
-            if (!Files.exists(src)) {
-                throw new ProvisioningException(Errors.pathDoesNotExist(src));
-            }
-            final Path target = copyPath.getTarget() == null ? runtime.getStagedDir() : runtime.getStagedDir().resolve(copyPath.getTarget());
-            if (copyPath.isReplaceProperties()) {
-                if (!Files.exists(target.getParent())) {
-                    try {
-                        Files.createDirectories(target.getParent());
-                    } catch (IOException e) {
-                        throw new ProvisioningException(Errors.mkdirs(target.getParent()), e);
-                    }
-                }
-                try {
-                    Files.walkFileTree(src, EnumSet.of(FileVisitOption.FOLLOW_LINKS), Integer.MAX_VALUE,
-                            new SimpleFileVisitor<Path>() {
-                                @Override
-                                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
-                                    final Path targetDir = target.resolve(src.relativize(dir));
-                                    try {
-                                        Files.copy(dir, targetDir);
-                                    } catch (FileAlreadyExistsException e) {
-                                        if (!Files.isDirectory(targetDir)) {
-                                            throw e;
-                                        }
+                Files.walkFileTree(src, EnumSet.of(FileVisitOption.FOLLOW_LINKS), Integer.MAX_VALUE,
+                        new SimpleFileVisitor<Path>() {
+                            @Override
+                            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+                                final Path targetDir = target.resolve(src.relativize(dir));
+                                try {
+                                    Files.copy(dir, targetDir);
+                                } catch (FileAlreadyExistsException e) {
+                                    if (!Files.isDirectory(targetDir)) {
+                                        throw e;
                                     }
-                                    return FileVisitResult.CONTINUE;
                                 }
+                                return FileVisitResult.CONTINUE;
+                            }
 
-                                @Override
-                                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-                                    PropertyReplacer.copy(file, target.resolve(src.relativize(file)), mergedTaskPropsResolver);
-                                    return FileVisitResult.CONTINUE;
-                                }
-                            });
-                } catch (IOException e) {
-                    throw new ProvisioningException(Errors.copyFile(src, target), e);
-                }
-            } else {
-                try {
-                    IoUtils.copy(src, target);
-                } catch (IOException e) {
-                    throw new ProvisioningException(Errors.copyFile(src, target));
-                }
+                            @Override
+                            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                                PropertyReplacer.copy(file, target.resolve(src.relativize(file)), mergedTaskPropsResolver);
+                                return FileVisitResult.CONTINUE;
+                            }
+                        });
+            } catch (IOException e) {
+                throw new ProvisioningException(Errors.copyFile(src, target), e);
+            }
+        } else {
+            try {
+                IoUtils.copy(src, target);
+            } catch (IOException e) {
+                throw new ProvisioningException(Errors.copyFile(src, target));
             }
         }
     }
 
-    private void deletePaths() throws ProvisioningException {
-        for(DeletePath deletePath : pathsToDelete) {
-            final Path path = runtime.getStagedDir().resolve(deletePath.getPath());
-            if (!Files.exists(path)) {
-                continue;
-            }
-            if(deletePath.isRecursive()) {
-                IoUtils.recursiveDelete(path);
-            } else {
-                try {
-                    Files.delete(path);
-                } catch (IOException e) {
-                    throw new ProvisioningException(Errors.deletePath(path), e);
-                }
+    public void deletePath(DeletePath deletePath) throws ProvisioningException {
+        final Path path = runtime.getStagedDir().resolve(deletePath.getPath());
+        if (!Files.exists(path)) {
+            return;
+        }
+        if(deletePath.isRecursive()) {
+            IoUtils.recursiveDelete(path);
+        } else {
+            try {
+                Files.delete(path);
+            } catch (IOException e) {
+                throw new ProvisioningException(Errors.deletePath(path), e);
             }
         }
     }

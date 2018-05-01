@@ -23,6 +23,8 @@ import org.jboss.galleon.xml.ConfigXml;
 import org.jboss.galleon.xml.XmlNameProvider;
 import org.jboss.staxmapper.XMLElementReader;
 import org.jboss.staxmapper.XMLExtendedStreamReader;
+import org.wildfly.galleon.plugin.WildFlyPackageTasks;
+
 import javax.xml.namespace.QName;
 import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
@@ -50,25 +52,20 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
 
         CONFIG("config"),
         COPY_ARTIFACT("copy-artifact"),
-        COPY_ARTIFACTS("copy-artifacts"),
-        COPY_PATHS("copy-paths"),
+        COPY_PATH("copy-path"),
         DELETE("delete"),
-        DELETE_PATHS("delete-paths"),
-        DIR("dir"),
         EXAMPLE_CONFIGS("example-configs"),
         FILE_PERMISSIONS("file-permissions"),
         FILTER("filter"),
         LINE_ENDINGS("line-endings"),
-        MKDIRS("mkdirs"),
+        MKDIR("mkdir"),
         PARAM("param"),
         PARAMS("params"),
-        PATH("path"),
         PERMISSION("permission"),
         TASKS("tasks"),
         TRANSFORM("transform"),
         UNIX("unix"),
         WINDOWS("windows"),
-        XSL("xsl"),
 
         // default unknown element
         UNKNOWN(null);
@@ -79,25 +76,20 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
             Map<QName, Element> elementsMap = new HashMap<QName, Element>();
             elementsMap.put(new QName(NAMESPACE_2_0, Element.CONFIG.getLocalName()), Element.CONFIG);
             elementsMap.put(new QName(NAMESPACE_2_0, Element.COPY_ARTIFACT.getLocalName()), Element.COPY_ARTIFACT);
-            elementsMap.put(new QName(NAMESPACE_2_0, Element.COPY_ARTIFACTS.getLocalName()), Element.COPY_ARTIFACTS);
-            elementsMap.put(new QName(NAMESPACE_2_0, Element.COPY_PATHS.getLocalName()), Element.COPY_PATHS);
+            elementsMap.put(new QName(NAMESPACE_2_0, Element.COPY_PATH.getLocalName()), Element.COPY_PATH);
             elementsMap.put(new QName(NAMESPACE_2_0, Element.DELETE.getLocalName()), Element.DELETE);
-            elementsMap.put(new QName(NAMESPACE_2_0, Element.DELETE_PATHS.getLocalName()), Element.DELETE_PATHS);
-            elementsMap.put(new QName(NAMESPACE_2_0, Element.DIR.getLocalName()), Element.DIR);
             elementsMap.put(new QName(NAMESPACE_2_0, Element.EXAMPLE_CONFIGS.getLocalName()), Element.EXAMPLE_CONFIGS);
             elementsMap.put(new QName(NAMESPACE_2_0, Element.FILE_PERMISSIONS.getLocalName()), Element.FILE_PERMISSIONS);
             elementsMap.put(new QName(NAMESPACE_2_0, Element.FILTER.getLocalName()), Element.FILTER);
             elementsMap.put(new QName(NAMESPACE_2_0, Element.LINE_ENDINGS.getLocalName()), Element.LINE_ENDINGS);
-            elementsMap.put(new QName(NAMESPACE_2_0, Element.MKDIRS.getLocalName()), Element.MKDIRS);
+            elementsMap.put(new QName(NAMESPACE_2_0, Element.MKDIR.getLocalName()), Element.MKDIR);
             elementsMap.put(new QName(NAMESPACE_2_0, Element.PARAM.getLocalName()), Element.PARAM);
             elementsMap.put(new QName(NAMESPACE_2_0, Element.PARAMS.getLocalName()), Element.PARAMS);
-            elementsMap.put(new QName(NAMESPACE_2_0, Element.PATH.getLocalName()), Element.PATH);
             elementsMap.put(new QName(NAMESPACE_2_0, Element.PERMISSION.getLocalName()), Element.PERMISSION);
             elementsMap.put(new QName(NAMESPACE_2_0, Element.TASKS.getLocalName()), Element.TASKS);
             elementsMap.put(new QName(NAMESPACE_2_0, Element.TRANSFORM.getLocalName()), Element.TRANSFORM);
             elementsMap.put(new QName(NAMESPACE_2_0, Element.UNIX.getLocalName()), Element.UNIX);
             elementsMap.put(new QName(NAMESPACE_2_0, Element.WINDOWS.getLocalName()), Element.WINDOWS);
-            elementsMap.put(new QName(NAMESPACE_2_0, Element.XSL.getLocalName()), Element.XSL);
             elements = elementsMap;
         }
 
@@ -222,26 +214,26 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
                     final Element element = Element.of(reader.getName());
 
                     switch (element) {
-                        case COPY_ARTIFACTS:
-                            parseCopyArtifacts(reader, builder);
+                        case COPY_ARTIFACT:
+                            builder.addTask(parseCopyArtifact(reader));
                             break;
-                        case COPY_PATHS:
-                            parseCopyPaths(reader, builder);
+                        case COPY_PATH:
+                            builder.addTask(parseCopyPath(reader));
                             break;
-                        case DELETE_PATHS:
-                            parseDeletePaths(reader, builder);
+                        case DELETE:
+                            builder.addTask(parseDeletePath(reader));
                             break;
                         case EXAMPLE_CONFIGS:
-                            parseExampleConfigs(reader, builder);
+                            builder.addTask(parseExampleConfigs(reader));
                             break;
-                        case XSL:
-                            parseXsl(reader, builder);
+                        case TRANSFORM:
+                            builder.addTask(parseTransform(reader));
                             break;
                         case FILE_PERMISSIONS:
                             parseFilePermissions(reader, builder);
                             break;
-                        case MKDIRS:
-                            parseMkdirs(reader, builder);
+                        case MKDIR:
+                            builder.addMkDir(parseMkdir(reader));
                             break;
                         case LINE_ENDINGS:
                             parseLineEndings(reader, builder);
@@ -259,25 +251,23 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
         throw ParsingUtils.endOfDocument(reader.getLocation());
     }
 
-    private void parseExampleConfigs(final XMLExtendedStreamReader reader, final WildFlyPackageTasks.Builder builder) throws XMLStreamException {
-        String origin = null;
+    private ExampleFpConfigs parseExampleConfigs(final XMLExtendedStreamReader reader) throws XMLStreamException {
+        final ExampleFpConfigs exampleConfigs = new ExampleFpConfigs();
         final int count = reader.getAttributeCount();
         for (int i = 0; i < count; i++) {
             final Attribute attribute = Attribute.of(reader.getAttributeName(i));
             switch (attribute) {
                 case ORIGIN:
-                    origin = reader.getAttributeValue(i);
+                    exampleConfigs.setOrigin(reader.getAttributeValue(i));
                     break;
                 default:
                     throw ParsingUtils.unexpectedContent(reader);
             }
         }
-        final ExampleFpConfigs.Builder exampleConfigs = ExampleFpConfigs.builder(origin);
         while (reader.hasNext()) {
             switch (reader.nextTag()) {
                 case XMLStreamConstants.END_ELEMENT: {
-                    builder.addExampleConfigs(exampleConfigs.build());
-                    return;
+                    return exampleConfigs;
                 }
                 case XMLStreamConstants.START_ELEMENT: {
                     final Element element = Element.of(reader.getName());
@@ -298,7 +288,7 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
         throw ParsingUtils.endOfDocument(reader.getLocation());
     }
 
-    private void parseExampleConfigs(final XMLExtendedStreamReader reader, ExampleFpConfigs.Builder builder) throws XMLStreamException {
+    private void parseExampleConfigs(final XMLExtendedStreamReader reader, ExampleFpConfigs builder) throws XMLStreamException {
         final ConfigModel.Builder configBuilder = ConfigModel.builder();
         ConfigXml.readConfig(reader, configBuilder);
         try {
@@ -330,29 +320,8 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
         return name;
     }
 
-    private void parseMkdirs(final XMLStreamReader reader, final WildFlyPackageTasks.Builder builder) throws XMLStreamException {
-        while (reader.hasNext()) {
-            switch (reader.nextTag()) {
-                case XMLStreamConstants.END_ELEMENT: {
-                    return;
-                }
-                case XMLStreamConstants.START_ELEMENT: {
-                    final Element element = Element.of(reader.getName());
-                    switch (element) {
-                        case DIR:
-                            builder.addMkDirs(parseName(reader));
-                            break;
-                        default:
-                            throw ParsingUtils.unexpectedContent(reader);
-                    }
-                    break;
-                }
-                default: {
-                    throw ParsingUtils.unexpectedContent(reader);
-                }
-            }
-        }
-        throw ParsingUtils.endOfDocument(reader.getLocation());
+    private String parseMkdir(final XMLStreamReader reader) throws XMLStreamException {
+        return parseName(reader);
     }
 
     private void parseLineEndings(final XMLStreamReader reader, final WildFlyPackageTasks.Builder builder) throws XMLStreamException {
@@ -397,12 +366,12 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
                     final Element element = Element.of(reader.getName());
                     switch (element) {
                         case FILTER:
-                            final FileFilter.Builder filterBuilder = FileFilter.builder();
+                            final FileFilter filterBuilder = new FileFilter();
                             parseFilter(reader, filterBuilder);
                             if(windows) {
-                                builder.addWindowsLineEndFilter(filterBuilder.build());
+                                builder.addWindowsLineEndFilter(filterBuilder);
                             } else {
-                                builder.addUnixLineEndFilter(filterBuilder.build());
+                                builder.addUnixLineEndFilter(filterBuilder);
                             }
                             break;
                         default:
@@ -418,7 +387,7 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
         throw ParsingUtils.endOfDocument(reader.getLocation());
     }
 
-    public void parseFilter(XMLStreamReader reader, FileFilter.Builder builder) throws XMLStreamException {
+    public void parseFilter(XMLStreamReader reader, FileFilter builder) throws XMLStreamException {
         final Set<Attribute> required = EnumSet.of(Attribute.PATTERN, Attribute.INCLUDE);
         final int count = reader.getAttributeCount();
         for (int i = 0; i < count; i++) {
@@ -443,34 +412,8 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
         ParsingUtils.parseNoContent(reader);
     }
 
-    private void parseCopyArtifacts(final XMLStreamReader reader, WildFlyPackageTasks.Builder builder) throws XMLStreamException {
-        while (reader.hasNext()) {
-            switch (reader.nextTag()) {
-                case XMLStreamConstants.END_ELEMENT: {
-                    return;
-                }
-                case XMLStreamConstants.START_ELEMENT: {
-                    final Element element = Element.of(reader.getName());
-                    switch (element) {
-                        case COPY_ARTIFACT:
-                            final CopyArtifact.Builder cpBuilder = CopyArtifact.builder();
-                            parseCopyArtifact(reader, cpBuilder);
-                            builder.addCopyArtifact(cpBuilder.build());
-                            break;
-                        default:
-                            throw ParsingUtils.unexpectedContent(reader);
-                    }
-                    break;
-                }
-                default: {
-                    throw ParsingUtils.unexpectedContent(reader);
-                }
-            }
-        }
-        throw ParsingUtils.endOfDocument(reader.getLocation());
-    }
-
-    private void parseCopyArtifact(XMLStreamReader reader, final CopyArtifact.Builder builder) throws XMLStreamException {
+    private CopyArtifact parseCopyArtifact(XMLStreamReader reader) throws XMLStreamException {
+        final CopyArtifact builder = new CopyArtifact();
         final Set<Attribute> required = EnumSet.of(Attribute.ARTIFACT, Attribute.TO_LOCATION);
         final int count = reader.getAttributeCount();
         for (int i = 0; i < count; i++) {
@@ -499,15 +442,15 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
         while (reader.hasNext()) {
             switch (reader.nextTag()) {
                 case XMLStreamConstants.END_ELEMENT: {
-                    return;
+                    return builder;
                 }
                 case XMLStreamConstants.START_ELEMENT: {
                     final Element element = Element.of(reader.getName());
                     switch (element) {
                         case FILTER:
-                            final FileFilter.Builder filterBuilder = FileFilter.builder();
+                            final FileFilter filterBuilder = new FileFilter();
                             parseFilter(reader, filterBuilder);
-                            builder.addFilter(filterBuilder.build());
+                            builder.addFilter(filterBuilder);
                             break;
                         default:
                             throw ParsingUtils.unexpectedContent(reader);
@@ -522,33 +465,8 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
         throw ParsingUtils.endOfDocument(reader.getLocation());
     }
 
-    private void parseCopyPaths(final XMLStreamReader reader, WildFlyPackageTasks.Builder builder) throws XMLStreamException {
-        while (reader.hasNext()) {
-            switch (reader.nextTag()) {
-                case XMLStreamConstants.END_ELEMENT: {
-                    return;
-                }
-                case XMLStreamConstants.START_ELEMENT: {
-                    final Element element = Element.of(reader.getName());
-                    switch (element) {
-                        case PATH:
-                            parseCopyPath(reader, builder);
-                            break;
-                        default:
-                            throw ParsingUtils.unexpectedContent(reader);
-                    }
-                    break;
-                }
-                default: {
-                    throw ParsingUtils.unexpectedContent(reader);
-                }
-            }
-        }
-        throw ParsingUtils.endOfDocument(reader.getLocation());
-    }
-
-    private void parseCopyPath(XMLStreamReader reader, WildFlyPackageTasks.Builder builder) throws XMLStreamException {
-        final CopyPath.Builder cpBuilder = CopyPath.builder();
+    private CopyPath parseCopyPath(XMLStreamReader reader) throws XMLStreamException {
+        final CopyPath cpBuilder = new CopyPath();
         boolean src = false;
         final int count = reader.getAttributeCount();
         for (int i = 0; i < count; i++) {
@@ -572,7 +490,7 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
             throw ParsingUtils.missingAttributes(reader.getLocation(), Collections.singleton(Attribute.SRC));
         }
         ParsingUtils.parseNoContent(reader);
-        builder.addCopyPath(cpBuilder.build());
+        return cpBuilder;
     }
 
     private void parseFilePermissions(final XMLStreamReader reader, WildFlyPackageTasks.Builder builder) throws XMLStreamException {
@@ -601,7 +519,7 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
     }
 
     protected FilePermission parsePermission(XMLStreamReader reader) throws XMLStreamException {
-        final FilePermission.Builder permissionBuilder = FilePermission.builder();
+        final FilePermission permissionBuilder = new FilePermission();
         final Set<Attribute> required = EnumSet.of(Attribute.VALUE);
         final int count = reader.getAttributeCount();
         for (int i = 0; i < count; i++) {
@@ -622,15 +540,15 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
         while (reader.hasNext()) {
             switch (reader.nextTag()) {
                 case XMLStreamConstants.END_ELEMENT: {
-                    return permissionBuilder.build();
+                    return permissionBuilder;
                 }
                 case XMLStreamConstants.START_ELEMENT: {
                     final Element element = Element.of(reader.getName());
                     switch (element) {
                         case FILTER:
-                            final FileFilter.Builder filterBuilder = FileFilter.builder();
+                            final FileFilter filterBuilder = new FileFilter();
                             parseFilter(reader, filterBuilder);
-                            permissionBuilder.addFilter(filterBuilder.build());
+                            permissionBuilder.addFilter(filterBuilder);
                             break;
                         default:
                             throw ParsingUtils.unexpectedContent(reader);
@@ -645,32 +563,7 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
         throw ParsingUtils.endOfDocument(reader.getLocation());
     }
 
-    public void parseDeletePaths(final XMLStreamReader reader, WildFlyPackageTasks.Builder builder) throws XMLStreamException {
-        while (reader.hasNext()) {
-            switch (reader.nextTag()) {
-                case XMLStreamConstants.END_ELEMENT: {
-                    return;
-                }
-                case XMLStreamConstants.START_ELEMENT: {
-                    final Element element = Element.of(reader.getName());
-                    switch (element) {
-                        case DELETE:
-                            parseDeletePath(reader, builder);
-                            break;
-                        default:
-                            throw ParsingUtils.unexpectedContent(reader);
-                    }
-                    break;
-                }
-                default: {
-                    throw ParsingUtils.unexpectedContent(reader);
-                }
-            }
-        }
-        throw ParsingUtils.endOfDocument(reader.getLocation());
-    }
-
-    private void parseDeletePath(XMLStreamReader reader, WildFlyPackageTasks.Builder builder) throws XMLStreamException {
+    private DeletePath parseDeletePath(XMLStreamReader reader) throws XMLStreamException {
         final int count = reader.getAttributeCount();
         String path = null;
         boolean recursive = false;
@@ -692,49 +585,24 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
         if (path == null) {
             throw ParsingUtils.missingAttributes(reader.getLocation(), Collections.singleton(Attribute.PATH));
         }
-        builder.addDeletePath(new DeletePath(path, recursive));
         ParsingUtils.parseNoContent(reader);
+        return new DeletePath(path, recursive);
     }
 
-    public void parseXsl(final XMLStreamReader reader, WildFlyPackageTasks.Builder builder) throws XMLStreamException {
-        while (reader.hasNext()) {
-            switch (reader.nextTag()) {
-                case XMLStreamConstants.END_ELEMENT: {
-                    return;
-                }
-                case XMLStreamConstants.START_ELEMENT: {
-                    final Element element = Element.of(reader.getName());
-                    switch (element) {
-                        case TRANSFORM:
-                            parseTransform(reader, builder);
-                            break;
-                        default:
-                            throw ParsingUtils.unexpectedContent(reader);
-                    }
-                    break;
-                }
-                default: {
-                    throw ParsingUtils.unexpectedContent(reader);
-                }
-            }
-        }
-        throw ParsingUtils.endOfDocument(reader.getLocation());
-    }
-
-    private void parseTransform(XMLStreamReader reader, WildFlyPackageTasks.Builder builder) throws XMLStreamException {
-        final XslTransform.Builder tBuilder = XslTransform.builder();
+    private XslTransform parseTransform(XMLStreamReader reader) throws XMLStreamException {
+        final XslTransform result = new XslTransform();
         final int count = reader.getAttributeCount();
         for (int i = 0; i < count; i++) {
             final Attribute attribute = Attribute.of(reader.getAttributeName(i));
             switch (attribute) {
                 case SRC:
-                    tBuilder.setSrc(reader.getAttributeValue(i));
+                    result.setSrc(reader.getAttributeValue(i));
                     break;
                 case OUTPUT:
-                    tBuilder.setOutput(reader.getAttributeValue(i));
+                    result.setOutput(reader.getAttributeValue(i));
                     break;
                 case STYLESHEET:
-                    tBuilder.setStylesheet(reader.getAttributeValue(i));
+                    result.setStylesheet(reader.getAttributeValue(i));
                     break;
                 default:
                     throw ParsingUtils.unexpectedContent(reader);
@@ -743,7 +611,6 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
         while (reader.hasNext()) {
             switch (reader.nextTag()) {
                 case XMLStreamConstants.END_ELEMENT: {
-                    final XslTransform result = tBuilder.build();
                     if (result.getSrc() == null) {
                         throw ParsingUtils.missingAttributes(reader.getLocation(), Collections.singleton(Attribute.SRC));
                     }
@@ -753,14 +620,13 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
                     if (result.getStylesheet() == null) {
                         throw ParsingUtils.missingAttributes(reader.getLocation(), Collections.singleton(Attribute.STYLESHEET));
                     }
-                    builder.addXslTransform(result);
-                    return;
+                    return result;
                 }
                 case XMLStreamConstants.START_ELEMENT: {
                     final Element element = Element.of(reader.getName());
                     switch (element) {
                         case PARAMS:
-                            parseParams(reader, tBuilder);
+                            parseParams(reader, result);
                             break;
                         default:
                             throw ParsingUtils.unexpectedContent(reader);
@@ -775,7 +641,7 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
         throw ParsingUtils.endOfDocument(reader.getLocation());
     }
 
-    private void parseParams(XMLStreamReader reader, XslTransform.Builder result) throws XMLStreamException {
+    private void parseParams(XMLStreamReader reader, XslTransform result) throws XMLStreamException {
         while (reader.hasNext()) {
             switch (reader.nextTag()) {
                 case XMLStreamConstants.END_ELEMENT: {
@@ -800,7 +666,7 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
         throw ParsingUtils.endOfDocument(reader.getLocation());
     }
 
-    private void parseParam(XMLStreamReader reader, XslTransform.Builder result) throws XMLStreamException {
+    private void parseParam(XMLStreamReader reader, XslTransform result) throws XMLStreamException {
         String name = null;
         String value = null;
         final int count = reader.getAttributeCount();

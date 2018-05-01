@@ -16,53 +16,35 @@
  */
 package org.wildfly.galleon.plugin.config;
 
+import org.jboss.galleon.ProvisioningException;
+import org.jboss.galleon.runtime.PackageRuntime;
+import org.wildfly.galleon.plugin.WfConstants;
+import org.wildfly.galleon.plugin.WfInstallPlugin;
+import org.wildfly.galleon.plugin.WildFlyPackageTask;
+
 /**
  *
  * @author Alexey Loubyansky
  */
-public class CopyPath {
+public class CopyPath implements WildFlyPackageTask {
 
-    public static class Builder {
+    private String src;
+    private String target;
+    private boolean replaceProperties;
 
-        private String src;
-        private String target;
-        private boolean replaceProperties;
-
-        private Builder() {
-        }
-
-        public Builder setSrc(String src) {
-            this.src = src;
-            return this;
-        }
-
-        public Builder setTarget(String target) {
-            this.target = target;
-            return this;
-        }
-
-        public Builder setReplaceProperties(boolean replaceProperties) {
-            this.replaceProperties = replaceProperties;
-            return this;
-        }
-
-        public CopyPath build() {
-            return new CopyPath(this);
-        }
+    public CopyPath() {
     }
 
-    public static Builder builder() {
-        return new Builder();
+    public void setSrc(String src) {
+        this.src = src;
     }
 
-    private final String src;
-    private final String target;
-    private final boolean replaceProperties;
+    public void setTarget(String target) {
+        this.target = target;
+    }
 
-    private CopyPath(Builder builder) {
-        this.src = builder.src;
-        this.target = builder.target;
-        this.replaceProperties = builder.replaceProperties;
+    public void setReplaceProperties(boolean replaceProperties) {
+        this.replaceProperties = replaceProperties;
     }
 
     public String getSrc() {
@@ -75,5 +57,10 @@ public class CopyPath {
 
     public boolean isReplaceProperties() {
         return replaceProperties;
+    }
+
+    @Override
+    public void execute(WfInstallPlugin plugin, PackageRuntime pkgRuntime) throws ProvisioningException {
+        plugin.copyPath(pkgRuntime.getResource(WfConstants.PM, WfConstants.WILDFLY), this);
     }
 }

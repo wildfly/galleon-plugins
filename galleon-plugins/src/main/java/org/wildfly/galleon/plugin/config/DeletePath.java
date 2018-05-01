@@ -16,11 +16,16 @@
  */
 package org.wildfly.galleon.plugin.config;
 
+import org.jboss.galleon.ProvisioningException;
+import org.jboss.galleon.runtime.PackageRuntime;
+import org.wildfly.galleon.plugin.WfInstallPlugin;
+import org.wildfly.galleon.plugin.WildFlyPackageTask;
+
 /**
  *
  * @author Alexey Loubyansky
  */
-public class DeletePath {
+public class DeletePath implements WildFlyPackageTask {
 
     private final String path;
     private final boolean recursive;
@@ -30,12 +35,22 @@ public class DeletePath {
         this.recursive = recursive;
     }
 
+    @Override
+    public Phase getPhase() {
+        return Phase.POST_INSTALL;
+    }
+
     public String getPath() {
         return path;
     }
 
     public boolean isRecursive() {
         return recursive;
+    }
+
+    @Override
+    public void execute(WfInstallPlugin plugin, PackageRuntime pkg) throws ProvisioningException {
+        plugin.deletePath(this);
     }
 
     @Override

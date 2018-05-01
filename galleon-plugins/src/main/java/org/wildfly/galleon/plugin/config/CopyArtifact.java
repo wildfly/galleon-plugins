@@ -17,9 +17,14 @@
 package org.wildfly.galleon.plugin.config;
 
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+
+import org.jboss.galleon.ProvisioningException;
+import org.jboss.galleon.runtime.PackageRuntime;
+import org.jboss.galleon.util.CollectionUtils;
+import org.wildfly.galleon.plugin.WfInstallPlugin;
+import org.wildfly.galleon.plugin.WildFlyPackageTask;
 
 /**
  * Represents an artifact that is copies into a specific location in the final
@@ -27,67 +32,32 @@ import java.util.List;
  *
  *
  * @author Stuart Douglas
+ * @author Alexey Loubyansky
  */
-public class CopyArtifact {
+public class CopyArtifact implements WildFlyPackageTask {
 
-    public static class Builder {
+    private String artifact;
+    private String toLocation;
+    private boolean extract;
+    private List<FileFilter> filters = Collections.emptyList();
 
-        private String artifact;
-        private String toLocation;
-        private boolean extract;
-        private List<FileFilter> filters = Collections.emptyList();
-
-        private Builder() {
-        }
-
-        public Builder setArtifact(String artifact) {
-            this.artifact = artifact;
-            return this;
-        }
-
-        public Builder setToLocation(String toLocation) {
-            this.toLocation = toLocation;
-            return this;
-        }
-
-        public Builder setExtract() {
-            this.extract = true;
-            return this;
-        }
-
-        public Builder addFilter(FileFilter filter) {
-            switch(filters.size()) {
-                case 0:
-                    filters = Collections.singletonList(filter);
-                    break;
-                case 1:
-                    filters = new ArrayList<FileFilter>(filters);
-                default:
-                    filters.add(filter);
-            }
-            return this;
-        }
-
-        public CopyArtifact build() {
-            return new CopyArtifact(artifact, toLocation, extract,filters);
-        }
+    public CopyArtifact() {
     }
 
-    public static Builder builder() {
-        return new Builder();
-    }
-
-    private final String artifact;
-    private final String toLocation;
-    private final boolean extract;
-    private final List<FileFilter> filters;
-
-
-    private CopyArtifact(String artifact, String toLocation, boolean extract, List<FileFilter> filters) {
+    public void setArtifact(String artifact) {
         this.artifact = artifact;
+    }
+
+    public void setToLocation(String toLocation) {
         this.toLocation = toLocation;
-        this.extract = extract;
-        this.filters = filters;
+    }
+
+    public void setExtract() {
+        this.extract = true;
+    }
+
+    public void addFilter(FileFilter filter) {
+        filters = CollectionUtils.add(filters, filter);
     }
 
     public String getArtifact() {
@@ -113,5 +83,10 @@ public class CopyArtifact {
             }
         }
         return true; //default include
+    }
+
+    @Override
+    public void execute(WfInstallPlugin plugin, PackageRuntime pkg) throws ProvisioningException {
+        plugin.copyArtifact(this);
     }
 }

@@ -26,44 +26,20 @@ import org.jboss.galleon.util.ParsingUtils;
  */
 public class FileFilter {
 
-    public static class Builder {
+    private String patternString;
+    private Pattern pattern;
+    private boolean include;
 
-        private String patternString;
-        private boolean include;
-
-        private Builder() {
-        }
-
-        public Builder setPatternString(String patternString) {
-            this.patternString = patternString;
-            return this;
-        }
-
-        public Builder setInclude() {
-            this.include = true;
-            return this;
-        }
-
-        public FileFilter build() {
-            return new FileFilter(patternString, include);
-        }
+    public FileFilter() {
     }
 
-    public static Builder builder() {
-        return new Builder();
-    }
-
-    private final String patternString;
-    private final Pattern pattern;
-    private final boolean include;
-
-    private FileFilter(String patternString, boolean include) {
-        if (patternString == null) {
-            throw new IllegalArgumentException("null pattern");
-        }
+    public void setPatternString(String patternString) {
         this.patternString = patternString;
         this.pattern = Pattern.compile(ParsingUtils.wildcardToJavaRegexp(patternString));
-        this.include = include;
+    }
+
+    public void setInclude() {
+        this.include = true;
     }
 
     public String getPattern() {

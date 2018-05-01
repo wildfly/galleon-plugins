@@ -19,62 +19,41 @@ package org.wildfly.galleon.plugin.config;
 import java.util.Collections;
 import java.util.Map;
 
+import org.jboss.galleon.ProvisioningException;
+import org.jboss.galleon.runtime.PackageRuntime;
 import org.jboss.galleon.util.CollectionUtils;
+import org.wildfly.galleon.plugin.WfConstants;
+import org.wildfly.galleon.plugin.WfInstallPlugin;
+import org.wildfly.galleon.plugin.WildFlyPackageTask;
 
 /**
  *
  * @author Alexey Loubyansky
  */
-public class XslTransform {
+public class XslTransform implements WildFlyPackageTask {
 
-    public static class Builder {
+    private String src;
+    private String stylesheet;
+    private String output;
+    private Map<String, String> params = Collections.emptyMap();
 
-        private String stylesheet;
-        private String src;
-        private String output;
-        private Map<String, String> params = Collections.emptyMap();
-
-        private Builder() {
-        }
-
-        public Builder setSrc(String src) {
-            this.src = src;
-            return this;
-        }
-
-        public Builder setOutput(String output) {
-            this.output = output;
-            return this;
-        }
-
-        public Builder setStylesheet(String stylesheet) {
-            this.stylesheet = stylesheet;
-            return this;
-        }
-
-        public void setParam(String name, String value) {
-            params = CollectionUtils.put(params, name, value);
-        }
-
-        public XslTransform build() {
-            return new XslTransform(this);
-        }
+    public XslTransform() {
     }
 
-    public static Builder builder() {
-        return new Builder();
+    public void setSrc(String src) {
+        this.src = src;
     }
 
-    private final String src;
-    private final String stylesheet;
-    private final String output;
-    private final Map<String, String> params;
+    public void setOutput(String output) {
+        this.output = output;
+    }
 
-    private XslTransform(Builder builder) {
-        this.src = builder.src;
-        this.stylesheet = builder.stylesheet;
-        this.output = builder.output;
-        this.params = CollectionUtils.unmodifiable(builder.params);
+    public void setStylesheet(String stylesheet) {
+        this.stylesheet = stylesheet;
+    }
+
+    public void setParam(String name, String value) {
+        params = CollectionUtils.put(params, name, value);
     }
 
     public String getSrc() {
@@ -95,5 +74,10 @@ public class XslTransform {
 
     public Map<String, String> getParams() {
         return params;
+    }
+
+    @Override
+    public void execute(WfInstallPlugin plugin, PackageRuntime pkg) throws ProvisioningException {
+        plugin.xslTransform(pkg.getFeaturePackRuntime(), this, pkg.getResource(WfConstants.PM, WfConstants.WILDFLY));
     }
 }

@@ -20,9 +20,13 @@ package org.wildfly.galleon.plugin.config;
 import java.util.Collections;
 import java.util.Map;
 
+import org.jboss.galleon.ProvisioningException;
 import org.jboss.galleon.config.ConfigId;
 import org.jboss.galleon.config.ConfigModel;
+import org.jboss.galleon.runtime.PackageRuntime;
 import org.jboss.galleon.util.CollectionUtils;
+import org.wildfly.galleon.plugin.WfInstallPlugin;
+import org.wildfly.galleon.plugin.WildFlyPackageTask;
 
 /**
  * This is hopefully a temporary class which represents configs from a feature-pack
@@ -30,41 +34,17 @@ import org.jboss.galleon.util.CollectionUtils;
  *
  * @author Alexey Loubyansky
  */
-public class ExampleFpConfigs {
+public class ExampleFpConfigs implements WildFlyPackageTask {
 
-    public static class Builder {
+    private String origin;
+    private Map<ConfigId, ConfigModel> configs = Collections.emptyMap();
 
-        private final String origin;
-        private Map<ConfigId, ConfigModel> configs = Collections.emptyMap();
-
-        private Builder(String origin) {
-            this.origin = origin;
-        }
-
-        public Builder addConfig(ConfigModel config) {
-            configs = CollectionUtils.put(configs, config.getId(), config);
-            return this;
-        }
-
-        public ExampleFpConfigs build() {
-            return new ExampleFpConfigs(this);
-        }
+    public void addConfig(ConfigModel config) {
+        configs = CollectionUtils.put(configs, config.getId(), config);
     }
 
-    public static Builder builder() {
-        return builder(null);
-    }
-
-    public static Builder builder(String origin) {
-        return new Builder(origin);
-    }
-
-    private final String origin;
-    private Map<ConfigId, ConfigModel> configs;
-
-    private ExampleFpConfigs(Builder builder) {
-        this.origin = builder.origin;
-        this.configs = builder.configs;
+    public void setOrigin(String origin) {
+        this.origin = origin;
     }
 
     public String getOrigin() {
@@ -79,5 +59,10 @@ public class ExampleFpConfigs {
         for(Map.Entry<ConfigId, ConfigModel> config : exampleConfigs.configs.entrySet()) {
             configs = CollectionUtils.put(configs, config.getKey(), config.getValue());
         }
+    }
+
+    @Override
+    public void execute(WfInstallPlugin plugin, PackageRuntime pkg) throws ProvisioningException {
+        plugin.addExampleConfigs(pkg.getFeaturePackRuntime(), this);
     }
 }
