@@ -115,7 +115,7 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
     private static boolean isProvided(String module) {
         return module.startsWith("java.") ||
                 module.startsWith("jdk.") ||
-                module.equals("org.jboss.modules.main");
+                module.equals("org.jboss.modules");
     }
 
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
@@ -616,12 +616,19 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
             @Override
             public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
                 final Path moduleXml = dir.resolve(WfConstants.MODULE_XML);
-                if(Files.exists(moduleXml)) {
-                    final String packageName = modulesDir.relativize(moduleXml.getParent()).toString().replace(File.separatorChar, '.');
-                    moduleXmlByPkgName.put(packageName, moduleXml);
-                    return FileVisitResult.SKIP_SUBTREE;
+                if(!Files.exists(moduleXml)) {
+                    return FileVisitResult.CONTINUE;
                 }
-                return FileVisitResult.CONTINUE;
+
+                String packageName;
+                if (moduleXml.getParent().getFileName().toString().equals("main")) {
+                    packageName = modulesDir.relativize(moduleXml.getParent().getParent()).toString();
+                } else {
+                    packageName = modulesDir.relativize(moduleXml.getParent()).toString();
+                }
+                packageName = packageName.replace(File.separatorChar, '.');
+                moduleXmlByPkgName.put(packageName, moduleXml);
+                return FileVisitResult.SKIP_SUBTREE;
             }
 
             @Override
@@ -661,9 +668,11 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
                 parsedModule = ModuleXmlParser.parse(targetXml, WfConstants.UTF8);
                 if (!parsedModule.dependencies.isEmpty()) {
                     for (ModuleDependency moduleDep : parsedModule.dependencies) {
-                        final StringBuilder buf = new StringBuilder();
-                        buf.append(moduleDep.getModuleId().getName()).append('.').append(moduleDep.getModuleId().getSlot());
-                        final String depName = buf.toString();
+                        final ModuleIdentifier moduleId = moduleDep.getModuleId();
+                        String depName = moduleId.getName();
+                        if(!moduleId.getSlot().equals("main")) {
+                            depName += '.' + moduleId.getSlot();
+                        }
                         if (moduleXmlByPkgName.containsKey(depName)) {
                             pkgSpecBuilder.addPackageDep(depName, moduleDep.isOptional());
                             continue;
