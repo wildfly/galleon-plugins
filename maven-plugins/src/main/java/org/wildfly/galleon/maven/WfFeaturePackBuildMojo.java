@@ -201,7 +201,7 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
             }
         }
         final Path targetResources = Paths.get(buildName, Constants.RESOURCES);
-        final Path specsDir = Paths.get(configDir.getAbsolutePath() + resourcesDir);
+        final Path specsDir = Paths.get(configDir.getAbsolutePath()).resolve(resourcesDir);
         if (Files.exists(specsDir)) {
             try {
                 IoUtils.copy(specsDir, targetResources);
@@ -264,9 +264,6 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         final PackageSpec.Builder docsBuilder = getExtendedPackage(WfConstants.DOCS, false);
         if(docsBuilder != null) {
             fpBuilder.getSpecBuilder().addDefaultPackage(addPackage(fpPackagesDir, fpBuilder, docsBuilder).getName());
-            if(fpBuilder.hasPackage("docs.licenses.xsl")) {
-                getExtendedPackage(WfConstants.DOCS_LICENSES, false).addPackageDep("docs.licenses.xsl");
-            }
             if(fpBuilder.hasPackage("docs.examples.configs")) {
                 getExtendedPackage("docs.examples", true).addPackageDep("docs.examples.configs", true);
             }
@@ -720,6 +717,7 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         final Properties properties = new Properties();
         properties.put("project.version", project.getVersion());
         properties.put("product.release.name", releaseName);
+        properties.put("version", project.getVersion()); // needed for licenses.xsl
         return properties;
     }
 

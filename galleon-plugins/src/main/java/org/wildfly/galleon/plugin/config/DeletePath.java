@@ -37,7 +37,7 @@ public class DeletePath implements WildFlyPackageTask {
 
     @Override
     public Phase getPhase() {
-        return Phase.POST_INSTALL;
+        return Phase.FINALIZING;
     }
 
     public String getPath() {

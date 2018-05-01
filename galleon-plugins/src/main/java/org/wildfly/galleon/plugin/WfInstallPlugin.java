@@ -50,7 +50,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Stream;
 
-import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerFactory;
@@ -131,6 +130,10 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     @Override
     protected List<PluginOption> initPluginOptions() {
         return Collections.singletonList(mavenDistOption);
+    }
+
+    public ProvisioningRuntime getRuntime() {
+        return runtime;
     }
 
     /* (non-Javadoc)
@@ -380,10 +383,6 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
     public void xslTransform(FeaturePackRuntime fp, XslTransform xslt, Path pmWfDir) throws ProvisioningException {
 
-        if(docBuilderFactory == null) {
-            docBuilderFactory = DocumentBuilderFactory.newInstance();
-        }
-
         final Path src = runtime.getStagedDir().resolve(xslt.getSrc());
         if (!Files.exists(src)) {
             throw new ProvisioningException(Errors.pathDoesNotExist(src));
@@ -394,8 +393,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
 
         try (InputStream srcInput = Files.newInputStream(src); OutputStream outStream = Files.newOutputStream(output)) {
-            final DocumentBuilder builder = docBuilderFactory.newDocumentBuilder();
-            final org.w3c.dom.Document document = builder.parse(srcInput);
+            final org.w3c.dom.Document document = getXmlDocumentBuilderFactory().newDocumentBuilder().parse(srcInput);
             final Transformer transformer = getXslTransformer(xslt.getStylesheet());
             if (xslt.hasParams()) {
                 for (Map.Entry<String, String> param : xslt.getParams().entrySet()) {
@@ -424,7 +422,19 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         if(transformer != null) {
             return transformer;
         }
-        final Path p = runtime.getStagedDir().resolve(stylesheet);
+        transformer = getXslTransformer(runtime.getStagedDir().resolve(stylesheet));
+        xslTransformers = CollectionUtils.put(xslTransformers, stylesheet, transformer);
+        return transformer;
+    }
+
+    public DocumentBuilderFactory getXmlDocumentBuilderFactory() {
+        if(docBuilderFactory == null) {
+            docBuilderFactory = DocumentBuilderFactory.newInstance();
+        }
+        return docBuilderFactory;
+    }
+
+    public Transformer getXslTransformer(Path p) throws ProvisioningException {
         if(!Files.exists(p)) {
             throw new ProvisioningException(Errors.pathDoesNotExist(p));
         }
@@ -433,12 +443,10 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             if(xsltFactory == null) {
                 xsltFactory = TransformerFactory.newInstance();
             }
-            transformer = xsltFactory.newTransformer(stylesource);
+            return xsltFactory.newTransformer(stylesource);
         } catch (Exception e) {
-            throw new ProvisioningException("Failed to initialize a transformer for " + stylesheet, e);
+            throw new ProvisioningException("Failed to initialize a transformer for " + p, e);
         }
-        xslTransformers = CollectionUtils.put(xslTransformers, stylesheet, transformer);
-        return transformer;
     }
 
     private void processModules(ArtifactCoords.Gav fp, String pkgName, Path fpModuleDir) throws ProvisioningException {
@@ -648,8 +656,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
     }
 
-    public void copyPath(final Path pmWfDir, CopyPath copyPath) throws ProvisioningException {
-        final Path src = pmWfDir.resolve(copyPath.getSrc());
+    public void copyPath(final Path relativeTo, CopyPath copyPath) throws ProvisioningException {
+        final Path src = relativeTo.resolve(copyPath.getSrc());
         if (!Files.exists(src)) {
             throw new ProvisioningException(Errors.pathDoesNotExist(src));
         }

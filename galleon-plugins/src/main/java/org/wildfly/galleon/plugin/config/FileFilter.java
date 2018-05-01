@@ -23,6 +23,7 @@ import org.jboss.galleon.util.ParsingUtils;
 
 /**
  * @author Stuart Douglas
+ * @author Alexey Loubyansky
  */
 public class FileFilter {
 

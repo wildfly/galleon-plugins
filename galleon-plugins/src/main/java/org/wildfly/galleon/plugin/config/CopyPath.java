@@ -16,6 +16,8 @@
  */
 package org.wildfly.galleon.plugin.config;
 
+import javax.xml.stream.XMLStreamException;
+
 import org.jboss.galleon.ProvisioningException;
 import org.jboss.galleon.runtime.PackageRuntime;
 import org.wildfly.galleon.plugin.WfConstants;
@@ -28,11 +30,23 @@ import org.wildfly.galleon.plugin.WildFlyPackageTask;
  */
 public class CopyPath implements WildFlyPackageTask {
 
+    private static final String RELATIVE_TO_CONTENT = "content";
+    private static final String RELATIVE_TO_RESOURCES = "resources";
+
+    private boolean relativeToContent;
     private String src;
     private String target;
     private boolean replaceProperties;
 
     public CopyPath() {
+    }
+
+    public void setRelativeTo(String relativeTo) throws XMLStreamException {
+        if(relativeTo.equals(RELATIVE_TO_CONTENT)) {
+            relativeToContent = true;
+        } else if(!relativeTo.equals(RELATIVE_TO_RESOURCES)) {
+            throw new XMLStreamException("Unexpected relative-to value " + relativeTo);
+        }
     }
 
     public void setSrc(String src) {
@@ -60,7 +74,7 @@ public class CopyPath implements WildFlyPackageTask {
     }
 
     @Override
-    public void execute(WfInstallPlugin plugin, PackageRuntime pkgRuntime) throws ProvisioningException {
-        plugin.copyPath(pkgRuntime.getResource(WfConstants.PM, WfConstants.WILDFLY), this);
+    public void execute(WfInstallPlugin plugin, PackageRuntime pkg) throws ProvisioningException {
+        plugin.copyPath(relativeToContent ? pkg.getContentDir() : pkg.getResource(WfConstants.PM, WfConstants.WILDFLY), this);
     }
 }

@@ -28,7 +28,7 @@ public interface WildFlyPackageTask {
 
     enum Phase {
         PROCESSING,
-        POST_INSTALL;
+        FINALIZING;
     }
 
     default Phase getPhase() {

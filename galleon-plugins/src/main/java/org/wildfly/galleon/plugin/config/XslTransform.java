@@ -36,6 +36,7 @@ public class XslTransform implements WildFlyPackageTask {
     private String stylesheet;
     private String output;
     private Map<String, String> params = Collections.emptyMap();
+    private Phase phase;
 
     public XslTransform() {
     }
@@ -56,6 +57,10 @@ public class XslTransform implements WildFlyPackageTask {
         params = CollectionUtils.put(params, name, value);
     }
 
+    public void setPhase(String phase) {
+        this.phase = Phase.valueOf(phase);
+    }
+
     public String getSrc() {
         return src;
     }
@@ -74,6 +79,11 @@ public class XslTransform implements WildFlyPackageTask {
 
     public Map<String, String> getParams() {
         return params;
+    }
+
+    @Override
+    public Phase getPhase() {
+        return phase;
     }
 
     @Override
