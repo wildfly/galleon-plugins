@@ -26,6 +26,7 @@ public interface WfConstants {
     String ARTIFACT_VERSIONS_PROPS = "artifact-versions.properties";
     String BASE = "base";
     String CONFIG = "config";
+    String CONFIGURATION = "configuration";
     String CONTENT = "content";
     String DOCS = "docs";
     String DOCS_LICENSES = "docs.licenses";
@@ -63,4 +64,11 @@ public interface WfConstants {
     String OP_PARAMS = "op-params";
     String OP_PARAMS_MAPPING = "op-params-mapping";
     String WRITE_ATTRIBUTE = "write-attribute";
+
+    String EMBEDDED_ARG_DOMAIN_CONFIG = "--domain-config";
+    String EMBEDDED_ARG_EMPTY_DOMAIN_CONFIG = "--empty-domain-config";
+    String EMBEDDED_ARG_EMPTY_HOST_CONFIG = "--empty-host-config";
+    String EMBEDDED_ARG_HOST_CONFIG = "--host-config";
+    String EMBEDDED_ARG_INTERNAL_EMPTY_CONFIG = "--internal-empty-config";
+    String EMBEDDED_ARG_SERVER_CONFIG = "--server-config";
 }

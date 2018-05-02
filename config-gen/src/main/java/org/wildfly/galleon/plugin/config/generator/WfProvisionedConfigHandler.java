@@ -532,11 +532,11 @@ public class WfProvisionedConfigHandler implements ProvisionedConfigHandler {
         final List<String> embeddedArgs = new ArrayList<>(config.getProperties().size());
         final String configNameProp;
         if(WfConstants.STANDALONE.equals(config.getModel())) {
-            configNameProp = "--server-config";
+            configNameProp = WfConstants.EMBEDDED_ARG_SERVER_CONFIG;
         } else if(WfConstants.DOMAIN.equals(config.getModel())) {
-            configNameProp = "--domain-config";
+            configNameProp = WfConstants.EMBEDDED_ARG_DOMAIN_CONFIG;
         } else if(WfConstants.HOST.equals(config.getModel())) {
-            configNameProp = "--host-config";
+            configNameProp = WfConstants.EMBEDDED_ARG_HOST_CONFIG;
         } else {
             throw new ProvisioningException("Unexpected config model " + config.getModel());
         }

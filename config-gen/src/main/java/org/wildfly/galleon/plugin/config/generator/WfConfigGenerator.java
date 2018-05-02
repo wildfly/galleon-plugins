@@ -35,6 +35,7 @@ import org.jboss.galleon.state.ProvisionedConfig;
 import org.wildfly.core.embedded.EmbeddedManagedProcess;
 import org.wildfly.core.embedded.EmbeddedProcessFactory;
 import org.wildfly.core.embedded.EmbeddedProcessStartException;
+import org.wildfly.galleon.plugin.WfConstants;
 
 /**
  *
@@ -163,21 +164,21 @@ public class WfConfigGenerator {
                 int i = 0;
                 while(i < args.length) {
                     final String arg = args[i++];
-                    if(arg.startsWith("--domain-config")) {
-                        if(arg.length() == "--domain-config".length()) {
+                    if(arg.startsWith(WfConstants.EMBEDDED_ARG_DOMAIN_CONFIG)) {
+                        if(arg.length() == WfConstants.EMBEDDED_ARG_DOMAIN_CONFIG.length()) {
                             domainConfig = args[i++];
                         } else {
-                            domainConfig = arg.substring("--domain-config=".length());
+                            domainConfig = arg.substring(WfConstants.EMBEDDED_ARG_DOMAIN_CONFIG.length() + 1);
                         }
-                    } else if(arg.startsWith("--host-config")) {
-                        if(arg.length() == "--host-config".length()) {
+                    } else if(arg.startsWith(WfConstants.EMBEDDED_ARG_HOST_CONFIG)) {
+                        if(arg.length() == WfConstants.EMBEDDED_ARG_HOST_CONFIG.length()) {
                             hostConfig = args[i++];
                         } else {
-                            hostConfig = arg.substring("--host-config=".length());
+                            hostConfig = arg.substring(WfConstants.EMBEDDED_ARG_HOST_CONFIG.length() + 1);
                         }
-                    } else if(arg.equals("--empty-host-config")) {
+                    } else if(arg.equals(WfConstants.EMBEDDED_ARG_EMPTY_HOST_CONFIG)) {
                         emptyHost = true;
-                    } else if(arg.equals("--empty-domain-config")) {
+                    } else if(arg.equals(WfConstants.EMBEDDED_ARG_EMPTY_DOMAIN_CONFIG)) {
                         emptyDomain = true;
                     }
                 }
@@ -197,13 +198,13 @@ public class WfConfigGenerator {
                 int i = 0;
                 while(i < args.length) {
                     final String arg = args[i++];
-                    if(arg.equals("--server-config")) {
-                        if(arg.length() == "--server-config".length()) {
+                    if(arg.equals(WfConstants.EMBEDDED_ARG_SERVER_CONFIG)) {
+                        if(arg.length() == WfConstants.EMBEDDED_ARG_SERVER_CONFIG.length()) {
                             serverConfig = args[i++];
                         } else {
-                            serverConfig = arg.substring("--server-config=".length());
+                            serverConfig = arg.substring(WfConstants.EMBEDDED_ARG_SERVER_CONFIG.length() + 1);
                         }
-                    } else if(arg.equals("--internal-empty-config")) {
+                    } else if(arg.equals(WfConstants.EMBEDDED_ARG_INTERNAL_EMPTY_CONFIG)) {
                         emptyConfig = true;
                     }
                 }

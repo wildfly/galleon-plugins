@@ -28,7 +28,6 @@ import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.DirectoryStream;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
@@ -254,16 +253,41 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                     }})
                 .build();
 
+        List<Path> configPaths = new ArrayList<>();
         final ProvisioningConfig.Builder configBuilder = ProvisioningConfig.builder();
-        for(Map.Entry<ArtifactCoords.Gav, ExampleFpConfigs> entry : exampleConfigs.entrySet()) {
-            final FeaturePackConfig.Builder fpBuilder = FeaturePackConfig.builder(entry.getKey())
+        for(FeaturePackRuntime fpRt : runtime.getFeaturePacks()) {
+            final FeaturePackConfig.Builder fpBuilder = FeaturePackConfig.builder(fpRt.getGav())
                     .setInheritConfigs(false)
                     .setInheritPackages(false);
-            for(Map.Entry<ConfigId, ConfigModel> config : entry.getValue().getConfigs().entrySet()) {
-                if(config.getValue() != null) {
-                    fpBuilder.addConfig(config.getValue());
-                } else {
-                    fpBuilder.includeDefaultConfig(config.getKey());
+            final ExampleFpConfigs fpExampleConfigs = exampleConfigs.get(fpRt.getGav());
+            if(fpExampleConfigs != null) {
+                for(Map.Entry<ConfigId, ConfigModel> config : fpExampleConfigs.getConfigs().entrySet()) {
+                    final ConfigId configId = config.getKey();
+                    final ConfigModel configModel = config.getValue();
+                    String configName = null;
+                    if(configModel != null) {
+                        fpBuilder.addConfig(configModel);
+                        if(configModel.hasProperties()) {
+                            if(WfConstants.STANDALONE.equals(configId.getModel())) {
+                                configName = configModel.getProperties().get(WfConstants.EMBEDDED_ARG_SERVER_CONFIG);
+                            } else if(WfConstants.HOST.equals(configId.getModel())) {
+                                configName = configModel.getProperties().get(WfConstants.EMBEDDED_ARG_HOST_CONFIG);
+                            } else {
+                                configName = configModel.getProperties().get(WfConstants.EMBEDDED_ARG_DOMAIN_CONFIG);
+                            }
+                        }
+                        if(configName == null) {
+                            configName = configId.getName();
+                        }
+                    } else {
+                        fpBuilder.includeDefaultConfig(configId);
+                        configName = configId.getName();
+                    }
+                    if(WfConstants.HOST.equals(configId.getModel())) {
+                        configPaths.add(examplesTmp.resolve(WfConstants.DOMAIN).resolve(WfConstants.CONFIGURATION).resolve(configName));
+                    } else {
+                        configPaths.add(examplesTmp.resolve(configId.getModel()).resolve(WfConstants.CONFIGURATION).resolve(configName));
+                    }
                 }
             }
             configBuilder.addFeaturePackDep(fpBuilder.build());
@@ -276,27 +300,13 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             throw new ProvisioningException("Failed to generate example configs", e);
         }
 
-        copyExampleConfigs(examplesTmp.resolve(WfConstants.STANDALONE).resolve("configuration"));
-        copyExampleConfigs(examplesTmp.resolve(WfConstants.DOMAIN).resolve("configuration"));
-    }
-
-    private void copyExampleConfigs(Path configDir) throws ProvisioningException {
-        if(!Files.exists(configDir)) {
-            return;
-        }
-        try (DirectoryStream<Path> stream = Files.newDirectoryStream(configDir)) {
-            final Iterator<Path> i = stream.iterator();
-            while (i.hasNext()) {
-                final Path p = i.next();
-                final String name = p.getFileName().toString();
-                if (name.endsWith(".xml")) {
-                    Path target = runtime.getStagedDir().resolve(WfConstants.DOCS).resolve("examples").resolve("configs")
-                            .resolve(name);
-                    IoUtils.copy(p, target);
-                }
+        final Path exampleConfigsDir = runtime.getStagedDir().resolve(WfConstants.DOCS).resolve("examples").resolve("configs");
+        for(Path configPath : configPaths) {
+            try {
+                IoUtils.copy(configPath, exampleConfigsDir.resolve(configPath.getFileName()));
+            } catch (IOException e) {
+                throw new ProvisioningException(Errors.copyFile(configPath, exampleConfigsDir.resolve(configPath.getFileName())), e);
             }
-        } catch (IOException e) {
-            throw new ProvisioningException("Failed to copy example configs", e);
         }
     }
 
