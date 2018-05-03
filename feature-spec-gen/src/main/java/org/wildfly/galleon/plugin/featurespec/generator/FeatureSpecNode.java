@@ -363,15 +363,17 @@ class FeatureSpecNode {
         return value;
     }
 
-    private void persistSpec(String name, ModelNode descr, boolean parentChildBranch) throws ProvisioningException {
+    private void persistSpec(String name, ModelNode descr) throws ProvisioningException {
         final FeatureSpec.Builder builder = FeatureSpec.builder(name);
         final FeatureAnnotation annotation = getAnnotation(descr);
         if(annotation != null) {
             builder.addAnnotation(annotation);
         }
-        if(parentChildBranch) {
-            builder.addAnnotation(FeatureAnnotation.parentChildrenBranch());
+        final String branchId = gen.getBranchId(name, 1);
+        if(branchId != null) {
+            builder.addAnnotation(FeatureAnnotation.featureBranch(branchId));
         }
+
         if (descr.hasDefined("requires")) {
             for (ModelNode capability : descr.require("requires").asList()) {
                 builder.requiresCapability(capability.get("name").asString(), capability.hasDefined("optional") && capability.get("optional").asBoolean());
@@ -975,22 +977,18 @@ class FeatureSpecNode {
     }
 
     private void buildSpec(int level) throws ProvisioningException {
+
         if(standaloneDescr != null && generateStandalone) {
-            final boolean parentChildrenBranch = level == 1 && (
-                    standaloneName.startsWith(SUBSYSTEM_PREFIX) ||
-                    standaloneName.equals(CORE_SERVICE_MANAGEMENT));
-            persistSpec(standaloneName, standaloneDescr, parentChildrenBranch);
+            persistSpec(standaloneName, standaloneDescr);
         }
         if(profileDescr != null && generateProfile) {
-            persistSpec(profileName, profileDescr, false);
+            persistSpec(profileName, profileDescr);
         }
         if(domainDescr != null && generateDomain) {
-            final boolean parentChildrenBranch = level == 1 && (domainName.regionMatches(DOMAIN_PREFIX.length(), CORE_SERVICE_MANAGEMENT, 0, CORE_SERVICE_MANAGEMENT.length()));
-            persistSpec(domainName, domainDescr, parentChildrenBranch);
+            persistSpec(domainName, domainDescr);
         }
         if(hostDescr != null && generateHost) {
-            final boolean parentChildrenBranch = level == 1 && (hostName.regionMatches(HOST_PREFIX.length(), CORE_SERVICE_MANAGEMENT, 0, CORE_SERVICE_MANAGEMENT.length()));
-            persistSpec(hostName, hostDescr, parentChildrenBranch);
+            persistSpec(hostName, hostDescr);
         }
     }
 }

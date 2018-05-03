@@ -53,6 +53,19 @@ public class FeatureSpecGenerator {
     private final boolean debug;
     private Set<String> inheritedSpecs;
 
+    String getBranchId(String spec, int dots) {
+        int i = 0;
+        int index = 0;
+        while(i <= dots) {
+            index = spec.indexOf('.', index + 1);
+            if(index < 0) {
+                return spec;
+            }
+            ++i;
+        }
+        return spec.substring(0, index);
+    }
+
     void addSpec(String name, FeatureSpecNode node) {
         nodesBySpecName.put(name, node);
     }
