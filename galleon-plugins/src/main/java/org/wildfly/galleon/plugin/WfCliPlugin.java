@@ -194,7 +194,7 @@ public class WfCliPlugin implements CliPlugin {
     }
 
     private static Map<String, String> getVariables(Path props) throws ProvisioningException, IOException {
-        HashMap variables = new HashMap<>();
+        Map<String, String> variables = new HashMap<>();
         if (Files.exists(props)) {
             try (Stream<String> lines = Files.lines(props)) {
                 final Iterator<String> iterator = lines.iterator();
