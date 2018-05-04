@@ -40,7 +40,7 @@ import nu.xom.ParsingException;
 import org.jboss.galleon.ProvisioningDescriptionException;
 import org.jboss.galleon.ProvisioningException;
 import org.jboss.galleon.plugin.CliPlugin;
-import org.jboss.galleon.runtime.FeaturePackRuntime;
+import org.jboss.galleon.runtime.PackageRuntime;
 import org.jboss.galleon.spec.PackageSpec;
 
 /**
@@ -53,16 +53,17 @@ public class WfCliPlugin implements CliPlugin {
     private static final String VERSIONS_PATH = "wildfly/artifact-versions.properties";
 
     @Override
-    public CustomPackageContent handlePackageContent(FeaturePackRuntime rt, PackageSpec spec, Path content)
+    public CustomPackageContent handlePackageContent(PackageRuntime pkg)
             throws ProvisioningException, ProvisioningDescriptionException, IOException {
-        Path modulePath = content.getParent().resolve(MODULE_PATH);
+        Path modulePath = pkg.getContentDir().getParent().resolve(MODULE_PATH);
         if (Files.exists(modulePath)) {
-            Path props = rt.getResource(VERSIONS_PATH);
+            Path props = pkg.getFeaturePackRuntime().getResource(VERSIONS_PATH);
             Map<String, String> variables = getVariables(props);
             List<String> artifacts = new ArrayList<>();
             String moduleVersion;
             try {
-                moduleVersion = parseModuleDescriptor(variables, content, spec, artifacts);
+                moduleVersion = parseModuleDescriptor(variables, pkg.getContentDir(),
+                        pkg.getSpec(), artifacts);
             } catch (ParsingException ex) {
                 throw new ProvisioningException(ex);
             }
