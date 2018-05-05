@@ -39,6 +39,7 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -104,6 +105,9 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private static final String CONFIG_GEN_PATH = "wildfly/wildfly-config-gen.jar";
     private static final String CONFIG_GEN_CLASS = "org.wildfly.galleon.plugin.config.generator.WfConfigGenerator";
 
+    private static final PluginOption OPTION_MVN_DIST = PluginOption.builder("jboss-maven-dist").hasNoValue().build();
+    public static final PluginOption OPTION_DUMP_CONFIG_SCRIPTS = PluginOption.builder("jboss-dump-config-scripts").build();
+
     private ProvisioningRuntime runtime;
     private PropertyResolver versionResolver;
     private List<Path> installationClassPath = new ArrayList<>();
@@ -114,8 +118,6 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
     private boolean thinServer;
     private Set<String> schemaGroups = Collections.emptySet();
-
-    private final PluginOption mavenDistOption = PluginOption.builder("jboss-maven-dist").hasNoValue().build();
 
     private List<WildFlyPackageTask> finalizingTasks = Collections.emptyList();
     private List<PackageRuntime> finalizingTasksPkgs = Collections.emptyList();
@@ -128,7 +130,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
     @Override
     protected List<PluginOption> initPluginOptions() {
-        return Collections.singletonList(mavenDistOption);
+        return Arrays.asList(OPTION_MVN_DIST, OPTION_DUMP_CONFIG_SCRIPTS);
     }
 
     public ProvisioningRuntime getRuntime() {
@@ -145,7 +147,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         messageWriter.verbose("WildFly Galleon install plugin");
 
         this.runtime = runtime;
-        thinServer = runtime.isOptionSet(mavenDistOption);
+        thinServer = runtime.isOptionSet(OPTION_MVN_DIST);
 
         final Map<String, String> artifactVersions = new HashMap<>();
         for(FeaturePackRuntime fp : runtime.getFeaturePacks()) {
@@ -295,7 +297,14 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         try {
             runtime.getMessageWriter().verbose("Generating example configs");
             ProvisioningConfig config = configBuilder.build();
-            pm.provision(config, Collections.singletonMap(mavenDistOption.getName(), null));
+            Map<String, String> options = runtime.getPluginOptions();
+            if(!options.containsKey(OPTION_MVN_DIST.getName())) {
+                final Map<String, String> tmp = new HashMap<>(options.size() + 1);
+                tmp.putAll(options);
+                options = tmp;
+                options.put(OPTION_MVN_DIST.getName(), null);
+            }
+            pm.provision(config, options);
         } catch(ProvisioningException e) {
             throw new ProvisioningException("Failed to generate example configs", e);
         }
