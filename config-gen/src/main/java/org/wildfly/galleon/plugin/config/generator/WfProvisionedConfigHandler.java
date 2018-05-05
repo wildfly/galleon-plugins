@@ -21,6 +21,8 @@ import static org.jboss.galleon.Constants.GLN_UNDEFINED;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -34,6 +36,7 @@ import org.jboss.as.cli.parsing.arguments.ArgumentValueCallbackHandler;
 import org.jboss.as.cli.parsing.arguments.ArgumentValueInitialState;
 import org.jboss.as.controller.client.helpers.Operations;
 import org.jboss.dmr.ModelNode;
+import org.jboss.dmr.Property;
 import org.jboss.galleon.ArtifactCoords;
 import org.jboss.galleon.MessageWriter;
 import org.jboss.galleon.ProvisioningDescriptionException;
@@ -424,12 +427,7 @@ public class WfProvisionedConfigHandler implements ProvisionedConfigHandler {
             throw new ProvisioningException("Unsupported config model " + config.getModel());
         }
 
-//        try {
-//            writer = Files.newBufferedWriter(Paths.get(System.getProperty("user.home")).resolve("galleon-scripts").resolve(config.getName()));
-//        } catch (IOException e) {
-//            // TODO Auto-generated catch block
-//            e.printStackTrace();
-//        }
+        //logScript(config);
     }
 
     @Override
@@ -486,8 +484,8 @@ public class WfProvisionedConfigHandler implements ProvisionedConfigHandler {
     @Override
     public void startBatch() throws ProvisioningException {
         messageWriter.verbose("      START BATCH");
-        composite = Operations.createCompositeOperation();
         //logToFile("batch");
+        composite = Operations.createCompositeOperation();
     }
 
     @Override
@@ -496,36 +494,20 @@ public class WfProvisionedConfigHandler implements ProvisionedConfigHandler {
         //logToFile("run-batch");
         try {
             configGen.execute(composite);
-        } catch(ProvisioningException e) {
+        } catch(Throwable t) {
             //closeLogFile();
-            throw e;
+            if(t instanceof ProvisioningException) {
+                throw t;
+            }
+            throw new ProvisioningException("Failed to execute operation " + composite, t);
         }
         composite = null;
     }
 
     @Override
     public void done() throws ProvisioningException {
-        configGen.stopEmbedded();
         //closeLogFile();
-    }
-
-    private void closeLogFile() {
-        try {
-            writer.close();
-        } catch (IOException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
-    }
-
-    private void logToFile(String line) {
-        try {
-            writer.write(line);
-            writer.newLine();
-        } catch (IOException e2) {
-            // TODO Auto-generated catch block
-            e2.printStackTrace();
-        }
+        configGen.stopEmbedded();
     }
 
     private String[] getEmbeddedArgs(ProvisionedConfig config) throws ProvisioningException {
@@ -561,42 +543,8 @@ public class WfProvisionedConfigHandler implements ProvisionedConfigHandler {
     }
 
     private void handleOp(ModelNode op) throws ProvisioningException {
-        /*
-        try {
-            final StringBuilder buf = new StringBuilder();
-            final List<Property> addrList = op.get("address").asPropertyList();
-            if(!addrList.isEmpty()) {
-                for(Property addr : addrList) {
-                    buf.append('/').append(addr.getName()).append('=').append(addr.getValue().asString());
-                }
-            }
-            buf.append(':');
-            buf.append(op.get("operation").asString());
-            final List<Property> params = op.asPropertyList();
-            if(params.size() > 2) {
-                buf.append('(');
-                boolean comma = false;
-                for(Property param : params) {
-                    final String paramName = param.getName();
-                    if(paramName.equals("address") || paramName.equals("operation")) {
-                        continue;
-                    }
-                    if(comma) {
-                        buf.append(',');
-                    } else {
-                        comma = true;
-                    }
-                    buf.append(param.getName()).append('=').append(param.getValue().asString());
-                }
-                buf.append(')');
-            }
-            writer.write(buf.toString());
-            writer.newLine();
-        } catch (IOException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
-        */
+        //logOp(op);
+
         if(composite != null) {
             composite.get(WfConstants.STEPS).add(op);
         } else {
@@ -638,5 +586,66 @@ public class WfProvisionedConfigHandler implements ProvisionedConfigHandler {
             list.add(mappings.isEmpty() ? params.get(i) : mappings.get(i));
         }
         return list;
+    }
+
+    private void logScript(ProvisionedConfig config) {
+        try {
+            writer = Files.newBufferedWriter(Paths.get(System.getProperty("user.home")).resolve("galleon-scripts").resolve("script-" + config.getName()));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void closeLogFile() {
+        try {
+            writer.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void logToFile(String line) {
+        try {
+            writer.write(line);
+            writer.newLine();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void logOp(ModelNode op) {
+        try {
+            final StringBuilder buf = new StringBuilder();
+            final List<Property> addrList = op.get("address").asPropertyList();
+            if(!addrList.isEmpty()) {
+                for(Property addr : addrList) {
+                    buf.append('/').append(addr.getName()).append('=').append(addr.getValue().asString());
+                }
+            }
+            buf.append(':');
+            buf.append(op.get("operation").asString());
+            final List<Property> params = op.asPropertyList();
+            if(params.size() > 2) {
+                buf.append('(');
+                boolean comma = false;
+                for(Property param : params) {
+                    final String paramName = param.getName();
+                    if(paramName.equals("address") || paramName.equals("operation")) {
+                        continue;
+                    }
+                    if(comma) {
+                        buf.append(',');
+                    } else {
+                        comma = true;
+                    }
+                    buf.append(param.getName()).append('=').append(param.getValue().asString());
+                }
+                buf.append(')');
+            }
+            writer.write(buf.toString());
+            writer.newLine();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }
