@@ -41,7 +41,6 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import javax.inject.Inject;
 import javax.xml.stream.XMLStreamException;
 
 import nu.xom.ParsingException;
@@ -56,10 +55,10 @@ import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
+import org.apache.maven.project.MavenProjectHelper;
 import org.eclipse.aether.RepositorySystem;
 import org.eclipse.aether.RepositorySystemSession;
 import org.eclipse.aether.artifact.DefaultArtifact;
-import org.eclipse.aether.installation.InstallationException;
 import org.eclipse.aether.repository.RemoteRepository;
 import org.eclipse.aether.resolution.ArtifactRequest;
 import org.eclipse.aether.resolution.ArtifactResolutionException;
@@ -75,13 +74,13 @@ import org.jboss.galleon.config.FeaturePackConfig;
 import org.jboss.galleon.layout.FeaturePackLayout;
 import org.jboss.galleon.layout.FeaturePackLayoutDescriber;
 import org.jboss.galleon.maven.plugin.FpMavenErrors;
-import org.jboss.galleon.maven.plugin.util.MavenPluginUtil;
 import org.jboss.galleon.spec.FeaturePackSpec;
 import org.jboss.galleon.spec.PackageSpec;
 import org.jboss.galleon.util.IoUtils;
 import org.jboss.galleon.util.CollectionUtils;
 import org.jboss.galleon.util.PathFilter;
 import org.jboss.galleon.util.StringUtils;
+import org.jboss.galleon.util.ZipUtils;
 import org.jboss.galleon.xml.FeaturePackXmlWriter;
 import org.jboss.galleon.xml.PackageXmlParser;
 import org.jboss.galleon.xml.PackageXmlWriter;
@@ -168,8 +167,8 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
     @Parameter(alias="feature-pack-artifact-id", defaultValue = "${project.artifactId}", required=false)
     private String fpArtifactId;
 
-    @Inject
-    private MavenPluginUtil mavenPluginUtil;
+    @Component
+    private MavenProjectHelper projectHelper;
 
     private MavenProjectArtifactVersions artifactVersions;
 
@@ -340,10 +339,28 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
             }
         }
 
-        try {
-            repoSystem.install(repoSession, mavenPluginUtil.getInstallLayoutRequest(workDir, project));
-        } catch (InstallationException | IOException e) {
-            throw new MojoExecutionException(FpMavenErrors.featurePackInstallation(), e);
+        // build feature-packs from the layout and attach as project artifacts
+        try (DirectoryStream<Path> wdStream = Files.newDirectoryStream(workDir, entry -> Files.isDirectory(entry))) {
+            for (Path groupDir : wdStream) {
+                try (DirectoryStream<Path> groupStream = Files.newDirectoryStream(groupDir)) {
+                    for (Path artifactDir : groupStream) {
+                        final String artifactId = artifactDir.getFileName().toString();
+                        try (DirectoryStream<Path> artifactStream = Files.newDirectoryStream(artifactDir)) {
+                            for (Path versionDir : artifactStream) {
+                                final Path target = Paths.get(project.getBuild().getDirectory()).resolve(artifactId + '-' + versionDir.getFileName() + ".zip");
+                                if(Files.exists(target)) {
+                                    IoUtils.recursiveDelete(target);
+                                }
+                                ZipUtils.zip(versionDir, target);
+                                debug("Attaching feature-pack " + target + " as a project artifact");
+                                projectHelper.attachArtifact(project, "zip", target.toFile());
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (IOException e) {
+            throw new MojoExecutionException("Failed to create a feature-pack archives from the layout", e);
         }
     }
 
@@ -368,7 +385,7 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
     }
 
     private void addModulesAll(final Path srcModulesDir, final FeaturePackLayout.Builder fpBuilder, final Path targetResources, final Path fpPackagesDir) throws MojoExecutionException {
-        getLog().debug("WfFeaturePackBuildMojo adding modules.all");
+        debug("WfFeaturePackBuildMojo adding modules.all");
         final PackageSpec.Builder modulesAll = getExtendedPackage(WfConstants.MODULES_ALL, true);
         try {
             final Map<String, Path> moduleXmlByPkgName = findModules(srcModulesDir);
@@ -797,6 +814,12 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         }
         try(ByteArrayInputStream in = new ByteArrayInputStream(fixedContent.getBytes(WfConstants.UTF8))) {
             Files.copy(in, file, StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+
+    private void debug(String msg, Object... args) {
+        if(getLog().isDebugEnabled()) {
+            getLog().debug(String.format(msg, args));
         }
     }
 }
