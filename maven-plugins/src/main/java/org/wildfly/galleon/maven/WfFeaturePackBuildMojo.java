@@ -263,9 +263,9 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         final PackageSpec.Builder docsBuilder = getExtendedPackage(WfConstants.DOCS, false);
         if(docsBuilder != null) {
             fpBuilder.getSpecBuilder().addDefaultPackage(addPackage(fpPackagesDir, fpBuilder, docsBuilder).getName());
-            if(fpBuilder.hasPackage("docs.examples.configs")) {
-                getExtendedPackage("docs.examples", true).addPackageDep("docs.examples.configs", true);
-            }
+//            if(fpBuilder.hasPackage("docs.examples.configs")) {
+//                getExtendedPackage("docs.examples", true).addPackageDep("docs.examples.configs", true);
+//            }
         }
 
         if (!fpDependencies.isEmpty() && !extendedPackages.isEmpty()) {
