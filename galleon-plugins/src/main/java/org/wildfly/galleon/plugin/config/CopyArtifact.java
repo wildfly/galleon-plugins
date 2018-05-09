@@ -40,6 +40,7 @@ public class CopyArtifact implements WildFlyPackageTask {
     private String toLocation;
     private boolean extract;
     private List<FileFilter> filters = Collections.emptyList();
+    private boolean optional;
 
     public CopyArtifact() {
     }
@@ -74,6 +75,14 @@ public class CopyArtifact implements WildFlyPackageTask {
 
     public List<FileFilter> getFilters() {
         return filters;
+    }
+
+    public void setOptional() {
+        this.optional = true;
+    }
+
+    public boolean isOptional() {
+        return optional;
     }
 
     public boolean includeFile(final String path) {

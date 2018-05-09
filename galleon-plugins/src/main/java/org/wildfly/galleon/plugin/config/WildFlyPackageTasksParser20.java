@@ -131,6 +131,7 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
         INCLUDE("include"),
         MODEL("model"),
         NAME("name"),
+        OPTIONAL("optional"),
         ORIGIN("origin"),
         OUTPUT("output"),
         PATH("path"),
@@ -160,6 +161,7 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
             attributesMap.put(new QName(MODEL.getLocalName()), MODEL);
             attributesMap.put(new QName(NAME.getLocalName()), NAME);
             attributesMap.put(new QName(ORIGIN.getLocalName()), ORIGIN);
+            attributesMap.put(new QName(OPTIONAL.getLocalName()), OPTIONAL);
             attributesMap.put(new QName(OUTPUT.getLocalName()), OUTPUT);
             attributesMap.put(new QName(PATH.getLocalName()), PATH);
             attributesMap.put(new QName(PATTERN.getLocalName()), PATTERN);
@@ -440,6 +442,11 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
                 case EXTRACT:
                     if(Boolean.parseBoolean(reader.getAttributeValue(i))) {
                         builder.setExtract();
+                    }
+                    break;
+                case OPTIONAL:
+                    if(Boolean.parseBoolean(reader.getAttributeValue(i))) {
+                        builder.setOptional();
                     }
                     break;
                 default:

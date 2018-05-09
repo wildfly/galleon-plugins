@@ -645,6 +645,9 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         final String artifactStr = copyArtifact.getArtifact();
         final String gavString = versionResolver.resolveProperty(artifactStr);
         if(gavString == null) {
+            if(copyArtifact.isOptional()) {
+                return;
+            }
             throw new ProvisioningException("Failed to resolve the version of " + artifactStr);
         }
         try {

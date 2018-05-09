@@ -79,6 +79,8 @@ import org.eclipse.aether.resolution.ArtifactResolutionException;
 @Mojo(name = "generate-feature-specs", requiresDependencyResolution = ResolutionScope.RUNTIME, defaultPhase = LifecyclePhase.GENERATE_RESOURCES)
 public class WfFeatureSpecBuildMojo extends AbstractMojo {
 
+    private static final String MAVEN_REPO_LOCAL = "maven.repo.local";
+
     private static final String MODULES = "modules";
 
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
@@ -179,12 +181,20 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
             }
         }
 
+        final String originalMavenRepoLocal = System.getProperty(MAVEN_REPO_LOCAL);
+        System.setProperty(MAVEN_REPO_LOCAL, session.getSettings().getLocalRepository());
         try {
             return FeatureSpecGeneratorInvoker.generateSpecs(wildflyDir, inheritedFeatures, outputDirectory.toPath(),
                     buildCp.toArray(new URL[buildCp.size()]),
                     getLog());
         } catch (ProvisioningException e) {
             throw new MojoExecutionException("Feature spec generator failed", e);
+        } finally {
+            if(originalMavenRepoLocal == null) {
+                System.clearProperty(MAVEN_REPO_LOCAL);
+            } else {
+                System.setProperty(MAVEN_REPO_LOCAL, originalMavenRepoLocal);
+            }
         }
     }
 
