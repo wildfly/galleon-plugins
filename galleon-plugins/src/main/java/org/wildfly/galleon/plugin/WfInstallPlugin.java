@@ -511,7 +511,11 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
         final Path targetPath = installDir.resolve(fpModuleDir.relativize(moduleTemplate));
         final Element rootElement = document.getRootElement();
-        if (! rootElement.getLocalName().equals("module")) {
+        if (! rootElement.getLocalName().equals("module") &&
+                // module-alias files don't need to be processed
+                // the only reason their are parsed and serialized is to match the processing in the legacy build tools
+                // this fixes the difference in lineendings between the two builds
+                !rootElement.getLocalName().equals("module-alias")) {
             // just copy the content and leave
             Files.copy(moduleTemplate, targetPath, StandardCopyOption.REPLACE_EXISTING);
             return;
