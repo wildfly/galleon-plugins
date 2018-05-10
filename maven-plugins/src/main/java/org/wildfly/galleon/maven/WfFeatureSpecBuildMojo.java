@@ -183,6 +183,7 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
 
         final String originalMavenRepoLocal = System.getProperty(MAVEN_REPO_LOCAL);
         System.setProperty(MAVEN_REPO_LOCAL, session.getSettings().getLocalRepository());
+        debug("Generating feature specs using local maven repo %s", System.getProperty(MAVEN_REPO_LOCAL));
         try {
             return FeatureSpecGeneratorInvoker.generateSpecs(wildflyDir, inheritedFeatures, outputDirectory.toPath(),
                     buildCp.toArray(new URL[buildCp.size()]),
@@ -351,7 +352,6 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
 
     private void copyJbossModule(Path wildfly) throws IOException, MojoExecutionException {
         for (org.apache.maven.model.Dependency dep : project.getDependencyManagement().getDependencies()) {
-            debug("Dependency found %s", dep);
             if ("org.jboss.modules".equals(dep.getGroupId()) && "jboss-modules".equals(dep.getArtifactId())) {
                 ArtifactItem jbossModule = new ArtifactItem();
                 jbossModule.setArtifactId(dep.getArtifactId());
@@ -403,13 +403,15 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
                 && "packages".equals(dir.getParent().getParent().getParent().getParent().getParent().getFileName().toString());
     }
 
-    private Artifact findArtifact(ArtifactItem featurePack) throws MojoExecutionException {
-        resolveVersion(featurePack);
+    private Artifact findArtifact(ArtifactItem artifact) throws MojoExecutionException {
+        resolveVersion(artifact);
         try {
             ProjectBuildingRequest buildingRequest
                     = new DefaultProjectBuildingRequest(session.getProjectBuildingRequest());
+            buildingRequest.setLocalRepository(session.getLocalRepository());
             buildingRequest.setRemoteRepositories(project.getRemoteArtifactRepositories());
-            ArtifactResult result = artifactResolver.resolveArtifact(buildingRequest, featurePack);
+            debug("Resolving artifact $s:$s:$s", artifact.getGroupId(), artifact.getArtifactId(), artifact.getVersion());
+            final ArtifactResult result = artifactResolver.resolveArtifact(buildingRequest, artifact);
             if (result != null) {
                 return result.getArtifact();
             }
@@ -419,16 +421,18 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
         }
     }
 
-    private Artifact findArtifact(Artifact featurePack) throws MojoExecutionException {
+    private Artifact findArtifact(Artifact artifact) throws MojoExecutionException {
         try {
             ProjectBuildingRequest buildingRequest
                     = new DefaultProjectBuildingRequest(session.getProjectBuildingRequest());
+            buildingRequest.setLocalRepository(session.getLocalRepository());
             buildingRequest.setRemoteRepositories(project.getRemoteArtifactRepositories());
-            ArtifactResult result = artifactResolver.resolveArtifact(buildingRequest, featurePack);
+            debug("Resolving artifact $s:$s:$s", artifact.getGroupId(), artifact.getArtifactId(), artifact.getVersion());
+            ArtifactResult result = artifactResolver.resolveArtifact(buildingRequest, artifact);
             if (result != null) {
                 return result.getArtifact();
             }
-            return featurePack;
+            return artifact;
         } catch (ArtifactResolverException e) {
             throw new MojoExecutionException("Couldn't resolve artifact: " + e.getMessage(), e);
         }

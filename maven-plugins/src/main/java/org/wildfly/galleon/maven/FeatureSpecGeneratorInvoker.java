@@ -36,7 +36,10 @@ public class FeatureSpecGeneratorInvoker {
     public static int generateSpecs(Path wildfly, Set<String> inheritedFeatures, Path outputDir, URL[] cpUrls, Log log) throws ProvisioningException {
         final ClassLoader originalCl = Thread.currentThread().getContextClassLoader();
         try (URLClassLoader newCl = prepareClassLoader(cpUrls, originalCl)) {
-            //printCl(newCl);
+            if(log.isDebugEnabled()) {
+                log.debug("Embedded server classpath:");
+                printCl(newCl, log);
+            }
             Thread.currentThread().setContextClassLoader(newCl);
             final Class<?> cliTest = newCl.loadClass("org.wildfly.galleon.plugin.featurespec.generator.FeatureSpecGenerator");
             final Method specGenMethod = cliTest.getMethod("generateSpecs", Path.class);
@@ -54,21 +57,21 @@ public class FeatureSpecGeneratorInvoker {
         }
     }
 
-/*    private static void printCl(ClassLoader cl) {
+    private static void printCl(ClassLoader cl, Log log) {
         if(cl.getParent() != null) {
-            printCl(cl.getParent());
+            printCl(cl.getParent(), log);
         }
-        System.out.println(cl.getClass());
+        log.debug(" " + cl.getClass().getName());
         if(!(cl instanceof URLClassLoader)) {
-            System.out.println("  NOT A URL CLASSLOADER");
+            log.debug("  NOT A URL CLASSLOADER");
             return;
         }
         int i = 0;
         for(URL url : ((URLClassLoader)cl).getURLs()) {
-            System.out.println(++i + ". " + url);
+            log.debug("  " + ++i + ". " + url);
         }
     }
-*/
+
     private static URLClassLoader prepareClassLoader(URL[] urls, final ClassLoader originalCl) throws ProvisioningException {
         return new URLClassLoader(urls, originalCl);
     }
