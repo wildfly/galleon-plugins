@@ -17,6 +17,7 @@
 package org.wildfly.galleon.maven;
 
 import com.google.common.base.Charsets;
+
 import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
@@ -35,6 +36,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.StringJoiner;
+
 import javax.xml.stream.XMLEventFactory;
 import javax.xml.stream.XMLEventReader;
 import javax.xml.stream.XMLEventWriter;
@@ -45,8 +47,12 @@ import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.events.Attribute;
 import javax.xml.stream.events.StartElement;
 import javax.xml.stream.events.XMLEvent;
+
 import org.apache.maven.artifact.Artifact;
+import org.apache.maven.artifact.DefaultArtifact;
+import org.apache.maven.artifact.handler.DefaultArtifactHandler;
 import org.apache.maven.plugin.logging.Log;
+import org.jboss.galleon.ArtifactCoords;
 
 /**
  *
@@ -56,13 +62,13 @@ public class ModuleXmlVersionResolver {
 
     private static final String MODULES = "modules";
 
-    public static void filterAndConvertModules(Path fpDirectory, Path targetModuleDir, Map<String, Artifact> artifacts, Log log) throws IOException {
+    public static void filterAndConvertModules(Path fpDirectory, Path targetModuleDir, Map<String, Artifact> artifacts, List<Artifact> hardcodedArtifacts, Log log) throws IOException {
         Files.walkFileTree(fpDirectory, new FileVisitor<Path>() {
             @Override
             public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
                 if (isModules(dir)) {
                     debug(log, "Copying %s to %s", dir, targetModuleDir);
-                    convertModules(dir, targetModuleDir, artifacts, log);
+                    convertModules(dir, targetModuleDir, artifacts, hardcodedArtifacts, log);
                     return FileVisitResult.SKIP_SUBTREE;
                 }
                 return FileVisitResult.CONTINUE;
@@ -91,7 +97,7 @@ public class ModuleXmlVersionResolver {
         });
     }
 
-    public static void convertModules(Path source, Path target, Map<String, Artifact> artifacts, Log log) throws IOException {
+    public static void convertModules(Path source, Path target, Map<String, Artifact> artifacts, List<Artifact> hardcodedArtifacts, Log log) throws IOException {
         if (Files.isDirectory(source)) {
             Files.createDirectories(target);
         } else {
@@ -118,7 +124,7 @@ public class ModuleXmlVersionResolver {
                     throws IOException {
                 try {
                     if ("module.xml".equals(file.getFileName().toString())) {
-                        convertModule(file, target.resolve(source.relativize(file)), artifacts, log);
+                        convertModule(file, target.resolve(source.relativize(file)), artifacts, hardcodedArtifacts, log);
                     } else {
                         Files.copy(file, target.resolve(source.relativize(file)));
                     }
@@ -134,17 +140,17 @@ public class ModuleXmlVersionResolver {
         return MODULES.equals(dir.getFileName().toString());
     }
 
-    public static void convertModule(final Path file, Path target, Map<String, Artifact> artifacts, Log log) throws IOException, XMLStreamException {
+    public static void convertModule(final Path file, Path target, Map<String, Artifact> artifacts, List<Artifact> hardcodedArtifacts, Log log) throws IOException, XMLStreamException {
         XMLOutputFactory outputFactory = XMLOutputFactory.newInstance();
         XMLInputFactory inputFactory = XMLInputFactory.newInstance();
         Files.deleteIfExists(target);
         try (Reader is = Files.newBufferedReader(file, Charsets.UTF_8);
                 Writer out = Files.newBufferedWriter(target, Charsets.UTF_8, StandardOpenOption.CREATE_NEW)) {
-            convert(inputFactory.createXMLEventReader(is), outputFactory.createXMLEventWriter(out), artifacts, log);
+            convert(inputFactory.createXMLEventReader(is), outputFactory.createXMLEventWriter(out), artifacts, hardcodedArtifacts, log);
         }
     }
 
-    private static void convert(final XMLEventReader r, final XMLEventWriter w, Map<String, Artifact> artifacts, Log log) throws IOException, XMLStreamException {
+    private static void convert(final XMLEventReader r, final XMLEventWriter w, Map<String, Artifact> artifacts, List<Artifact> hardcodedArtifacts, Log log) throws IOException, XMLStreamException {
         XMLEventFactory eventFactory = XMLEventFactory.newInstance();
         while (r.hasNext()) {
             XMLEvent event = r.nextEvent();
@@ -156,7 +162,7 @@ public class ModuleXmlVersionResolver {
                         log.debug(startElement + " has been converted to " + convertedModule);
                         w.add(convertedModule);
                     } else if ("artifact".equals(startElement.getName().getLocalPart())) {
-                        StartElement convertedArtifact = convertArtifactElement(eventFactory, startElement, artifacts, log);
+                        StartElement convertedArtifact = convertArtifactElement(eventFactory, startElement, artifacts, hardcodedArtifacts, log);
                         log.debug(startElement + " has been converted to " + convertedArtifact);
                         w.add(convertedArtifact);
                     } else {
@@ -180,7 +186,7 @@ public class ModuleXmlVersionResolver {
         w.close();
     }
 
-    private static StartElement convertArtifactElement(XMLEventFactory eventFactory, StartElement artifactElement, Map<String, Artifact> artifacts, Log log) {
+    private static StartElement convertArtifactElement(XMLEventFactory eventFactory, StartElement artifactElement, Map<String, Artifact> artifacts, List<Artifact> hardcodedArtifacts, Log log) {
         List<Attribute> attributes = new ArrayList<>();
         Iterator<?> iter = artifactElement.getAttributes();
         while (iter.hasNext()) {
@@ -191,7 +197,7 @@ public class ModuleXmlVersionResolver {
                 if (artifactCoords != null) {
                     Artifact artifact = artifacts.get(artifactCoords);
                     if (artifact == null) {
-                        log.warn("Couldn't find an artifact in the dependencies to resolve " + artifactCoords);
+                        log.warn("Couldn't locate artifact in the dependencies " + artifactCoords);
                         attributes.add(attribute);
                     } else {
                         StringJoiner joiner = new StringJoiner(":");
@@ -205,6 +211,9 @@ public class ModuleXmlVersionResolver {
                     }
                 } else {
                     attributes.add(attribute);
+                    final ArtifactCoords coords = ArtifactCoords.fromString(artifactName);
+                    hardcodedArtifacts.add(new DefaultArtifact(coords.getGroupId(), coords.getArtifactId(), coords.getVersion(),
+                            "provided", coords.getExtension(), coords.getClassifier(), new DefaultArtifactHandler(coords.getExtension())));
                 }
             } else {
                 attributes.add(attribute);

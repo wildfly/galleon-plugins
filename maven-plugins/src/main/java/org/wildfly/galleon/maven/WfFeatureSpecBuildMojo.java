@@ -157,28 +157,34 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
         final Set<String> inheritedFeatures = getInheritedFeatures(modulesDir, featurePackArtifacts);
         final Map<String, Artifact> buildArtifacts = collectBuildArtifacts(modulesDir, featurePackArtifacts);
 
-        ModuleXmlVersionResolver.filterAndConvertModules(modulesDir, wildflyDir.resolve(MODULES), buildArtifacts, getLog());
+        List<Artifact> hardcodedArtifacts = new ArrayList<>(); // this one includes also the hardcoded artifact versions into module.xml
+        ModuleXmlVersionResolver.filterAndConvertModules(modulesDir, wildflyDir.resolve(MODULES), buildArtifacts, hardcodedArtifacts, getLog());
         final Path modulesTemplates = Paths.get(project.getBuild().getDirectory()).resolve("resources").resolve(MODULES);
         if (Files.exists(modulesTemplates)) {
-            ModuleXmlVersionResolver.filterAndConvertModules(modulesTemplates, wildflyDir.resolve(MODULES), buildArtifacts, getLog());
+            ModuleXmlVersionResolver.filterAndConvertModules(modulesTemplates, wildflyDir.resolve(MODULES), buildArtifacts, hardcodedArtifacts, getLog());
         }
         addBasicConfigs(wildflyDir);
 
         final Artifact pluginArtifact = project.getPluginArtifactMap().get("org.wildfly.galleon-plugins:wildfly-galleon-maven-plugins");
-        final ArtifactItem item = new ArtifactItem();
-        item.setArtifactId("wildfly-feature-spec-gen");
-        item.setGroupId(pluginArtifact.getGroupId());
-        item.setVersion(pluginArtifact.getVersion());
-        final File itemFile = findArtifact(item).getFile();
+        final ArtifactItem specgenJar = new ArtifactItem();
+        specgenJar.setArtifactId("wildfly-feature-spec-gen");
+        specgenJar.setGroupId(pluginArtifact.getGroupId());
+        specgenJar.setVersion(pluginArtifact.getVersion());
+        final File itemFile = findArtifact(specgenJar).getFile();
 
+        // TODO this CP might include too many artifacts
+        // we do need to make sure they are available locally but not necessarily add them to the cp
         final List<URL> buildCp = new ArrayList<>(buildArtifacts.size());
         buildCp.add(itemFile.toURI().toURL());
         for(Artifact artifact : buildArtifacts.values()) {
             if(artifact.getFile() == null) {
-                 buildCp.add(findArtifact(artifact).getFile().toURI().toURL());
+                buildCp.add(findArtifact(artifact).getFile().toURI().toURL());
             } else {
                 buildCp.add(artifact.getFile().toURI().toURL());
             }
+        }
+        for(Artifact artifact : hardcodedArtifacts) {
+            findArtifact(artifact);
         }
 
         final String originalMavenRepoLocal = System.getProperty(MAVEN_REPO_LOCAL);
