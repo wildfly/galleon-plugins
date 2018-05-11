@@ -414,14 +414,14 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         mkdirs(pluginsDir);
         Path wfPlugInPath;
         try {
-            wfPlugInPath = resolveArtifact(ArtifactCoords.newInstance(mvnPluginsArtifact.getGroupId(), "wildfly-galleon-plugins", mvnPluginsArtifact.getVersion(), "jar"));
+            wfPlugInPath = resolveArtifact(ArtifactCoords.newInstance(mvnPluginsArtifact.getGroupId(), WfConstants.WF_GALLEON_PLUGINS, mvnPluginsArtifact.getVersion(), "jar"));
         } catch (ProvisioningException e) {
             throw new MojoExecutionException("Failed to build feature-pack", e);
         }
         try {
-            IoUtils.copy(wfPlugInPath, pluginsDir.resolve(wfPlugInPath.getFileName()));
+            IoUtils.copy(wfPlugInPath, pluginsDir.resolve(WfConstants.WF_GALLEON_PLUGINS + WfConstants.DOT_JAR));
         } catch (IOException e) {
-            throw new MojoExecutionException(Errors.copyFile(wfPlugInPath, pluginsDir.resolve(wfPlugInPath.getFileName())));
+            throw new MojoExecutionException(Errors.copyFile(wfPlugInPath, pluginsDir.resolve(WfConstants.WF_GALLEON_PLUGINS + WfConstants.DOT_JAR)));
         }
     }
 
@@ -429,12 +429,12 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         mkdirs(resourcesDir);
         Path wfPlugInPath;
         try {
-            wfPlugInPath = resolveArtifact(ArtifactCoords.newInstance(mvnPluginsArtifact.getGroupId(), "wildfly-config-gen", mvnPluginsArtifact.getVersion(), "jar"));
+            wfPlugInPath = resolveArtifact(ArtifactCoords.newInstance(mvnPluginsArtifact.getGroupId(), WfConstants.WF_CONFIG_GEN, mvnPluginsArtifact.getVersion(), "jar"));
         } catch (ProvisioningException e) {
             throw new MojoExecutionException("Failed to build feature-pack", e);
         }
         try {
-            IoUtils.copy(wfPlugInPath, resourcesDir.resolve("wildfly-config-gen.jar"));
+            IoUtils.copy(wfPlugInPath, resourcesDir.resolve(WfConstants.WF_CONFIG_GEN + WfConstants.DOT_JAR));
         } catch (IOException e) {
             throw new MojoExecutionException(Errors.copyFile(wfPlugInPath, resourcesDir.resolve(wfPlugInPath.getFileName())));
         }

@@ -23,6 +23,10 @@ package org.wildfly.galleon.plugin;
  */
 public interface WfConstants {
 
+    // Artifacts
+    String WF_CONFIG_GEN = "wildfly-config-gen";
+    String WF_GALLEON_PLUGINS = "wildfly-galleon-plugins";
+
     String ARTIFACT_VERSIONS_PROPS = "artifact-versions.properties";
     String BASE = "base";
     String CONFIG = "config";
@@ -31,6 +35,7 @@ public interface WfConstants {
     String DOCS = "docs";
     String DOCS_LICENSES = "docs.licenses";
     String DOCS_SCHEMA = "docs.schema";
+    String DOT_JAR = ".jar";
     String DOMAIN = "domain";
     String HOST = "host";
     String LAYOUT = "layout";
