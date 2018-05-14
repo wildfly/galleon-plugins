@@ -1,0 +1,3 @@
+## Introduction
+
+WildFly Galleon Plugins project includes Galleon and Maven plugin implementations that are dedicated to building feature-packs (including generation of feature specs and packages) for WildFly releases and provisioning of WildFly-based distributions. These plugins can also be re-used by projects that integrate into or extend WildFly (Core, Servlet of Full base distributions).

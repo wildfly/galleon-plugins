@@ -1,0 +1,11 @@
+### Goals overview
+
+[options="autowidth"]
+|===
+|<<_build_feature_pack>> |Creates a feature-pack archive from the provided resources in the WildFly fashion.
+|<<_generate_feature_specs>> |Generates feature specs from WildFly extensions that are later included into the feature-pack.
+|===
+
+include::build-feature-pack/index.adoc[]
+
+include::generate-feature-specs/index.adoc[]

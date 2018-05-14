@@ -1,0 +1,28 @@
+### build-feature-pack
+
+This Maven mojo creates a WildFly style feature-pack archive from the provided resources according to the feature-pack build configuration file and attaches it to the current Maven project as an artifact.
+
+.Table Parameters
+[options="autowidth"]
+|====
+|Parameter name |Default |Description
+
+|config-file
+|wildfly-feature-pack-build.xml
+|Feature-pack build configuration file
+
+|config-dir
+|${basedir}
+|Feature-pack build configuration file directory
+
+|release-name
+|${product.release.name}
+|The name of the release the feature-pack represents which will be stored in the feature-pack properties
+
+|feature-pack-artifact-id
+|${project.artifactId}
+|The artifactId for the generated feature-pack
+
+|====
+
+
