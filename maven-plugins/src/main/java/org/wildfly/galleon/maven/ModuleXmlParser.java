@@ -98,10 +98,15 @@ class ModuleXmlParser {
         final int size = modules.size();
         for (int i = 0; i < size; i ++) {
             final Element moduleElement = modules.get(i);
-            String name = getOptionalAttributeValue(moduleElement, "name", "");
-            String slot = getOptionalAttributeValue(moduleElement, "slot", "main");
+            final String name = getOptionalAttributeValue(moduleElement, "name", "");
+            final ModuleIdentifier moduleId;
+            if(name.indexOf(':') < 0) {
+                final String slot = getOptionalAttributeValue(moduleElement, "slot", "main");
+                moduleId = new ModuleIdentifier(name, slot);
+            } else {
+                moduleId = ModuleIdentifier.fromString(name);
+            }
             boolean optional = Boolean.parseBoolean(getOptionalAttributeValue(moduleElement, "optional", "false"));
-            ModuleIdentifier moduleId = new ModuleIdentifier(name, slot);
             result.dependencies.add(new ModuleParseResult.ModuleDependency(moduleId, optional));
         }
     }
