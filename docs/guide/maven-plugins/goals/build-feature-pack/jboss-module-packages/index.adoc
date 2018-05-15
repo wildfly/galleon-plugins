@@ -2,7 +2,7 @@
 
 The current approach is to generate a package per JBoss module. JBoss module dependencies are reflected in the corresponding package dependencies.
 
-To generate JBoss module packages the resources directory of the project has to include `modules/system/layers/base` directory which contains `module.xml` file templates.
+To generate JBoss module packages the resources directory of the project has to include `modules/system/layers` directory which contains `module.xml` file templates.
 
 Traditionally, WildFly-based builds use `module.xml` templates to generate the final `module.xml` files based on the distribution type selected: thin (when the JBoss module artifacts are loaded directly from the Maven repository at runtime) or thick (when the JBoss module artifacts are resolved and copied to the distribution directory at provisioning time).
 
