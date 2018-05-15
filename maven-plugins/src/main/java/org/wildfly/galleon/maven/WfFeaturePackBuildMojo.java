@@ -237,7 +237,7 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
             throw new MojoExecutionException("Failed to process dependencies", e);
         }
 
-        final Path srcModulesDir = targetResources.resolve(WfConstants.MODULES).resolve(WfConstants.SYSTEM).resolve(WfConstants.LAYERS).resolve(WfConstants.BASE);
+        final Path srcModulesDir = targetResources.resolve(WfConstants.MODULES).resolve(WfConstants.SYSTEM).resolve(WfConstants.LAYERS);
         if (Files.exists(srcModulesDir)) {
             addModulesAll(srcModulesDir, fpBuilder, targetResources, fpPackagesDir);
         } else{
