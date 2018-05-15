@@ -33,6 +33,7 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,6 +41,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 import javax.xml.stream.XMLStreamException;
 
@@ -387,10 +389,14 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
     private void addModulesAll(final Path srcModulesDir, final FeaturePackLayout.Builder fpBuilder, final Path targetResources, final Path fpPackagesDir) throws MojoExecutionException {
         debug("WfFeaturePackBuildMojo adding modules.all");
         final PackageSpec.Builder modulesAll = getExtendedPackage(WfConstants.MODULES_ALL, true);
-        try {
-            final Map<String, Path> moduleXmlByPkgName = findModules(srcModulesDir);
-            if (moduleXmlByPkgName.isEmpty()) {
-                throw new MojoExecutionException("Modules not found in " + srcModulesDir);
+        try(Stream<Path> layers = Files.list(srcModulesDir)) {
+            final Map<String, Path> moduleXmlByPkgName = new HashMap<>();
+            final Iterator<Path> i = layers.iterator();
+            while(i.hasNext()) {
+                findModules(i.next(), moduleXmlByPkgName);
+                if (moduleXmlByPkgName.isEmpty()) {
+                    throw new MojoExecutionException("Modules not found in " + srcModulesDir);
+                }
             }
             packageModules(fpBuilder, targetResources, moduleXmlByPkgName, fpPackagesDir, modulesAll);
         } catch (IOException e) {
@@ -627,8 +633,7 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         }
     }
 
-    private Map<String, Path> findModules(Path modulesDir) throws IOException {
-        final Map<String, Path> moduleXmlByPkgName = new HashMap<>();
+    private void findModules(Path modulesDir, Map<String, Path> moduleXmlByPkgName) throws IOException {
         Files.walkFileTree(modulesDir, new FileVisitor<Path>() {
             @Override
             public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
@@ -663,7 +668,6 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
                 return FileVisitResult.CONTINUE;
             }
         });
-        return moduleXmlByPkgName;
     }
 
     private void packageModules(FeaturePackLayout.Builder fpBuilder,
