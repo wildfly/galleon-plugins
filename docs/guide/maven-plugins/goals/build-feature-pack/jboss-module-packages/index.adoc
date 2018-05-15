@@ -1,0 +1,80 @@
+#### Generating JBoss module packages
+
+The current approach is to generate a package per JBoss module. JBoss module dependencies are reflected in the corresponding package dependencies.
+
+To generate JBoss module packages the resources directory of the project has to include `modules/system/layers/base` directory which contains `module.xml` file templates.
+
+Traditionally, WildFly-based builds use `module.xml` templates to generate the final `module.xml` files based on the distribution type selected: thin (when the JBoss module artifacts are loaded directly from the Maven repository at runtime) or thick (when the JBoss module artifacts are resolved and copied to the distribution directory at provisioning time).
+
+For example, here is an excerpt from a `module.xml` template:
+
+[source,xml]
+----
+<module xmlns="urn:jboss:module:1.8" name="org.jboss.as.jmx">
+    <properties>
+        <property name="jboss.api" value="private"/>
+    </properties>
+
+    <exports>
+        <exclude path="org/jboss/as/jmx/logging"/>
+    </exports>
+
+    <resources>
+        <artifact name="${org.wildfly.core:wildfly-jmx}"/>
+    </resources>
+
+    <dependencies>
+        <!-- skipped content -->
+----
+
+It looks pretty much like the final `module.xml` except that the artifact name is an epression which should be replaced with either the complete artifact coordinates in case of a thin distribution, e.g.
+[source,xml]
+----
+<module name="org.jboss.as.jmx" xmlns="urn:jboss:module:1.8">
+    <properties>
+        <property name="jboss.api" value="private"/>
+    </properties>
+
+    <exports>
+        <exclude path="org/jboss/as/jmx/logging"/>
+    </exports>
+
+    <resources>
+        <artifact name="org.wildfly.core:wildfly-jmx:5.0.0.Beta3-SNAPSHOT"/>
+    </resources>
+
+    <dependencies>
+        <!-- skipped content -->
+----
+or the `resource-root` element in case of a thick distribution, e.g.
+
+[source,xml]
+----
+<module name="org.jboss.as.jmx" xmlns="urn:jboss:module:1.8">
+    <properties>
+        <property name="jboss.api" value="private"/>
+    </properties>
+
+    <exports>
+        <exclude path="org/jboss/as/jmx/logging"/>
+    </exports>
+
+    <resources>
+        <resource-root path="wildfly-jmx-5.0.0.Beta3-SNAPSHOT.jar"/>
+    </resources>
+
+    <dependencies>
+        <!-- skipped content -->
+----
+
+`module.xml` template processing is happening at provisioning time and depends on the kind of distribution being provisioned. The mojo creates a package per `module.xml` template and relfects the module dependencies as package dependencies.
+
+NOTE: It is possible that a module depends on another module which is not found in the current feature-pack. In that case, the feature-pack that contains the package representing the module from the dependency must be declared as the dependency on the current feature-pack in the feature-pack build config file. If the dependency could not be resolved locally (among the modules included in the current feature-pack), the module will be looked up in the dependencies of the current feature-pack (in the order the dependencies are specified in the feature-pack build config file).
+
+In case a module dependency could not be resolved neither locally nor in the feature-pack dependencies, an error will be thrown with the corresponding message.
+
+##### modules.all package
+
+If a feature-pack includes JBoss modules, in addition to the module packages, the mojo will generate a package called `modules.all`. This package will not contain any content but will simply depend on all the module packages generated for this feature-pack. This package exists for convenience only to be able to install all the modules from the feature-pack (and its dependencies) by including a single package.
+
+NOTE: Original WildFly feature-packs include `modules.all` into the default package list at the moment to follow the legacy approach of building distributions. This is configured in the feature-pack build config file.
