@@ -165,35 +165,23 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
         }
         addBasicConfigs(wildflyDir);
 
-        final Artifact pluginArtifact = project.getPluginArtifactMap().get("org.wildfly.galleon-plugins:wildfly-galleon-maven-plugins");
-        final ArtifactItem specgenJar = new ArtifactItem();
-        specgenJar.setArtifactId("wildfly-feature-spec-gen");
-        specgenJar.setGroupId(pluginArtifact.getGroupId());
-        specgenJar.setVersion(pluginArtifact.getVersion());
-        final File itemFile = findArtifact(specgenJar).getFile();
+        for(Artifact art : hardcodedArtifacts) {
+            findArtifact(art);
+        }
 
-        // TODO this CP might include too many artifacts
-        // we do need to make sure they are available locally but not necessarily add them to the cp
-        final List<URL> buildCp = new ArrayList<>(buildArtifacts.size());
-        buildCp.add(itemFile.toURI().toURL());
-        for(Artifact artifact : buildArtifacts.values()) {
-            if(artifact.getFile() == null) {
-                buildCp.add(findArtifact(artifact).getFile().toURI().toURL());
-            } else {
-                buildCp.add(artifact.getFile().toURI().toURL());
-            }
-        }
-        for(Artifact artifact : hardcodedArtifacts) {
-            findArtifact(artifact);
-        }
+        final URL[] specGenCp = new URL[3];
+        Artifact artifact = project.getPluginArtifactMap().get("org.wildfly.galleon-plugins:wildfly-galleon-maven-plugins");
+        specGenCp[0] = resolveArtifact(artifact.getGroupId(), "wildfly-feature-spec-gen", artifact.getVersion(), null, "jar").toURI().toURL();
+        artifact = buildArtifacts.get("org.jboss.modules:jboss-modules");
+        specGenCp[1] = resolveArtifact(artifact.getGroupId(), artifact.getArtifactId(), artifact.getVersion(), null, "jar").toURI().toURL();
+        artifact = buildArtifacts.get("org.wildfly.core:wildfly-cli");
+        specGenCp[2] = resolveArtifact(artifact.getGroupId(), artifact.getArtifactId(), artifact.getVersion(), "client", "jar").toURI().toURL();
 
         final String originalMavenRepoLocal = System.getProperty(MAVEN_REPO_LOCAL);
         System.setProperty(MAVEN_REPO_LOCAL, session.getSettings().getLocalRepository());
         debug("Generating feature specs using local maven repo %s", System.getProperty(MAVEN_REPO_LOCAL));
         try {
-            return FeatureSpecGeneratorInvoker.generateSpecs(wildflyDir, inheritedFeatures, outputDirectory.toPath(),
-                    buildCp.toArray(new URL[buildCp.size()]),
-                    getLog());
+            return FeatureSpecGeneratorInvoker.generateSpecs(wildflyDir, inheritedFeatures, outputDirectory.toPath(), specGenCp, getLog());
         } catch (ProvisioningException e) {
             throw new MojoExecutionException("Feature spec generator failed", e);
         } finally {
@@ -203,6 +191,20 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
                 System.setProperty(MAVEN_REPO_LOCAL, originalMavenRepoLocal);
             }
         }
+    }
+
+    private File resolveArtifact(String groupId, String artifactId, String version, String classifier, String extension) throws MojoExecutionException {
+        final ArtifactItem item = new ArtifactItem();
+        item.setArtifactId(artifactId);
+        item.setGroupId(groupId);
+        item.setVersion(version);
+        if(classifier != null) {
+            item.setClassifier(classifier);
+        }
+        if(extension != null) {
+            item.setExtension(extension);
+        }
+        return findArtifact(item).getFile();
     }
 
     private void addBasicConfigs(final Path wildfly) throws IOException {
