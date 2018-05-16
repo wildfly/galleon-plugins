@@ -110,7 +110,6 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
     private ProvisioningRuntime runtime;
     private PropertyResolver versionResolver;
-    private List<Path> installationClassPath = new ArrayList<>();
 
     private Map<ArtifactCoords.Gav, Properties> fpTasksProps = Collections.emptyMap();
     private Properties mergedTaskProps = new Properties();
@@ -329,18 +328,26 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             throw new ProvisioningException(Errors.pathDoesNotExist(configGenJar));
         }
 
-        final List<URL> cp = new ArrayList<>();
+        final URL[] cp = new URL[3];
         try {
-            cp.add(configGenJar.toUri().toURL());
-            for(Path p : installationClassPath) {
-                cp.add(p.toUri().toURL());
-            }
+            cp[0] = configGenJar.toUri().toURL();
+            ArtifactCoords.Gav gav = ArtifactCoords.newGav(resolveRequiredGav("org.jboss.modules:jboss-modules"));
+            cp[1] = runtime.resolveArtifact(new ArtifactCoords(gav.getGroupId(), gav.getArtifactId(), gav.getVersion(), null, "jar")).toUri().toURL();
+            gav = ArtifactCoords.newGav(resolveRequiredGav("org.wildfly.core:wildfly-cli"));
+            cp[2] = runtime.resolveArtifact(new ArtifactCoords(gav.getGroupId(), gav.getArtifactId(), gav.getVersion(), "client", "jar")).toUri().toURL();
         } catch (IOException e) {
             throw new ProvisioningException("Failed to init classpath for " + runtime.getStagedDir(), e);
         }
+        if(runtime.getMessageWriter().isVerboseEnabled()) {
+            final MessageWriter mw = runtime.getMessageWriter();
+            mw.verbose("Config generator classpath:");
+            for(int i = 0; i < cp.length; ++i) {
+                mw.verbose(i+1 + ". %s", cp[i]);
+            }
+        }
 
         final ClassLoader originalCl = Thread.currentThread().getContextClassLoader();
-        final URLClassLoader configGenCl = new URLClassLoader(cp.toArray(new URL[cp.size()]), originalCl);
+        final URLClassLoader configGenCl = new URLClassLoader(cp, originalCl);
         Thread.currentThread().setContextClassLoader(configGenCl);
         try {
             final Class<?> configHandlerCls = configGenCl.loadClass(CONFIG_GEN_CLASS);
@@ -364,6 +371,14 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             } catch (IOException e) {
             }
         }
+    }
+
+    private String resolveRequiredGav(String artifactGa) throws ProvisioningException {
+        String gavStr = versionResolver.resolveProperty(artifactGa);
+        if(gavStr == null) {
+            throw new ProvisioningException("Failed to resolve version of " + artifactGa);
+        }
+        return gavStr;
     }
 
     private void processPackages(final FeaturePackRuntime fp) throws ProvisioningException {
@@ -576,7 +591,6 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 if (thinServer) {
                     // ignore jandex variable, just resolve coordinates to a string
                     attribute.setValue(coordsStr);
-                    addToInstallationCp(moduleArtifact);
                 } else {
                     final Path targetDir = installDir.resolve(fpModuleDir.relativize(moduleTemplate.getParent()));
                     final String artifactFileName = moduleArtifact.getFileName().toString();
@@ -594,7 +608,6 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                         finalFileName = artifactFileName;
                         final Path targetModulePath = targetDir.resolve(artifactFileName);
                         Files.copy(moduleArtifact, targetModulePath, StandardCopyOption.REPLACE_EXISTING);
-                        addToInstallationCp(targetModulePath);
                     }
                     element.setLocalName("resource-root");
                     attribute.setLocalName("path");
@@ -671,7 +684,6 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 extractArtifact(jarSrc, jarTarget, copyArtifact);
             } else {
                 IoUtils.copy(jarSrc, jarTarget);
-                addToInstallationCp(jarTarget);
             }
             runtime.getMessageWriter().verbose("    Copying artifact %s to %s", jarSrc, jarTarget);
             if(schemaGroups.contains(coords.getGroupId())) {
@@ -782,19 +794,12 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                                 if(copy.includeFile(file.toString().substring(1))) {
                                     final Path targetPath = target.resolve(zipRoot.relativize(file).toString());
                                     Files.copy(file, targetPath);
-                                    if(targetPath.getFileName().endsWith(".jar")) {
-                                        addToInstallationCp(targetPath);
-                                    }
                                 }
                                 return FileVisitResult.CONTINUE;
                             }
                         });
             }
         }
-    }
-
-    private void addToInstallationCp(Path p) {
-        installationClassPath.add(p);
     }
 
     private static void mkdirs(final WildFlyPackageTasks tasks, Path installDir) throws ProvisioningException {
