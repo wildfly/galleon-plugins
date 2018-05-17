@@ -35,7 +35,7 @@ public class FeatureSpecGeneratorInvoker {
 
     public static int generateSpecs(Path wildfly, Set<String> inheritedFeatures, Path outputDir, URL[] cpUrls, Log log) throws ProvisioningException {
         final ClassLoader originalCl = Thread.currentThread().getContextClassLoader();
-        try (URLClassLoader newCl = prepareClassLoader(cpUrls, originalCl)) {
+        try (URLClassLoader newCl = new URLClassLoader(cpUrls, originalCl)) {
             if(log.isDebugEnabled()) {
                 log.debug("Embedded server classpath:");
                 printCl(newCl, log);
@@ -70,10 +70,6 @@ public class FeatureSpecGeneratorInvoker {
         for(URL url : ((URLClassLoader)cl).getURLs()) {
             log.debug("  " + ++i + ". " + url);
         }
-    }
-
-    private static URLClassLoader prepareClassLoader(URL[] urls, final ClassLoader originalCl) throws ProvisioningException {
-        return new URLClassLoader(urls, originalCl);
     }
 
     private FeatureSpecGeneratorInvoker() {
