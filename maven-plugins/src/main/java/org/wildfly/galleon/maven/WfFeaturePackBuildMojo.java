@@ -22,6 +22,7 @@ import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.Reader;
 import java.nio.file.DirectoryStream;
 import java.nio.file.FileVisitResult;
 import java.nio.file.FileVisitor;
@@ -162,6 +163,18 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
      */
     @Parameter(alias="release-name", defaultValue = "${product.release.name}", required=true)
     private String releaseName;
+
+    /**
+     * Task properties file
+     */
+    @Parameter(alias="task-properties-file", required=false)
+    private File taskPropsFile;
+
+    /**
+     * Task properties
+     */
+    @Parameter(alias="task-properties", required=false)
+    private Map<String, String> taskProps = Collections.emptyMap();
 
     /**
      * The release name
@@ -743,11 +756,25 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         }
     }
 
-    private Properties getFPConfigProperties() {
+    private Properties getFPConfigProperties() throws MojoExecutionException {
         final Properties properties = new Properties();
         properties.put("project.version", project.getVersion());
-        properties.put("product.release.name", releaseName);
         properties.put("version", project.getVersion()); // needed for licenses.xsl
+        properties.put("product.release.name", releaseName);
+        if(taskPropsFile != null) {
+            final Path p = taskPropsFile.toPath();
+            if(!Files.exists(p)) {
+                throw new MojoExecutionException(Errors.pathDoesNotExist(p));
+            }
+            try (Reader reader = Files.newBufferedReader(p)) {
+                properties.load(reader);
+            } catch (IOException e) {
+                throw new MojoExecutionException(Errors.readFile(p), e);
+            }
+        }
+        if(!taskProps.isEmpty()) {
+            properties.putAll(taskProps);
+        }
         return properties;
     }
 
