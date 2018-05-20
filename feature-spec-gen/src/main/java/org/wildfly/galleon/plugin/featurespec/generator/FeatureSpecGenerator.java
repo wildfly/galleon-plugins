@@ -120,8 +120,6 @@ public class FeatureSpecGenerator {
 
     public int generateSpecs(Path installationHome) throws ProvisioningException {
         final Map<Object, Object> originalProps = new HashMap<>(System.getProperties());
-        System.setProperty("org.wildfly.logging.skipLogManagerCheck", "true");
-        System.setProperty("java.util.logging.manager", "org.jboss.logmanager.LogManager");
         try {
             doGenerate(installationHome);
         } finally {
