@@ -76,7 +76,7 @@
     <version.org.jboss.galleon>1.0.0.CR3</version.org.jboss.galleon>
     <version.org.jboss.dmr>1.5.0.Final</version.org.jboss.dmr>
     <version.org.jboss.jandex>2.0.3.Final</version.org.jboss.jandex>
-    <version.org.jboss.modules.jboss-modules>1.7.0.Final</version.org.jboss.modules.jboss-modules>
+    <version.org.jboss.modules.jboss-modules>1.8.5.Final</version.org.jboss.modules.jboss-modules>
     <version.org.wildfly.core.wildfly-core>4.0.0.Final</version.org.wildfly.core.wildfly-core>
     <version.org.jboss.logging>3.3.1.Final</version.org.jboss.logging>
     <version.org.jboss.logmanager>2.0.6.Final</version.org.jboss.logmanager>
