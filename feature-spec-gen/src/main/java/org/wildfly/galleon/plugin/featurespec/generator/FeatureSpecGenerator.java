@@ -16,7 +16,6 @@
  */
 package org.wildfly.galleon.plugin.featurespec.generator;
 
-import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -25,18 +24,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import javax.xml.stream.XMLStreamException;
-
-import org.jboss.as.controller.client.ModelControllerClient;
-import org.jboss.as.controller.client.helpers.Operations;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.Property;
-import org.jboss.galleon.ProvisioningDescriptionException;
 import org.jboss.galleon.ProvisioningException;
-import org.wildfly.core.embedded.EmbeddedProcessFactory;
-import org.wildfly.core.embedded.EmbeddedProcessStartException;
-import org.wildfly.core.embedded.HostController;
-import org.wildfly.core.embedded.StandaloneServer;
 
 /**
  *
@@ -50,6 +40,7 @@ public class FeatureSpecGenerator {
     private int specsGenerated;
 
     final Path outputDir;
+    private final boolean fork;
     private final boolean debug;
     private Set<String> inheritedSpecs;
 
@@ -112,8 +103,9 @@ public class FeatureSpecGenerator {
         ++specsGenerated;
     }
 
-    public FeatureSpecGenerator(Path outputDir, Set<String> inheritedSpecs, boolean debug) {
+    public FeatureSpecGenerator(Path outputDir, Set<String> inheritedSpecs, boolean fork, boolean debug) {
         this.outputDir = outputDir;
+        this.fork = fork;
         this.debug = debug;
         this.inheritedSpecs = inheritedSpecs;
     }
@@ -121,7 +113,7 @@ public class FeatureSpecGenerator {
     public int generateSpecs(Path installationHome) throws ProvisioningException {
         final Map<Object, Object> originalProps = new HashMap<>(System.getProperties());
         try {
-            doGenerate(installationHome);
+            doGenerate(installationHome.toString());
         } finally {
             final List<String> toClear = new ArrayList<>();
             for(Map.Entry<Object, Object> prop : System.getProperties().entrySet()) {
@@ -139,12 +131,12 @@ public class FeatureSpecGenerator {
         return specsGenerated;
     }
 
-    private void doGenerate(Path installationHome) throws ProvisioningException {
+    private void doGenerate(String installationHome) throws ProvisioningException {
 
-        final ModelNode standaloneFeatures = readStandaloneFeatures(installationHome);
+        final ModelNode standaloneFeatures = FeatureSpecDescriptionReader.readStandalone(installationHome, fork);
         final FeatureSpecNode rootNode = new FeatureSpecNode(this, FeatureSpecNode.STANDALONE_MODEL, standaloneFeatures.require("name").asString(), standaloneFeatures);
 
-        final ModelNode domainRoots = readDomainFeatures(installationHome);
+        final ModelNode domainRoots = FeatureSpecDescriptionReader.readDomain(installationHome, fork);
         rootNode.setDomainDescr("domain", new ModelNode());
         rootNode.generateDomain = false;
         for(Property child : domainRoots.get("children").asPropertyList()) {
@@ -165,59 +157,6 @@ public class FeatureSpecGenerator {
 
         rootNode.buildSpecs();
     }
-
-    private static ModelNode readStandaloneFeatures(Path wildfly) throws ProvisioningException {
-        StandaloneServer server = EmbeddedProcessFactory.createStandaloneServer(wildfly.toAbsolutePath().toString(), null, null, new String[]{"--admin-only"});
-        try {
-            server.start();
-            try (ModelControllerClient client = server.getModelControllerClient()) {
-                return readFeatures(client);
-            } catch (XMLStreamException | ProvisioningDescriptionException | IOException ex) {
-                throw new ProvisioningException("Failed to read feature specs from an embedded server", ex);
-            }
-        } catch (EmbeddedProcessStartException ex) {
-            throw new ProvisioningException("Failed to start embedded server", ex);
-        } finally {
-            server.stop();
-        }
-    }
-
-   private static ModelNode readDomainFeatures(Path wildfly) throws ProvisioningException {
-        HostController host = EmbeddedProcessFactory.createHostController(wildfly.toAbsolutePath().toString(), null, null, new String[]{"--admin-only"});
-        try {
-            host.start();
-            try (ModelControllerClient client = host.getModelControllerClient()) {
-                return readFeatures(client);
-            } catch (XMLStreamException | ProvisioningDescriptionException | IOException ex) {
-                throw new ProvisioningException("Failed to read feature specs from an embedded host controller", ex);
-            }
-        } catch (EmbeddedProcessStartException ex) {
-            throw new ProvisioningException("Failed to start embedded host controller", ex);
-        } finally {
-            host.stop();
-        }
-    }
-
-   private static ModelNode readFeatures(ModelControllerClient client) throws IOException, ProvisioningDescriptionException, XMLStreamException {
-       ModelNode address = new ModelNode().setEmptyList();
-       ModelNode op = Operations.createOperation("read-feature-description", address);
-       op.get("recursive").set(true);
-       ModelNode result = client.execute(op);
-       checkOutcome(result);
-       if (result.hasDefined("result")) {
-           result = result.require("result");
-       }
-       return result.require("feature");
-   }
-
-   private static void checkOutcome(final ModelNode result) throws ProvisioningDescriptionException {
-       if (!result.get("outcome").asString().equals("success")) {
-           if (result.hasDefined("failure-description")) {
-               throw new ProvisioningDescriptionException(result.get("failure-description").asString());
-           }
-           throw new ProvisioningDescriptionException("Error executing operation " + result.asString());
-       }
-   }
 
    void warn(String str) {
        System.out.println("WARN: " + str);

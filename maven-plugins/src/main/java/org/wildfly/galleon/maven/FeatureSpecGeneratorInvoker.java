@@ -33,7 +33,7 @@ import org.jboss.galleon.ProvisioningException;
  */
 public class FeatureSpecGeneratorInvoker {
 
-    public static int generateSpecs(Path wildfly, Set<String> inheritedFeatures, Path outputDir, URL[] cpUrls, Log log) throws ProvisioningException {
+    public static int generateSpecs(Path wildfly, Set<String> inheritedFeatures, Path outputDir, URL[] cpUrls, boolean fork, Log log) throws ProvisioningException {
         final ClassLoader originalCl = Thread.currentThread().getContextClassLoader();
         try (URLClassLoader newCl = new URLClassLoader(cpUrls, originalCl)) {
             if(log.isDebugEnabled()) {
@@ -43,7 +43,7 @@ public class FeatureSpecGeneratorInvoker {
             Thread.currentThread().setContextClassLoader(newCl);
             final Class<?> cliTest = newCl.loadClass("org.wildfly.galleon.plugin.featurespec.generator.FeatureSpecGenerator");
             final Method specGenMethod = cliTest.getMethod("generateSpecs", Path.class);
-            return (int) specGenMethod.invoke(cliTest.getConstructor(Path.class, Set.class, boolean.class).newInstance(outputDir, inheritedFeatures, log.isDebugEnabled()), wildfly);
+            return (int) specGenMethod.invoke(cliTest.getConstructor(Path.class, Set.class, boolean.class, boolean.class).newInstance(outputDir, inheritedFeatures, fork, log.isDebugEnabled()), wildfly);
         } catch(InvocationTargetException e) {
             final Throwable cause = e.getCause();
             if(cause instanceof ProvisioningException ) {
