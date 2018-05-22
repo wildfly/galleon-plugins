@@ -107,6 +107,9 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
     @Parameter(alias = "host-extensions", required = true)
     private List<String> hostExtensions;
 
+    @Parameter(alias = "fork-embedded", required = false)
+    private boolean forkEmbedded;
+
     @Component
     private ArchiverManager archiverManager;
 
@@ -181,7 +184,7 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
         System.setProperty(MAVEN_REPO_LOCAL, session.getSettings().getLocalRepository());
         debug("Generating feature specs using local maven repo %s", System.getProperty(MAVEN_REPO_LOCAL));
         try {
-            return FeatureSpecGeneratorInvoker.generateSpecs(wildflyDir, inheritedFeatures, outputDirectory.toPath(), specGenCp, getLog());
+            return FeatureSpecGeneratorInvoker.generateSpecs(wildflyDir, inheritedFeatures, outputDirectory.toPath(), specGenCp, forkEmbedded, getLog());
         } catch (ProvisioningException e) {
             throw new MojoExecutionException("Feature spec generator failed", e);
         } finally {

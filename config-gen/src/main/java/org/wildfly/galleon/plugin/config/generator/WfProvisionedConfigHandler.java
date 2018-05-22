@@ -56,7 +56,7 @@ import org.wildfly.galleon.plugin.WfInstallPlugin;
  *
  * @author Alexey Loubyansky
  */
-public class WfProvisionedConfigHandler implements ProvisionedConfigHandler {
+public class WfProvisionedConfigHandler implements ProvisionedConfigHandler, AutoCloseable {
 
     private interface NameFilter {
         boolean accepts(String name, int position);
@@ -403,14 +403,13 @@ public class WfProvisionedConfigHandler implements ProvisionedConfigHandler {
     private List<ManagedOp> ops = Collections.emptyList();
     private NameFilter paramFilter;
 
-    private ModelNode composite;
-
     private Path dumpScriptsDir;
     private BufferedWriter scriptWriter;
     private int batchCount;
     private int opsCount;
     private int individualOpsCount;
     private StringBuilder scriptBuf;
+    private boolean inBatch;
 
     public WfProvisionedConfigHandler(ProvisioningRuntime runtime, WfConfigGenerator configGen) throws ProvisioningException {
         this.configGen = configGen;
@@ -431,7 +430,7 @@ public class WfProvisionedConfigHandler implements ProvisionedConfigHandler {
             paramFilter = getStandaloneParamFilter();
         } else if(WfConstants.DOMAIN.equals(config.getModel())) {
             configGen.startHc(getEmbeddedArgs(config));
-            configGen.execute(Operations.createAddOperation(Operations.createAddress("host", "tmp")));
+            configGen.handle(Operations.createAddOperation(Operations.createAddress("host", "tmp")));
             paramFilter = getDomainParamFilter();
         } else if (WfConstants.HOST.equals(config.getModel())) {
             configGen.startHc(getEmbeddedArgs(config));
@@ -495,27 +494,24 @@ public class WfProvisionedConfigHandler implements ProvisionedConfigHandler {
             newLineScript();
             writeScript("# Batch No. " + ++batchCount);
             writeScript("batch");
+            inBatch = true;
         }
-        composite = Operations.createCompositeOperation();
+        configGen.startBatch();
     }
 
     @Override
     public void endBatch() throws ProvisioningException {
         if(scriptWriter != null) {
             writeScript("run-batch");
+            inBatch = false;
         }
         try {
-            configGen.execute(composite);
+            configGen.endBatch();
         } catch(Throwable t) {
             if(scriptWriter != null) {
                 closeScriptWriter();
             }
-            if(t instanceof ProvisioningException) {
-                throw t;
-            }
-            throw new ProvisioningException("Failed to execute operation " + composite, t);
         }
-        composite = null;
     }
 
     @Override
@@ -524,6 +520,13 @@ public class WfProvisionedConfigHandler implements ProvisionedConfigHandler {
             closeScriptWriter();
         }
         configGen.stopEmbedded();
+    }
+
+    @Override
+    public void close() {
+        if(scriptWriter != null) {
+            closeScriptWriter();
+        }
     }
 
     private String[] getEmbeddedArgs(ProvisionedConfig config) throws ProvisioningException {
@@ -560,28 +563,23 @@ public class WfProvisionedConfigHandler implements ProvisionedConfigHandler {
 
     private void handleOp(ModelNode op) throws ProvisioningException {
         if(scriptWriter != null) {
-            if(composite == null) {
+            if(!inBatch) {
                 ++individualOpsCount;
                 newLineScript();
             }
             writeScript(op);
             ++opsCount;
         }
-
-        if(composite != null) {
-            composite.get(WfConstants.STEPS).add(op);
-        } else {
-            try {
-                configGen.execute(op);
-            } catch(Throwable t) {
-                if(scriptWriter != null) {
-                    closeScriptWriter();
-                }
-                if(t instanceof ProvisioningException) {
-                    throw t;
-                }
-                throw new ProvisioningException("Failed to execute operation " + op, t);
+        try {
+            configGen.handle(op);
+        } catch (Throwable t) {
+            if (scriptWriter != null) {
+                closeScriptWriter();
             }
+            if (t instanceof ProvisioningException) {
+                throw t;
+            }
+            throw new ProvisioningException("Failed to execute operation " + op, t);
         }
     }
 
