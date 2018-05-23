@@ -42,8 +42,10 @@ public class FeatureSpecGeneratorInvoker {
             }
             Thread.currentThread().setContextClassLoader(newCl);
             final Class<?> cliTest = newCl.loadClass("org.wildfly.galleon.plugin.featurespec.generator.FeatureSpecGenerator");
-            final Method specGenMethod = cliTest.getMethod("generateSpecs", Path.class);
-            return (int) specGenMethod.invoke(cliTest.getConstructor(Path.class, Set.class, boolean.class, boolean.class).newInstance(outputDir, inheritedFeatures, fork, log.isDebugEnabled()), wildfly);
+            final Method specGenMethod = cliTest.getMethod("generateSpecs");
+            return (int) specGenMethod.invoke(
+                    cliTest.getConstructor(String.class, Path.class, Set.class, boolean.class, boolean.class)
+                    .newInstance(wildfly.toString(), outputDir, inheritedFeatures, fork, log.isDebugEnabled()));
         } catch(InvocationTargetException e) {
             final Throwable cause = e.getCause();
             if(cause instanceof ProvisioningException ) {
