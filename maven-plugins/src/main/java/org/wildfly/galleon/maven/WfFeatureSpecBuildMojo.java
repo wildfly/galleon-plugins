@@ -421,7 +421,7 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
                     = new DefaultProjectBuildingRequest(session.getProjectBuildingRequest());
             buildingRequest.setLocalRepository(session.getLocalRepository());
             buildingRequest.setRemoteRepositories(project.getRemoteArtifactRepositories());
-            debug("Resolving artifact $s:$s:$s", artifact.getGroupId(), artifact.getArtifactId(), artifact.getVersion());
+            debug("Resolving artifact %s:%s:%s", artifact.getGroupId(), artifact.getArtifactId(), artifact.getVersion());
             final ArtifactResult result = artifactResolver.resolveArtifact(buildingRequest, artifact);
             if (result != null) {
                 return result.getArtifact();
@@ -438,7 +438,7 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
                     = new DefaultProjectBuildingRequest(session.getProjectBuildingRequest());
             buildingRequest.setLocalRepository(session.getLocalRepository());
             buildingRequest.setRemoteRepositories(project.getRemoteArtifactRepositories());
-            debug("Resolving artifact $s:$s:$s", artifact.getGroupId(), artifact.getArtifactId(), artifact.getVersion());
+            debug("Resolving artifact %s:%s:%s", artifact.getGroupId(), artifact.getArtifactId(), artifact.getVersion());
             ArtifactResult result = artifactResolver.resolveArtifact(buildingRequest, artifact);
             if (result != null) {
                 return result.getArtifact();

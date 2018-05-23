@@ -30,7 +30,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.jboss.as.controller.client.ModelControllerClient;
 import org.jboss.as.controller.client.helpers.ClientConstants;
 import org.jboss.as.controller.client.helpers.Operations;
 import org.jboss.dmr.ModelNode;
@@ -39,10 +38,9 @@ import org.jboss.galleon.Errors;
 import org.jboss.galleon.ProvisioningException;
 import org.jboss.galleon.util.IoUtils;
 import org.jboss.galleon.util.StringUtils;
+import org.wildfly.core.embedded.EmbeddedManagedProcess;
 import org.wildfly.core.embedded.EmbeddedProcessFactory;
 import org.wildfly.core.embedded.EmbeddedProcessStartException;
-import org.wildfly.core.embedded.HostController;
-import org.wildfly.core.embedded.StandaloneServer;
 import org.wildfly.galleon.plugin.WfConstants;
 import org.wildfly.galleon.plugin.server.ForkedEmbeddedUtil;
 
@@ -160,8 +158,11 @@ public class FeatureSpecGenerator implements ForkedEmbeddedUtil.ForkCallback {
             if(systemProps != null) {
                 IoUtils.recursiveDelete(systemProps);
             }
-            if(this.standaloneSpecsFile != null) {
+            if(standaloneSpecsFile != null) {
                 IoUtils.recursiveDelete(standaloneSpecsFile);
+            }
+            if(domainSpecsFile != null) {
+                IoUtils.recursiveDelete(domainSpecsFile);
             }
         }
         return specsGenerated;
@@ -176,8 +177,8 @@ public class FeatureSpecGenerator implements ForkedEmbeddedUtil.ForkCallback {
             standaloneFeatures = readSpecsFile(getStandaloneSpecsFile());
             domainRoots = readSpecsFile(getDomainSpecsFile());
         } else {
-            standaloneFeatures = readStandaloneFeatures(installation);
-            domainRoots = readDomainFeatures(installation);
+            standaloneFeatures = readFeatureSpecs(createStandaloneServer(installation));
+            domainRoots = readFeatureSpecs(createEmbeddedHc(installation));
         }
 
         final FeatureSpecNode rootNode = new FeatureSpecNode(this, FeatureSpecNode.STANDALONE_MODEL, standaloneFeatures.require(ClientConstants.NAME).asString(), standaloneFeatures);
@@ -210,9 +211,9 @@ public class FeatureSpecGenerator implements ForkedEmbeddedUtil.ForkCallback {
             StringUtils.append(buf, Arrays.asList(args));
             throw new IllegalArgumentException("Expected 3 arguments but got " + Arrays.asList(args));
         }
-        ModelNode result = readStandaloneFeatures(args[0]);
+        ModelNode result = readFeatureSpecs(createStandaloneServer(args[0]));
         writeSpecsFile(Paths.get(args[1]), result);
-        result = readDomainFeatures(args[0]);
+        result = readFeatureSpecs(createEmbeddedHc(args[0]));
         writeSpecsFile(Paths.get(args[2]), result);
     }
 
@@ -252,46 +253,33 @@ public class FeatureSpecGenerator implements ForkedEmbeddedUtil.ForkCallback {
         return domainSpecsFile;
     }
 
-    private static ModelNode readStandaloneFeatures(String jbossHome) throws ProvisioningException {
-        final StandaloneServer server = EmbeddedProcessFactory.createStandaloneServer(jbossHome, null, null, new String[] {"--admin-only"});
-        try {
-            server.start();
-            return readFeatures(server.getModelControllerClient());
-        } catch (EmbeddedProcessStartException ex) {
-            throw new ProvisioningException("Failed to embed server", ex);
-        } finally {
-            server.stop();
-        }
+    private static EmbeddedManagedProcess createStandaloneServer(String jbossHome) {
+        return EmbeddedProcessFactory.createStandaloneServer(jbossHome, null, null, new String[] {"--admin-only"});
     }
 
-    private static ModelNode readDomainFeatures(String jbossHome) throws ProvisioningException {
-        final HostController server = EmbeddedProcessFactory.createHostController(jbossHome, null, null, new String[] {"--admin-only"});
-        try {
-            server.start();
-            return readFeatures(server.getModelControllerClient());
-        } catch (EmbeddedProcessStartException ex) {
-            throw new ProvisioningException("Failed to embed host controller", ex);
-        } finally {
-            server.stop();
-        }
+    private static EmbeddedManagedProcess createEmbeddedHc(String jbossHome) {
+        return EmbeddedProcessFactory.createHostController(jbossHome, null, null, new String[] {"--admin-only"});
     }
 
-    private static ModelNode readFeatures(ModelControllerClient client) throws ProvisioningException {
-        final ModelNode op = Operations.createOperation("read-feature-description");
-        op.get("recursive").set(true);
-        final ModelNode result;
+    private static ModelNode readFeatureSpecs(final EmbeddedManagedProcess server) throws ProvisioningException {
         try {
-            result = client.execute(op);
-        } catch (IOException e) {
-            throw new ProvisioningException("Failed to read feature descriptions", e);
-        }
-        if(!Operations.isSuccessfulOutcome(result)) {
-            throw new ProvisioningException(Operations.getFailureDescription(result).asString());
-        }
-        if (result.hasDefined("result")) {
-            return result.require("result").require("feature");
-        } else {
-            throw new ProvisioningException("The outcome does not include 'result': " + result.asString());
+            server.start();
+            final ModelNode op = Operations.createOperation("read-feature-description");
+            op.get(ClientConstants.RECURSIVE).set(true);
+            final ModelNode result;
+            try {
+                result = server.getModelControllerClient().execute(op);
+            } catch (IOException e) {
+                throw new ProvisioningException("Failed to read feature descriptions", e);
+            }
+            if(!Operations.isSuccessfulOutcome(result)) {
+                throw new ProvisioningException(Operations.getFailureDescription(result).asString());
+            }
+            return result.require(ClientConstants.RESULT).require("feature");
+        } catch (EmbeddedProcessStartException ex) {
+            throw new ProvisioningException("Failed to read feature spec descriptions", ex);
+        } finally {
+            server.stop();
         }
     }
 
@@ -299,7 +287,7 @@ public class FeatureSpecGenerator implements ForkedEmbeddedUtil.ForkCallback {
         try (InputStream is = Files.newInputStream(specsFile)) {
             return ModelNode.fromStream(is);
         } catch (IOException e) {
-            throw new ProvisioningException("Failed to read feature spec file " + specsFile, e);
+            throw new ProvisioningException(Errors.readFile(specsFile), e);
         }
     }
 
@@ -307,7 +295,7 @@ public class FeatureSpecGenerator implements ForkedEmbeddedUtil.ForkCallback {
         try(BufferedWriter writer = Files.newBufferedWriter(specsFile)) {
             writer.write(specs.asString());
         } catch (IOException e) {
-            throw new ProvisioningException(Errors.writeFile(specsFile));
+            throw new ProvisioningException(Errors.writeFile(specsFile), e);
         }
     }
 
