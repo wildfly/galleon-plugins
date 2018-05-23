@@ -478,7 +478,6 @@ public class WfConfigGenerator {
                 }
             }
             if (p.exitValue() != 0) {
-                //System.err.println(writer.getBuffer().toString());
                 throw new RuntimeException("Process has failed");
             }
         } catch (IOException e) {
