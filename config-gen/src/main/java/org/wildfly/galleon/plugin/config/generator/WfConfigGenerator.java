@@ -452,14 +452,21 @@ public class WfConfigGenerator {
         final StringBuilder cp = new StringBuilder();
         collectCpUrls(System.getProperty("java.home"), Thread.currentThread().getContextClassLoader(), cp);
 
-        final String[] commands = new String[] {"java",
-                "-cp", cp.toString(),
-                WfConfigGenerator.class.getName(),
-                jbossHome,
-                script.toString()};
+        final List<String> args = new ArrayList<>(7);
+        args.add("java");
+        args.add("-cp");
+        args.add(cp.toString());
+        final String mavenRepoLocal = System.getProperty("maven.repo.local");
+        if(mavenRepoLocal != null) {
+            args.add("-Dmaven.repo.local=" + System.getProperty("maven.repo.local"));
+        }
+        args.add(WfConfigGenerator.class.getName());
+        args.add(jbossHome);
+        args.add(script.toString());
+
         Process p;
         try {
-            p = new ProcessBuilder(Arrays.asList(commands)).redirectErrorStream(true).start();
+            p = new ProcessBuilder(args).redirectErrorStream(true).start();
         } catch (IOException e) {
             throw new ProvisioningException("Failed to start a feature spec reading process", e);
         }

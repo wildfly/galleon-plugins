@@ -28,7 +28,9 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 import org.jboss.as.controller.client.ModelControllerClient;
 import org.jboss.as.controller.client.helpers.Operations;
@@ -136,15 +138,21 @@ public class FeatureSpecDescriptionReader {
             throw new ProvisioningException("Failed to create a temporary file", e);
         }
 
-        final String[] commands = new String[] {"java",
-                "-cp", cp.toString(),
-                FeatureSpecDescriptionReader.class.getName(),
-                jbossHome,
-                controllerType,
-                descrFile.getAbsolutePath()};
+        final List<String> args = new ArrayList<>(8);
+        args.add("java");
+        args.add("-cp");
+        args.add(cp.toString());
+        final String mavenRepoLocal = System.getProperty("maven.repo.local");
+        if(mavenRepoLocal != null) {
+            args.add("-Dmaven.repo.local=" + System.getProperty("maven.repo.local"));
+        }
+        args.add(FeatureSpecDescriptionReader.class.getName());
+        args.add(jbossHome);
+        args.add(controllerType);
+        args.add(descrFile.getAbsolutePath());
         Process p;
         try {
-            p = new ProcessBuilder(Arrays.asList(commands)).redirectErrorStream(true).start();
+            p = new ProcessBuilder(args).redirectErrorStream(true).start();
         } catch (IOException e) {
             throw new ProvisioningException("Failed to start a feature spec reading process", e);
         }
