@@ -24,7 +24,6 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.StringWriter;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
@@ -67,17 +66,17 @@ public class FeatureSpecDescriptionReader {
         }
     }
 
-    public static ModelNode readStandalone(String jbossHome, boolean forkEmbedded) throws ProvisioningException {
+    public static ModelNode readStandalone(String jbossHome, boolean forkEmbedded, boolean echoEmbeddedLog) throws ProvisioningException {
         if(forkEmbedded) {
-            return forkEmbedded(jbossHome, "standalone");
+            return forkEmbedded(jbossHome, "standalone", echoEmbeddedLog);
         } else {
             return readStandaloneFeatures(jbossHome);
         }
     }
 
-    public static ModelNode readDomain(String jbossHome, boolean forkEmbedded) throws ProvisioningException {
+    public static ModelNode readDomain(String jbossHome, boolean forkEmbedded, boolean echoEmbeddedLog) throws ProvisioningException {
         if(forkEmbedded) {
-            return forkEmbedded(jbossHome, "domain");
+            return forkEmbedded(jbossHome, "domain", echoEmbeddedLog);
         } else {
             return readDomainFeatures(jbossHome);
         }
@@ -126,7 +125,7 @@ public class FeatureSpecDescriptionReader {
         }
     }
 
-    private static ModelNode forkEmbedded(String jbossHome, String controllerType) throws ProvisioningException {
+    private static ModelNode forkEmbedded(String jbossHome, String controllerType, boolean echoEmbeddedLog) throws ProvisioningException {
         final StringBuilder cp = new StringBuilder();
         collectCpUrls(System.getProperty("java.home"), Thread.currentThread().getContextClassLoader(), cp);
 
@@ -150,13 +149,12 @@ public class FeatureSpecDescriptionReader {
             throw new ProvisioningException("Failed to start a feature spec reading process", e);
         }
 
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
-                StringWriter writer = new StringWriter();
-                BufferedWriter bw = new BufferedWriter(writer);) {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
             String line = reader.readLine();
             while (line != null) {
-                bw.write(line);
-                bw.newLine();
+                if(echoEmbeddedLog) {
+                    System.out.println(line);
+                }
                 line = reader.readLine();
             }
             if (p.isAlive()) {
@@ -167,13 +165,11 @@ public class FeatureSpecDescriptionReader {
                 }
             }
             if (p.exitValue() != 0) {
-                System.err.println(writer.getBuffer().toString());
                 throw new RuntimeException("Process has failed");
             }
         } catch (IOException e) {
             throw new ProvisioningException("Process has failed", e);
         }
-
         try (InputStream is = new FileInputStream(descrFile)) {
             return ModelNode.fromStream(is);
         } catch (IOException e) {

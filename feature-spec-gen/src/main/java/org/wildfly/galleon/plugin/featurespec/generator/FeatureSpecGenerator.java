@@ -133,10 +133,10 @@ public class FeatureSpecGenerator {
 
     private void doGenerate(String installationHome) throws ProvisioningException {
 
-        final ModelNode standaloneFeatures = FeatureSpecDescriptionReader.readStandalone(installationHome, fork);
+        final ModelNode standaloneFeatures = FeatureSpecDescriptionReader.readStandalone(installationHome, fork, debug);
         final FeatureSpecNode rootNode = new FeatureSpecNode(this, FeatureSpecNode.STANDALONE_MODEL, standaloneFeatures.require("name").asString(), standaloneFeatures);
 
-        final ModelNode domainRoots = FeatureSpecDescriptionReader.readDomain(installationHome, fork);
+        final ModelNode domainRoots = FeatureSpecDescriptionReader.readDomain(installationHome, fork, debug);
         rootNode.setDomainDescr("domain", new ModelNode());
         rootNode.generateDomain = false;
         for(Property child : domainRoots.get("children").asPropertyList()) {
