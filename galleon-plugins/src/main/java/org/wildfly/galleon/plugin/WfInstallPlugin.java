@@ -107,7 +107,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
     private static final PluginOption OPTION_MVN_DIST = PluginOption.builder("jboss-maven-dist").hasNoValue().build();
     public static final PluginOption OPTION_DUMP_CONFIG_SCRIPTS = PluginOption.builder("jboss-dump-config-scripts").build();
-    private static final PluginOption OPTION_FORK_EMBEDDED = PluginOption.builder("jboss-fork-embedded").hasNoValue().build();
+    private static final PluginOption OPTION_FORK_EMBEDDED = PluginOption.builder("jboss-fork-embedded").build();
 
     private ProvisioningRuntime runtime;
     private PropertyResolver versionResolver;
@@ -355,7 +355,12 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             final Constructor<?> ctor = configHandlerCls.getConstructor();
             final Method m = configHandlerCls.getMethod(CONFIG_GEN_METHOD, ProvisioningRuntime.class, boolean.class);
             final Object generator = ctor.newInstance();
-            m.invoke(generator, runtime, runtime.isOptionSet(OPTION_FORK_EMBEDDED));
+            boolean forkEmbedded = false;
+            if(runtime.isOptionSet(OPTION_FORK_EMBEDDED)) {
+                final String value = runtime.getOptionValue(OPTION_FORK_EMBEDDED);
+                forkEmbedded = value == null ? true : Boolean.parseBoolean(value);
+            }
+            m.invoke(generator, runtime, forkEmbedded);
         } catch(InvocationTargetException e) {
             final Throwable cause = e.getCause();
             if(cause instanceof ProvisioningException) {

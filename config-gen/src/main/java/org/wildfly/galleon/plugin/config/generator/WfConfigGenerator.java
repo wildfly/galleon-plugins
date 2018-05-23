@@ -18,12 +18,8 @@
 package org.wildfly.galleon.plugin.config.generator;
 
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.PrintWriter;
-import java.net.URL;
-import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -47,12 +43,14 @@ import org.wildfly.core.embedded.EmbeddedManagedProcess;
 import org.wildfly.core.embedded.EmbeddedProcessFactory;
 import org.wildfly.core.embedded.EmbeddedProcessStartException;
 import org.wildfly.galleon.plugin.WfConstants;
+import org.wildfly.galleon.plugin.server.ForkedEmbeddedUtil;
+
 
 /**
  *
  * @author Alexey Loubyansky
  */
-public class WfConfigGenerator {
+public class WfConfigGenerator implements ForkedEmbeddedUtil.ForkCallback {
 
     private static final byte INITIAL = 0;
     private static final byte START_STANDALONE = 1;
@@ -66,6 +64,7 @@ public class WfConfigGenerator {
 
     private Long bootTimeout = null;
 
+    private MessageWriter messageWriter;
     private boolean forkEmbedded;
     private String jbossHome;
     private EmbeddedManagedProcess embeddedProcess;
@@ -80,6 +79,7 @@ public class WfConfigGenerator {
     private StringBuilder scriptBuf;
 
     public void generate(ProvisioningRuntime runtime, boolean forkEmbedded) throws ProvisioningException {
+        this.messageWriter = runtime.getMessageWriter();
         this.forkEmbedded = forkEmbedded;
         this.jbossHome = runtime.getStagedDir().toString();
         final Map<?, ?> originalProps = forkEmbedded ? null : new HashMap<>(System.getProperties());
@@ -92,9 +92,8 @@ public class WfConfigGenerator {
 
     private void doGenerate(ProvisioningRuntime runtime) throws ProvisioningException {
 
-        final MessageWriter messageWriter = runtime.getMessageWriter();
         if(messageWriter.isVerboseEnabled()) {
-            messageWriter.verbose("Generating WildFly-based configs forkEmbedded=%", forkEmbedded);
+            messageWriter.verbose("Generating WildFly-based configs forkEmbedded=%s", forkEmbedded);
         }
 
         if(forkEmbedded) {
@@ -126,7 +125,7 @@ public class WfConfigGenerator {
         if(forkEmbedded) {
             scriptWriter.close();
             scriptWriter = null;
-            forkEmbedded(messageWriter);
+            ForkedEmbeddedUtil.fork(this, jbossHome, script.toString());
         }
     }
 
@@ -448,103 +447,44 @@ public class WfConfigGenerator {
         scriptWriter.println(line);
     }
 
-    private void forkEmbedded(MessageWriter messageWriter) throws ProvisioningException {
-        final StringBuilder cp = new StringBuilder();
-        collectCpUrls(System.getProperty("java.home"), Thread.currentThread().getContextClassLoader(), cp);
-
-        final List<String> args = new ArrayList<>(7);
-        args.add("java");
-        args.add("-cp");
-        args.add(cp.toString());
-        final String mavenRepoLocal = System.getProperty("maven.repo.local");
-        if(mavenRepoLocal != null) {
-            args.add("-Dmaven.repo.local=" + System.getProperty("maven.repo.local"));
-        }
-        args.add(WfConfigGenerator.class.getName());
-        args.add(jbossHome);
-        args.add(script.toString());
-
-        Process p;
-        try {
-            p = new ProcessBuilder(args).redirectErrorStream(true).start();
-        } catch (IOException e) {
-            throw new ProvisioningException("Failed to start a feature spec reading process", e);
-        }
-
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
-            String line = reader.readLine();
-            while (line != null) {
-                messageWriter.verbose(line);
-                line = reader.readLine();
-            }
-            if (p.isAlive()) {
-                try {
-                    p.waitFor();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
-            if (p.exitValue() != 0) {
-                throw new RuntimeException("Process has failed");
-            }
-        } catch (IOException e) {
-            throw new ProvisioningException("Process has failed", e);
-        }
-    }
-
-    private static void collectCpUrls(String javaHome, ClassLoader cl, StringBuilder buf) {
-        final ClassLoader parentCl = cl.getParent();
-        if(parentCl != null) {
-            collectCpUrls(javaHome, cl.getParent(), buf);
-        }
-        if (cl instanceof URLClassLoader) {
-            for (URL url : ((URLClassLoader)cl).getURLs()) {
-                final String file = url.getFile();
-                if(file.startsWith(javaHome)) {
-                    continue;
-                }
-                if (buf.length() > 0) {
-                    buf.append(File.pathSeparatorChar);
-                }
-                buf.append(file);
-            }
-        }
-    }
-
-    public static void main(String... args) throws Exception {
+    @Override
+    public void forkedForEmbedded(String... args) throws ProvisioningException {
         if(args.length != 2) {
             throw new IllegalArgumentException("Expected one argument but received " + Arrays.asList(args));
         }
+        this.jbossHome = args[0];
         final Path script = Paths.get(args[1]);
         if(!Files.exists(script)) {
             throw new ProvisioningException(Errors.pathDoesNotExist(script));
         }
         try {
-            executeScript(args[0], script);
+            executeScript(script);
         } catch(IOException e) {
             throw new ProvisioningException("Failed to execute configuration script", e);
         }
     }
 
-    private static void executeScript(String jbossHome, Path script) throws IOException, ProvisioningException {
-        final WfConfigGenerator configGen = new WfConfigGenerator();
-        configGen.jbossHome = jbossHome;
-        byte state = INITIAL;
+    @Override
+    public void forkedEmbeddedMessage(String msg) {
+        messageWriter.verbose(msg);
+    }
 
+    private void executeScript(Path script) throws IOException, ProvisioningException {
+        byte state = INITIAL;
         try (BufferedReader reader = Files.newBufferedReader(script)) {
             String line = reader.readLine();
             while(line != null) {
                 if(state == EMBEDDED_STARTED) {
                     if(STOP.equals(line)) {
-                        configGen.doStopEmbedded();
+                        doStopEmbedded();
                         state = INITIAL;
                     } else if(BATCH.equals(line)) {
-                        configGen.startBatch();
+                        startBatch();
                     } else if(RUN_BATCH.equals(line)) {
-                        configGen.endBatch();
+                        endBatch();
                     } else {
                         try {
-                            configGen.handle(ModelNode.fromJSONString(line));
+                            handle(ModelNode.fromJSONString(line));
                         } catch(RuntimeException t) {
                             System.out.println("Failed to parse '" + line + "'");
                             throw t;
@@ -553,9 +493,9 @@ public class WfConfigGenerator {
                 } else if((state & LOOKING_FOR_ARGS) > 0) {
                     final String[] args = line.split(",");
                     if((state & START_STANDALONE) > 0) {
-                        configGen.doStartServer(args);
+                        doStartServer(args);
                     } else if((state & START_HC) > 0) {
-                        configGen.doStartHc(args);
+                        doStartHc(args);
                     } else {
                         throw new IllegalStateException("Unexpected state " + state);
                     }
