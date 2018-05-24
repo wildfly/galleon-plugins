@@ -30,6 +30,8 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.Properties;
 
 import org.jboss.galleon.Errors;
 import org.jboss.galleon.ProvisioningException;
@@ -121,16 +123,8 @@ public class ForkedEmbeddedUtil {
             throw new IllegalStateException("Expected at least two arguments but got " + Arrays.asList(args));
         }
 
-        // set the system properties
-        final Path props = Paths.get(args[0]);
-        if(!Files.exists(props)) {
-            throw new ProvisioningException(Errors.pathDoesNotExist(props));
-        }
-        try(BufferedReader reader = Files.newBufferedReader(props)) {
-            System.getProperties().load(reader);
-        } catch (IOException e) {
-            throw new ProvisioningException(Errors.readFile(props));
-        }
+        // set system properties
+        setSystemProps(args[0]);
 
         Class<?> cls;
         try {
@@ -149,6 +143,27 @@ public class ForkedEmbeddedUtil {
             throw new ProvisioningException("Failed to instantiate " + args[1], e);
         }
         ((ForkCallback)o).forkedForEmbedded(args.length == 2 ? new String[0] : Arrays.copyOfRange(args, 2, args.length));
+    }
+
+    private static void setSystemProps(String path) throws ProvisioningException {
+        final Path props = Paths.get(path);
+        if(!Files.exists(props)) {
+            throw new ProvisioningException(Errors.pathDoesNotExist(props));
+        }
+        final Properties tmp = new Properties();
+        try(BufferedReader reader = Files.newBufferedReader(props)) {
+            tmp.load(reader);
+        } catch (IOException e) {
+            throw new ProvisioningException(Errors.readFile(props));
+        }
+        for(Map.Entry<?, ?> prop : tmp.entrySet()) {
+            final String current = System.getProperty(prop.getKey().toString());
+            if(current != null) {
+                // do not override the default properties
+                continue;
+            }
+            System.setProperty(prop.getKey().toString(), prop.getValue().toString());
+        }
     }
 
     private static void collectCpUrls(String javaHome, ClassLoader cl, StringBuilder buf) {
