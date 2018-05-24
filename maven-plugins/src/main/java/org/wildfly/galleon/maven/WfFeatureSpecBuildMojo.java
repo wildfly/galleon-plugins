@@ -60,6 +60,7 @@ import org.codehaus.plexus.components.io.fileselectors.IncludeExcludeFileSelecto
 import org.codehaus.plexus.util.StringUtils;
 import org.jboss.galleon.ProvisioningException;
 import org.jboss.galleon.util.IoUtils;
+import org.wildfly.galleon.plugin.WfConstants;
 import org.eclipse.aether.RepositorySystem;
 import org.eclipse.aether.artifact.DefaultArtifact;
 import org.eclipse.aether.artifact.DefaultArtifactType;
@@ -81,6 +82,8 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
     private static final String MAVEN_REPO_LOCAL = "maven.repo.local";
 
     private static final String MODULES = "modules";
+
+    private static final Path MODULE_PATH_SEGMENT = Paths.get("pm").resolve("wildfly").resolve("module").resolve(MODULES);
 
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
     protected MavenProject project;
@@ -150,8 +153,8 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
 
     private int doExecute(Path wildflyDir, Path modulesDir) throws MojoExecutionException, MojoFailureException, MavenFilteringException, IOException {
 
-        Files.createDirectories(wildflyDir.resolve("standalone").resolve("configuration"));
-        Files.createDirectories(wildflyDir.resolve("domain").resolve("configuration"));
+        Files.createDirectories(wildflyDir.resolve(WfConstants.STANDALONE).resolve(WfConstants.CONFIGURATION));
+        Files.createDirectories(wildflyDir.resolve(WfConstants.DOMAIN).resolve(WfConstants.CONFIGURATION));
         Files.createDirectories(wildflyDir.resolve("bin"));
         Files.createFile(wildflyDir.resolve("bin").resolve("jboss-cli-logging.properties"));
         copyJbossModule(wildflyDir);
@@ -220,7 +223,7 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
         }
         lines.add("</extensions>");
         lines.add("</server>");
-        Files.write(wildfly.resolve("standalone").resolve("configuration").resolve("standalone.xml"), lines);
+        Files.write(wildfly.resolve(WfConstants.STANDALONE).resolve(WfConstants.CONFIGURATION).resolve("standalone.xml"), lines);
 
         lines.clear();
         lines.add("<?xml version='1.0' encoding='UTF-8'?>");
@@ -231,7 +234,7 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
         }
         lines.add("</extensions>");
         lines.add("</domain>");
-        Files.write(wildfly.resolve("domain").resolve("configuration").resolve("domain.xml"), lines);
+        Files.write(wildfly.resolve(WfConstants.DOMAIN).resolve(WfConstants.CONFIGURATION).resolve("domain.xml"), lines);
 
         lines.clear();
         lines.add("<?xml version='1.0' encoding='UTF-8'?>");
@@ -259,7 +262,7 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
         lines.add("</interface>");
         lines.add("</interfaces>");
         lines.add("</host>");
-        Files.write(wildfly.resolve("domain").resolve("configuration").resolve("host.xml"), lines);
+        Files.write(wildfly.resolve(WfConstants.DOMAIN).resolve(WfConstants.CONFIGURATION).resolve("host.xml"), lines);
     }
 
     private Map<String, Artifact> collectBuildArtifacts(Path tmpModules, List<Artifact> featurePackArtifacts)
@@ -331,7 +334,7 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
             }
             featurePackArtifacts.add(fpArtifact);
             File archive = fpArtifact.getFile();
-            Path tmpArchive = Files.createTempDirectory(fp.getGroupId() + '_' + fp.getArtifactId() + '_' + fp.getVersion());
+            final Path tmpArchive = Files.createTempDirectory(fp.getGroupId() + '_' + fp.getArtifactId() + '_' + fp.getVersion());
             try {
                 UnArchiver unArchiver;
                 try {
@@ -345,13 +348,21 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
                 unArchiver.setSourceFile(archive);
                 unArchiver.setDestDirectory(tmpArchive.toFile());
                 unArchiver.extract();
-                try (Stream<Path> children = Files.list(tmpArchive.resolve("features"))) {
-                    List<String> features = children.map(Path::getFileName).map(Path::toString).collect(Collectors.toList());
-                    for (String feature : features) {
-                        inheritedFeatures.add(feature);
+
+                Path fpDir = tmpArchive.resolve("features");
+                if(Files.exists(fpDir)) {
+                    try (Stream<Path> children = Files.list(fpDir)) {
+                        final List<String> features = children.map(Path::getFileName).map(Path::toString).collect(Collectors.toList());
+                        for (String feature : features) {
+                            inheritedFeatures.add(feature);
+                        }
                     }
                 }
-                setModules(tmpArchive, tmpModules.resolve(MODULES));
+
+                fpDir = tmpArchive.resolve("packages");
+                if(Files.exists(fpDir)) {
+                    setModules(fpDir, tmpModules.resolve(MODULES));
+                }
             } catch (NoSuchArchiverException ex) {
                 getLog().warn(ex);
             } finally {
@@ -381,7 +392,7 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
         Files.walkFileTree(fpDirectory, new FileVisitor<Path>() {
             @Override
             public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
-                if (isModule(dir)) {
+                if (dir.endsWith(MODULE_PATH_SEGMENT)) {
                     debug("Copying %s to %s", dir, moduleDir);
                     IoUtils.copy(dir, moduleDir);
                     return FileVisitResult.SKIP_SUBTREE;
@@ -404,14 +415,6 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
                 return FileVisitResult.CONTINUE;
             }
         });
-    }
-
-    private boolean isModule(Path dir) {
-        return MODULES.equals(dir.getFileName().toString())
-                && "module".equals(dir.getParent().getFileName().toString())
-                && "wildfly".equals(dir.getParent().getParent().getFileName().toString())
-                && "pm".equals(dir.getParent().getParent().getParent().getFileName().toString())
-                && "packages".equals(dir.getParent().getParent().getParent().getParent().getParent().getFileName().toString());
     }
 
     private Artifact findArtifact(ArtifactItem artifact) throws MojoExecutionException {
