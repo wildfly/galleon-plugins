@@ -4,8 +4,8 @@ This Maven mojo creates a WildFly style feature-pack archive from the provided r
 
 The content of the future feature-pack archive is first created in the directory called `layout` under the module's build directory which is then ZIPped to create the feature-pack artifact.
 
-.Table Parameters
-[options="autowidth"]
+.Parameters
+[%autowidth.stretch]
 |====
 |Parameter name |Default |Description
 
@@ -17,13 +17,21 @@ The content of the future feature-pack archive is first created in the directory
 |${basedir}
 |Feature-pack build configuration file directory
 
-|release-name
-|${product.release.name}
-|The name of the release the feature-pack represents which will be stored in the feature-pack properties
-
 |feature-pack-artifact-id
 |${project.artifactId}
 |The artifactId for the generated feature-pack
+
+|release-name
+|${product.release.name}
+|The name of the release the feature-pack represents which will be stored in the feature-pack's `resources/wildfly/wildfly-tasks.properties` as `product.release.name` property
+
+|task-properties
+|-
+|Various properties that will be added to feature-pack's `resources/wildfly/wildfly-tasks.properties`. NOTE: values of this parameter will overwrite the corresponding values from task-properties-file parameter, in case it's also set
+
+|task-properties-file
+|-
+|Path to a properties file content of which will be added to feature-pack's `resources/wildfly/wildfly-tasks.properties` file that is used as the source of properties during file copying tasks with property replacement
 
 |====
 
@@ -31,3 +39,4 @@ include::wildfly-feature-pack-build-xml/index.adoc[]
 
 include::jboss-module-packages/index.adoc[]
 
+include::non-module-packages/index.adoc[]

@@ -31,7 +31,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -123,23 +122,24 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
     public void execute() throws MojoExecutionException, MojoFailureException {
 
         final long startTime = System.currentTimeMillis();
-
         Path modulesDir = null;
         Path wildflyDir = null;
-        Properties props = new Properties();
         int specsTotal = -1;
         try {
             modulesDir = Files.createTempDirectory(MODULES);
-            wildflyDir = Files.createTempDirectory("wildfly-specs-dist");
+            wildflyDir = Files.createTempDirectory("wf-specs-dist");
             specsTotal = doExecute(wildflyDir, modulesDir);
         } catch (RuntimeException | Error | MojoExecutionException | MojoFailureException e) {
             throw e;
         } catch (IOException | MavenFilteringException ex) {
             throw new MojoExecutionException(ex.getMessage(), ex);
         } finally {
-            clearXMLConfiguration(props);
-            IoUtils.recursiveDelete(modulesDir);
-
+            if(modulesDir != null) {
+                IoUtils.recursiveDelete(modulesDir);
+            }
+            if(wildflyDir != null) {
+                IoUtils.recursiveDelete(wildflyDir);
+            }
             if(getLog().isDebugEnabled() && specsTotal >= 0) {
                 final long totalTime = System.currentTimeMillis() - startTime;
                 final long secs = totalTime / 1000;
@@ -510,27 +510,6 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
         final Log log = getLog();
         if (log.isDebugEnabled()) {
             log.debug(String.format(format, args));
-        }
-    }
-
-    private void clearXMLConfiguration(Properties props) {
-        clearProperty(props, "javax.xml.parsers.DocumentBuilderFactory");
-        clearProperty(props, "javax.xml.parsers.SAXParserFactory");
-        clearProperty(props, "javax.xml.transform.TransformerFactory");
-        clearProperty(props, "javax.xml.xpath.XPathFactory");
-        clearProperty(props, "javax.xml.stream.XMLEventFactory");
-        clearProperty(props, "javax.xml.stream.XMLInputFactory");
-        clearProperty(props, "javax.xml.stream.XMLOutputFactory");
-        clearProperty(props, "javax.xml.datatype.DatatypeFactory");
-        clearProperty(props, "javax.xml.validation.SchemaFactory");
-        clearProperty(props, "org.xml.sax.driver");
-    }
-
-    private void clearProperty(Properties props, String name) {
-        if (props.containsKey(name)) {
-            System.setProperty(name, props.getProperty(name));
-        } else {
-            System.clearProperty(name);
         }
     }
 }

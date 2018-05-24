@@ -4,7 +4,7 @@ The current approach is to generate a package per JBoss module. JBoss module dep
 
 To generate JBoss module packages the resources directory of the project has to include `modules/system/layers` directory which contains `module.xml` file templates.
 
-Traditionally, WildFly-based builds use `module.xml` templates to generate the final `module.xml` files based on the distribution type selected: thin (when the JBoss module artifacts are loaded directly from the Maven repository at runtime) or thick (when the JBoss module artifacts are resolved and copied to the distribution directory at provisioning time).
+Traditionally, WildFly-based builds use `module.xml` templates to generate the final `module.xml` files based on the distribution type selected: *thin* (when the JBoss module artifacts are loaded directly from the Maven repository at runtime) or *thick* (when the JBoss module artifacts are resolved and copied to the distribution directory at provisioning time).
 
 For example, here is an excerpt from a `module.xml` template:
 
@@ -69,7 +69,7 @@ or the `resource-root` element in case of a thick distribution, e.g.
 
 `module.xml` template processing is happening at provisioning time and depends on the kind of distribution being provisioned. The mojo creates a package per `module.xml` template and relfects the module dependencies as package dependencies.
 
-NOTE: It is possible that a module depends on another module which is not found in the current feature-pack. In that case, the feature-pack that contains the package representing the module from the dependency must be declared as the dependency on the current feature-pack in the feature-pack build config file. If the dependency could not be resolved locally (among the modules included in the current feature-pack), the module will be looked up in the dependencies of the current feature-pack (in the order the dependencies are specified in the feature-pack build config file).
+NOTE: It is possible that a module depends on another module which is not found in the current feature-pack. In that case, the feature-pack that contains the package representing the module from the dependency must be declared as the dependency of the current feature-pack in the feature-pack build config file. If the dependency could not be resolved locally (among the modules included in the current feature-pack), the module will be looked up in the dependencies of the current feature-pack (in the order the dependencies are specified in the feature-pack build config file).
 
 In case a module dependency could not be resolved neither locally nor in the feature-pack dependencies, an error will be thrown with the corresponding message.
 

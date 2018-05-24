@@ -1,0 +1,7 @@
+#### Customized JBoss modules and non-JBoss modules packages
+
+The Maven project module which creates a feature-pack may describe its packages and/or provide more data for the packages generated from JBoss modules in the Maven module's `src/main/resources/packages`.
+
+Every child directory of `src/main/resources/packages` represents a package with the directory name being the package name. The content of the package directory is going to be copied to the corresponding package directory in the feature-pack.
+
+
