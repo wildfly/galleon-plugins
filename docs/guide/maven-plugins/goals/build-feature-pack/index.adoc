@@ -37,6 +37,9 @@ The content of the future feature-pack archive is first created in the directory
 
 include::wildfly-feature-pack-build-xml/index.adoc[]
 
+include::packages/index.adoc[]
+
 include::jboss-module-packages/index.adoc[]
 
-include::non-module-packages/index.adoc[]
+
+

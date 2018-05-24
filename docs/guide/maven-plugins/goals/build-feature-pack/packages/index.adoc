@@ -1,0 +1,22 @@
+#### Feature-pack packages
+
+The Maven project module which creates a feature-pack may describe its packages and/or provide more data for the packages generated from JBoss modules in the Maven module's `src/main/resources/packages`.
+
+Every child directory of `src/main/resources/packages` represents a package with the directory name being the package name. The content of the package directory is going to be copied to the corresponding package directory in the feature-pack.
+
+The usual package directory structure is:
+....
+package_name
+|- content/
+|- pm/
+|  `- wildfly/
+|     `- tasks.xml
+`- package.xml
+....
+
+In general, the only required child of the package directory is `package.xml`.
+
+Package content directory includes content that will be copied to the installation root directory when the package is installed.
+
+`pm/wildfly/tasks.xml` file is optional, it may include instructions to copy and/or delete files and diretcories, create directories, resolve and copy Maven artifacts to the installation directory, etc. These tasks are executed when the content of all the packages has been copied into the installation.
+

@@ -1,10 +1,12 @@
 #### Generating JBoss module packages
 
-The current approach is to generate a package per JBoss module. JBoss module dependencies are reflected in the corresponding package dependencies.
+JBoss modules of the distribution are turned into feature-pack packages. A package is created per JBoss module. JBoss module dependencies are reflected in the corresponding package dependencies.
 
-To generate JBoss module packages the resources directory of the project has to include `modules/system/layers` directory which contains `module.xml` file templates.
+JBoss modules packages don't have to be manually described in `src/main/resources/packages`.
 
 Traditionally, WildFly-based builds use `module.xml` templates to generate the final `module.xml` files based on the distribution type selected: *thin* (when the JBoss module artifacts are loaded directly from the Maven repository at runtime) or *thick* (when the JBoss module artifacts are resolved and copied to the distribution directory at provisioning time).
+
+The Maven module that is building a feature-pack may include `src/main/resources/modules/system/layers` directory containing `module.xml` templates. The mojo will read those and generate a package per `module.xml`.
 
 For example, here is an excerpt from a `module.xml` template:
 
@@ -67,11 +69,13 @@ or the `resource-root` element in case of a thick distribution, e.g.
         <!-- skipped content -->
 ----
 
-`module.xml` template processing is happening at provisioning time and depends on the kind of distribution being provisioned. The mojo creates a package per `module.xml` template and relfects the module dependencies as package dependencies.
+`module.xml` template processing is happening at provisioning time and depends on the kind of distribution being provisioned.
 
 NOTE: It is possible that a module depends on another module which is not found in the current feature-pack. In that case, the feature-pack that contains the package representing the module from the dependency must be declared as the dependency of the current feature-pack in the feature-pack build config file. If the dependency could not be resolved locally (among the modules included in the current feature-pack), the module will be looked up in the dependencies of the current feature-pack (in the order the dependencies are specified in the feature-pack build config file).
 
 In case a module dependency could not be resolved neither locally nor in the feature-pack dependencies, an error will be thrown with the corresponding message.
+
+NOTE: The package generated for a JBoss module can still be customized by, e.g., adding `pm/wildfly/tasks.xml` to it in `src/main/resources/packages`. In this case the package dir in `src/main/resources/packages` has to include only the content that the generated package is missing. It doesn't have to include `package.xml` unless the generated one has to be replaced with a custom one.
 
 ##### modules.all package
 
