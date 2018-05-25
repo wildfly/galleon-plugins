@@ -58,6 +58,12 @@
                 <version>${project.version}</version>
                 <ec2-pub-ip-dash>${ec2-pub-ip-dash}</ec2-pub-ip-dash>
                 <ec2-pub-ip>${ec2-pub-ip}</ec2-pub-ip>
+                <revnumber>${project.version}</revnumber>
+                <revdate>${maven.build.timestamp}</revdate>
+                <icons>font</icons>
+                <source-highlighter>coderay</source-highlighter>
+                <coderay-css>style</coderay-css>
+                <toclevels>2</toclevels>
               </attributes>
             </configuration>
           </execution>

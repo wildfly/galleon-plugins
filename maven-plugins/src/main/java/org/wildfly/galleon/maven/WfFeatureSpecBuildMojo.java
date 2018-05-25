@@ -73,6 +73,9 @@ import org.eclipse.aether.resolution.ArtifactRequest;
 import org.eclipse.aether.resolution.ArtifactResolutionException;
 
 /**
+ * This plug-in generates WildFly feature specifications.
+ * It starts a minimal embedded server with the specified extensions, reolving dependencies via Aether, and gets
+ * an export of the meta-model from the server to produce the specifications for Galleon.
  *
  * @author Emmanuel Hugonnet (c) 2017 Red Hat, inc.
  */
@@ -91,24 +94,48 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
     @Parameter(defaultValue = "${session}", readonly = true, required = true)
     protected MavenSession session;
 
+    /**
+     * The directory where the generated specifications are written.
+     */
     @Parameter(alias = "output-dir", required = true)
     private File outputDirectory;
 
+    /**
+     * List of artifacts of feature pack that the feature specifications import.
+     */
     @Parameter(alias = "feature-packs", required = false)
     private List<ArtifactItem> featurePacks;
 
+    /**
+     * List of external artifacts to be added to the embedded server.
+     */
     @Parameter(alias = "external-artifacts", required = false)
     private List<ExternalArtifact> externalArtifacts;
 
+    /**
+     * List of WildFly extensions for the embedded standalone.
+     * Used in the standalone.xml
+     */
     @Parameter(alias = "standalone-extensions", required = true)
     private List<String> standaloneExtensions;
 
+    /**
+     * List of WildFly extensions for the embedded domain.
+     * Used in the domain.xml.
+     */
     @Parameter(alias = "domain-extensions", required = true)
     private List<String> domainExtensions;
 
+    /**
+     * List of WildFly extensions for the embedded host.
+     * Used in the host.xml.
+     */
     @Parameter(alias = "host-extensions", required = true)
     private List<String> hostExtensions;
 
+    /**
+     * If the embedded server process needs to be forked.
+     */
     @Parameter(alias = "fork-embedded", required = false)
     private boolean forkEmbedded;
 

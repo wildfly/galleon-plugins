@@ -1,3 +1,120 @@
 ### generate-feature-specs
 
-Coming soon
+This Maven mojo generates WildFly feature specifications.
+
+It starts a minimal embedded server with the specified extensions, reolving dependencies via Aether, and gets an export of the meta-model from the server to produce the specifications for Galleon.
+
+
+.Parameters
+[%autowidth.stretch]
+|====
+|Parameter name |Default |Required |Description
+
+|domainExtensions
+|-
+|Yes
+|List of WildFly extensions for the embedded domain. Used in the domain.xml.
+
+|externalArtifacts
+|-
+|No
+|List of external artifacts to be added to the embedded server classpath.
+
+|featurePacks
+|-
+|No
+|List of artifacts of feature pack that the feature specifications import.
+
+|forkEmbedded
+|false
+|No
+|If the embedded server process needs to be forked.
+
+|hostExtensions
+|-
+|Yes
+|List of WildFly extensions for the embedded host. Used in the host.xml.
+
+|standaloneExtensions
+|-
+|Yes
+|List of WildFly extensions for the embedded host. Used in the host.xml.
+
+|outputDirectory
+|-
+|Yes
+|The directory where the generated specifications are written.
+
+|====
+
+.Sample plugin configuration
+[source,xml]
+----
+
+<plugin>
+  <groupId>org.wildfly.galleon-plugins</groupId>
+  <artifactId>wildfly-galleon-maven-plugins</artifactId>
+  <executions>
+    <execution>
+      <id>feature-spec-build</id>
+      <goals>
+        <goal>generate-feature-specs</goal>
+      </goals>
+      <phase>prepare-package</phase>
+      <configuration>
+        <output-dir>${basedir}/target/resources/features</output-dir>
+        <feature-packs>
+          <feature-pack>
+            <groupId>org.wildfly.core</groupId>
+            <artifactId>wildfly-core-galleon-pack</artifactId>
+            <version>${version.org.wildfly.core}</version>
+            <type>zip</type>
+            <extension>zip</extension>
+          </feature-pack>
+          <feature-pack>
+            <groupId>org.wildfly</groupId>
+            <artifactId>wildfly-servlet-galleon-pack</artifactId>
+            <version>${project.version}</version>
+            <type>zip</type>
+            <extension>zip</extension>
+          </feature-pack>
+        </feature-packs>
+        <external-artifacts>
+          <external-artifact>
+            <artifactItem>
+              <groupId>org.apache.activemq</groupId>
+              <artifactId>artemis-native</artifactId>
+              <version>${version.org.apache.activemq.artemis}</version>
+            </artifactItem>
+            <includes>lib/**</includes>
+            <excludes>*.*</excludes>
+            <toLocation>system/layers/base/org/apache/activemq/artemis/journal/main</toLocation>
+          </external-artifact>
+        </external-artifacts>
+        <standalone-extensions>
+          <extension>org.wildfly.extension.discovery</extension>
+          <extension>org.jboss.as.clustering.infinispan</extension>
+          <extension>org.jboss.as.clustering.jgroups</extension>
+          <!-- skipped content -->
+          <extension>org.wildfly.extension.undertow</extension>
+          <extension>org.wildfly.iiop-openjdk</extension>
+        </standalone-extensions>
+        <domain-extensions>
+          <extension>org.wildfly.extension.discovery</extension>
+          <extension>org.jboss.as.clustering.infinispan</extension>
+         <!-- skipped content -->
+          <extension>org.wildfly.extension.undertow</extension>
+          <extension>org.wildfly.iiop-openjdk</extension>
+        </domain-extensions>
+        <host-extensions>
+          <extension>org.jboss.as.jmx</extension>
+          <extension>org.wildfly.extension.core-management</extension>
+          <extension>org.wildfly.extension.discovery</extension>
+          <extension>org.wildfly.extension.elytron</extension>
+        </host-extensions>
+      </configuration>
+    </execution>
+  </executions>
+</plugin>
+
+----
