@@ -91,9 +91,10 @@ import org.wildfly.galleon.plugin.WfConstants;
 import org.wildfly.galleon.maven.ModuleParseResult.ModuleDependency;
 
 /**
- * This plug-in builds a WildFly feature-pack arranging the content by packages.
- * The artifact versions are resolved here. The configuration pieces are copied into
- * the feature-pack resources directory and will be assembled at the provisioning time.
+ * This Maven mojo creates a WildFly style feature-pack archive from the provided resources according to the
+ * feature-pack build configuration file and attaches it to the current Maven project as an artifact. <br/>
+ * The content of the future feature-pack archive is first created in the directory called `layout` under the module's
+ * build directory which is then ZIPped to create the feature-pack artifact.
  *
  * @author Alexey Loubyansky
  */
@@ -133,13 +134,13 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
     private List<RemoteRepository> remoteRepos;
 
     /**
-     * The configuration file used for feature pack.
+     * The feature-pack build configuration file.
      */
     @Parameter(alias = "config-file", defaultValue = "wildfly-feature-pack-build.xml", property = "wildfly.feature.pack.configFile")
     private String configFile;
 
     /**
-     * The directory the configuration file is located in.
+     * The feature-pack build configuration file directory
      */
     @Parameter(alias = "config-dir", defaultValue = "${basedir}", property = "wildfly.feature.pack.configDir")
     private File configDir;
@@ -159,25 +160,29 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
     private String buildName;
 
     /**
-     * The release name
+     * The name of the release the feature-pack represents which will be stored in the feature-pack's
+     * `resources/wildfly/wildfly-tasks.properties` as `product.release.name` property.
      */
     @Parameter(alias="release-name", defaultValue = "${product.release.name}", required=true)
     private String releaseName;
 
     /**
-     * Task properties file
+     * Path to a properties file content of which will be added to feature-pack's
+     * `resources/wildfly/wildfly-tasks.properties` file that is used as the source of properties during
+     * file copying tasks with property replacement.
      */
     @Parameter(alias="task-properties-file", required=false)
     private File taskPropsFile;
 
     /**
-     * Task properties
+     * Various properties that will be added to feature-pack's `resources/wildfly/wildfly-tasks.properties`.<br/>
+     * NOTE: values of this parameter will overwrite the corresponding values from task-properties-file parameter, in case it's also set.<br/>
      */
     @Parameter(alias="task-properties", required=false)
     private Map<String, String> taskProps = Collections.emptyMap();
 
     /**
-     * The release name
+     * The artifactId for the generated feature-pack.
      */
     @Parameter(alias="feature-pack-artifact-id", defaultValue = "${project.artifactId}", required=false)
     private String fpArtifactId;
