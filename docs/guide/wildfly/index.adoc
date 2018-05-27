@@ -1,9 +1,0 @@
-## WildFly provisioning
-
-IMPORTANT: The WildFly provisioning docs are very much out of date. They pretty much can be ignored. The updates are coming soon.
-
-include::provisioning/index.adoc[]
-
-include::feature-pack-build/index.adoc[]
-
-include::demo/index.adoc[]

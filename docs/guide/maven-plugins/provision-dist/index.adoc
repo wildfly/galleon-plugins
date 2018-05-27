@@ -1,1 +1,1 @@
-NOTE: Provisioning of distributions is done using the Maven plugin that belongs to Galleon itself. Please, refer to Galleon documentation for more information. TODO: insert the link to the relevant Galleon docs
+NOTE: Provisioning of distributions is done using the Maven plugin that belongs to Galleon itself. Please, refer to Galleon documentation for more information.
