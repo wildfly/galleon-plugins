@@ -101,7 +101,7 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
     private File outputDirectory;
 
     /**
-     * List of artifacts of feature pack that the feature specifications import.
+     * Feature-pack artifacts the new feature-pack will depend on
      */
     @Parameter(alias = "feature-packs", required = false)
     private List<ArtifactItem> featurePacks;
@@ -134,7 +134,7 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
     private List<String> hostExtensions;
 
     /**
-     * If the embedded server process needs to be forked.
+     * Whether to launch the embedded server to read feature descriptions in a separate process
      */
     @Parameter(alias = "fork-embedded", required = false)
     private boolean forkEmbedded;

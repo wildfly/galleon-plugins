@@ -16,5 +16,3 @@ Alexey Loubyansky
 include::intro/index.adoc[]
 
 include::maven-plugins/index.adoc[]
-
-include::wildfly/index.adoc[]
