@@ -9,7 +9,7 @@ include::provision-dist/index.adoc[]
 <dependency>
     <groupId>org.wildfly.galleon-plugins</groupId>
     <artifactId>wildfly-galleon-maven-plugins</artifactId>
-    <version>1.0.0.Final-SNAPSHOT</version>
+    <version>1.0.0.Final</version>
 </dependency>
 ----
 
