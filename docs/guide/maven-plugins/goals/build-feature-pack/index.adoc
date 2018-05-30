@@ -1,45 +1,4 @@
-### build-feature-pack
-
-This Maven mojo creates a WildFly style feature-pack archive from the provided resources according to the feature-pack build configuration file and attaches it to the current Maven project as an artifact.
-
-The content of the future feature-pack archive is first created in the directory called `layout` under the module's build directory which is then ZIPped to create the feature-pack artifact.
-
-.Parameters
-[%autowidth.stretch]
-|====
-|Parameter name |Required |Default |Description
-
-|config-file
-|true
-|wildfly-feature-pack-build.xml
-|Feature-pack build configuration file
-
-|config-dir
-|true
-|${basedir}
-|Feature-pack build configuration file directory
-
-|feature-pack-artifact-id
-|true
-|${project.artifactId}
-|The artifactId for the generated feature-pack
-
-|release-name
-|true
-|${product.release.name}
-|The name of the release the feature-pack represents which will be stored in the feature-pack's `resources/wildfly/wildfly-tasks.properties` as `product.release.name` property
-
-|task-properties
-|false
-|-
-|Various properties that will be added to feature-pack's `resources/wildfly/wildfly-tasks.properties`. NOTE: values of this parameter will overwrite the corresponding values from task-properties-file parameter, in case it's also set
-
-|task-properties-file
-|false
-|-
-|Path to a properties file content of which will be added to feature-pack's `resources/wildfly/wildfly-tasks.properties` file that is used as the source of properties during file copying tasks with property replacement
-
-|====
+include::../../../../../maven-plugins/target/generated-sources/plugin/build-feature-pack-mojo.adoc[]
 
 include::wildfly-feature-pack-build-xml/index.adoc[]
 

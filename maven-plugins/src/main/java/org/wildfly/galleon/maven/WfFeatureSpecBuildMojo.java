@@ -101,7 +101,7 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
     private File outputDirectory;
 
     /**
-     * Feature-pack artifacts the new feature-pack will depend on
+     * List of feature-pack artifacts that the new feature-pack will depend on.
      */
     @Parameter(alias = "feature-packs", required = false)
     private List<ArtifactItem> featurePacks;
