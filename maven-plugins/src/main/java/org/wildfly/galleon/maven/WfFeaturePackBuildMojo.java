@@ -92,7 +92,8 @@ import org.wildfly.galleon.maven.ModuleParseResult.ModuleDependency;
 
 /**
  * This Maven mojo creates a WildFly style feature-pack archive from the provided resources according to the
- * feature-pack build configuration file and attaches it to the current Maven project as an artifact. <br/>
+ * feature-pack build configuration file and attaches it to the current Maven project as an artifact.
+ *
  * The content of the future feature-pack archive is first created in the directory called `layout` under the module's
  * build directory which is then ZIPped to create the feature-pack artifact.
  *
