@@ -85,13 +85,11 @@ import org.jboss.galleon.runtime.PackageRuntime;
 import org.jboss.galleon.runtime.ProvisioningRuntime;
 import org.jboss.galleon.util.IoUtils;
 import org.jboss.galleon.util.CollectionUtils;
-import org.jboss.galleon.util.PropertyUtils;
 import org.jboss.galleon.util.ZipUtils;
 import org.wildfly.galleon.plugin.config.CopyArtifact;
 import org.wildfly.galleon.plugin.config.CopyPath;
 import org.wildfly.galleon.plugin.config.DeletePath;
 import org.wildfly.galleon.plugin.config.ExampleFpConfigs;
-import org.wildfly.galleon.plugin.config.FilePermission;
 import org.wildfly.galleon.plugin.config.XslTransform;
 import org.wildfly.galleon.plugin.server.CliScriptRunner;
 
@@ -414,9 +412,6 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             }
             if (pkgTasks.hasMkDirs()) {
                 mkdirs(pkgTasks, this.runtime.getStagedDir());
-            }
-            if (pkgTasks.hasFilePermissions() && !PropertyUtils.isWindows()) {
-                processFeaturePackFilePermissions(pkgTasks, this.runtime.getStagedDir());
             }
         }
     }
@@ -819,38 +814,6 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                     throw new ProvisioningException(Errors.mkdirs(dir));
                 }
             }
-        }
-    }
-
-    private static void processFeaturePackFilePermissions(WildFlyPackageTasks tasks, Path installDir) throws ProvisioningException {
-        final List<FilePermission> filePermissions = tasks.getFilePermissions();
-        try {
-            Files.walkFileTree(installDir, new SimpleFileVisitor<Path>() {
-                @Override
-                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
-                    final String relative = installDir.relativize(dir).toString();
-                    for (FilePermission perm : filePermissions) {
-                        if (perm.includeFile(relative)) {
-                            Files.setPosixFilePermissions(dir, perm.getPermission());
-                            continue;
-                        }
-                    }
-                    return FileVisitResult.CONTINUE;
-                }
-                @Override
-                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-                    final String relative = installDir.relativize(file).toString();
-                    for (FilePermission perm : filePermissions) {
-                        if (perm.includeFile(relative)) {
-                            Files.setPosixFilePermissions(file, perm.getPermission());
-                            continue;
-                        }
-                    }
-                    return FileVisitResult.CONTINUE;
-                }
-            });
-        } catch (IOException e) {
-            throw new ProvisioningException("Failed to set file permissions", e);
         }
     }
 
