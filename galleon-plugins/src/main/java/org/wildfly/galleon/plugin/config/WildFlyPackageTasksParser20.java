@@ -513,17 +513,30 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
         return cpBuilder;
     }
 
-    private void parseFilePermissions(final XMLStreamReader reader, WildFlyPackageTasks.Builder builder) throws XMLStreamException {
+    private void parseFilePermissions(final XMLExtendedStreamReader reader, WildFlyPackageTasks.Builder builder) throws XMLStreamException {
+        final FilePermissions permissions = new FilePermissions();
+        final int count = reader.getAttributeCount();
+        for (int i = 0; i < count; i++) {
+            final Attribute attribute = Attribute.of(reader.getAttributeName(i));
+            switch (attribute) {
+                case PHASE:
+                    permissions.setPhase(reader.getAttributeValue(i));
+                    break;
+                default:
+                    throw ParsingUtils.unexpectedAttribute(reader, i);
+            }
+        }
         while (reader.hasNext()) {
             switch (reader.nextTag()) {
                 case XMLStreamConstants.END_ELEMENT: {
+                    builder.addTask(permissions);
                     return;
                 }
                 case XMLStreamConstants.START_ELEMENT: {
                     final Element element = Element.of(reader.getName());
                     switch (element) {
                         case PERMISSION:
-                            builder.addFilePermissions(parsePermission(reader));
+                            permissions.addFilePermissions(parsePermission(reader));
                             break;
                         default:
                             throw ParsingUtils.unexpectedContent(reader);
