@@ -43,7 +43,6 @@ import org.jboss.galleon.util.IoUtils;
  * @author Alexey Loubyansky
  */
 public class ForkedEmbeddedUtil {
-
     public interface ForkCallback {
 
         void forkedForEmbedded(String... args) throws ProvisioningException;
@@ -51,16 +50,16 @@ public class ForkedEmbeddedUtil {
         default void forkedEmbeddedMessage(String msg) {}
     }
 
-    public static int fork(ForkCallback callback, String... args) throws ProvisioningException {
+    public static void fork(ForkCallback callback, String... args) throws ProvisioningException {
         final Path props = storeSystemProps();
         try {
-            return fork(callback, props, args);
+            fork(callback, props, args);
         } finally {
             IoUtils.recursiveDelete(props);
         }
     }
 
-    public static int fork(ForkCallback callback, Path props, String... args) throws ProvisioningException {
+    public static void fork(ForkCallback callback, Path props, String... args) throws ProvisioningException {
         // prepare the classpath
         final StringBuilder cp = new StringBuilder();
         collectCpUrls(System.getProperty("java.home"), Thread.currentThread().getContextClassLoader(), cp);
@@ -96,7 +95,11 @@ public class ForkedEmbeddedUtil {
                     e.printStackTrace();
                 }
             }
-            return p.exitValue();
+
+            int exitCode = p.exitValue();
+            if (exitCode != 0){
+                throw new ProvisioningException("Forked embedded process has failed");
+            }
         } catch (IOException e) {
             throw new ProvisioningException("Forked embedded process has failed", e);
         }
@@ -117,32 +120,37 @@ public class ForkedEmbeddedUtil {
         return props;
     }
 
-    public static void main(String... args) throws ProvisioningException {
+    public static void main(String... args) {
+        try{
+            if(args.length < 2) {
+                throw new IllegalStateException("Expected at least two arguments but got " + Arrays.asList(args));
+            }
 
-        if(args.length < 2) {
-            throw new IllegalStateException("Expected at least two arguments but got " + Arrays.asList(args));
-        }
+            // set system properties
+            setSystemProps(args[0]);
 
-        // set system properties
-        setSystemProps(args[0]);
-
-        Class<?> cls;
-        try {
-            cls = Thread.currentThread().getContextClassLoader().loadClass(args[1]);
-        } catch (ClassNotFoundException e) {
-            throw new ProvisioningException("Failed to locate the target class " + args[1], e);
-        }
+            Class<?> cls;
+            try {
+                cls = Thread.currentThread().getContextClassLoader().loadClass(args[1]);
+            } catch (ClassNotFoundException e) {
+                throw new ProvisioningException("Failed to locate the target class " + args[1], e);
+            }
         /*if(!ForkCallback.class.isAssignableFrom(cls)) {
             throw new ProvisioningException(args[1] + " does not implement " + ForkCallback.class.getName());
         }*/
 
-        Object o;
-        try {
-            o = cls.newInstance();
-        } catch (Exception e) {
-            throw new ProvisioningException("Failed to instantiate " + args[1], e);
+            Object o;
+            try {
+                o = cls.newInstance();
+            } catch (Exception e) {
+                throw new ProvisioningException("Failed to instantiate " + args[1], e);
+            }
+            ((ForkCallback)o).forkedForEmbedded(args.length == 2 ? new String[0] : Arrays.copyOfRange(args, 2, args.length));
+
+        } catch (Throwable t){
+            t.printStackTrace(System.err);
+            System.exit(1);
         }
-        ((ForkCallback)o).forkedForEmbedded(args.length == 2 ? new String[0] : Arrays.copyOfRange(args, 2, args.length));
     }
 
     private static void setSystemProps(String path) throws ProvisioningException {
