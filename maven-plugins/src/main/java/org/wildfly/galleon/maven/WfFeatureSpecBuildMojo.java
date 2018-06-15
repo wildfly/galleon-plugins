@@ -74,7 +74,7 @@ import org.eclipse.aether.resolution.ArtifactResolutionException;
 
 /**
  * This plug-in generates WildFly feature specifications.
- * It starts a minimal embedded server with the specified extensions, reolving dependencies via Aether, and gets
+ * It starts a minimal embedded server with the specified extensions, resolving dependencies via Aether, and gets
  * an export of the meta-model from the server to produce the specifications for Galleon.
  *
  * @author Emmanuel Hugonnet (c) 2017 Red Hat, inc.
