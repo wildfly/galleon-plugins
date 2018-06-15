@@ -1,6 +1,6 @@
 include::../../../../../maven-plugins/target/generated-sources/plugin/generate-feature-specs-mojo.adoc[]
 
-#### Sample Configuration 
+#### Sample Configuration
 
 .Sample plugin configuration
 [source,xml]
@@ -83,16 +83,21 @@ include::../../../../../maven-plugins/target/generated-sources/plugin/generate-f
 
 #### How does it work ?
 
-This section explains the basic mecanism of feature spec generation in WildFly. +
+This section explains the basic mechanism of feature spec generation in WildFly.
 
-Since the whole mmecanism relies on the WildFly metamodel we create a mininal configuration file with all the extensions we want to be able to configure in the feature pack. +
-Then we genrerate the feature specs via a Wildfly OperationStepHandler specifically designed for this. +
+Since the whole mechanism relies on the WildFly metamodel we create a mininal configuration file with all the extensions
+we want to be able to configure in the feature pack. Then we generate the feature specs via a Wildfly
+OperationStepHandler specifically designed for this.
 
-Each resource registration in the WildFly model is considered to be a feature as long as it is not a `proxy`, a `runtime only` or an `alias`.
-The registration address is used to define the feature-id of the feature and all attributes that can be used in the addHanlder will become parameters. +
-Capabilities are used to defined the links between feature specs thus defining how the operations will be grouped, ordered and executed.+
+Each resource registration in the WildFly model is considered to be a feature as long as it is not a `proxy`, a
+`runtime only` or an `alias`. The registration address is used to define the feature-id of the feature and all
+attributes that can be used in the addHandler will become parameters. Capabilities are used to define the links between
+feature specs thus defining how the operations will be grouped, ordered and executed.
 
-Complex attributes can not be used as simple parameters of a feature and are converted to feature specs too so they can be configured in an easier way through a `writeAttribute` or `addList` instead of an `add` operation.
+Complex attributes cannot be used as simple parameters of a feature and are converted to feature specs too so they can
+be configured in an easier way through a `writeAttribute` or `addList` instead of an `add` operation.
 
-Then all the feature specs for *standalone* server, *domain* server and *host* controller are processed and 'merged' into a single feature spec if no incompatibility exists between those three modes.
-We remove also all the feature specs that have already been defined in the feature packs that we are depending on (for example core feature specs that would have been produced in every Wildfly server are removed).
+Then all the feature specs for *standalone* server, *domain* server and *host* controller are processed and 'merged'
+into a single feature spec if no incompatibility exists between those three modes. We remove also all the feature specs
+that have already been defined in the feature packs that we are depending on (for example core feature specs that would
+have been produced in every Wildfly server are removed).
