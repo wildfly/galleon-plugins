@@ -28,17 +28,16 @@ import java.util.Map;
 import java.util.Map.Entry;
 
 import org.jboss.galleon.ProvisioningException;
-import org.jboss.galleon.ArtifactCoords.Gav;
 import org.jboss.galleon.config.ConfigId;
 import org.jboss.galleon.config.ConfigModel;
 import org.jboss.galleon.config.FeaturePackConfig;
+import org.jboss.galleon.creator.FeaturePackBuilder;
+import org.jboss.galleon.creator.PackageBuilder;
 import org.jboss.galleon.diff.FileSystemDiffResult;
-import org.jboss.galleon.repomanager.FeaturePackBuilder;
-import org.jboss.galleon.repomanager.PackageBuilder;
 import org.jboss.galleon.runtime.ProvisioningRuntime;
+import org.jboss.galleon.universe.FeaturePackLocation.FPID;
 
 import java.util.Set;
-import java.util.StringJoiner;
 
 /**
  *
@@ -47,9 +46,9 @@ import java.util.StringJoiner;
 public class WfDiffResult extends FileSystemDiffResult {
     private final List<Path> scripts = new ArrayList<>();
     private final List<ConfigModel> configs = new ArrayList<>();
-    private final Map<Gav, ConfigId> includedConfigs = new HashMap<>();
+    private final Map<FPID, ConfigId> includedConfigs = new HashMap<>();
 
-    public WfDiffResult(Map<Gav, ConfigId> includedConfigs, List<ConfigModel> configs, List<Path> scripts, Set<Path> deletedFiles, Set<Path> addedFiles, Set<Path> modifiedBinaryFiles, Map<Path, List<String>> unifiedDiffs) {
+    public WfDiffResult(Map<FPID, ConfigId> includedConfigs, List<ConfigModel> configs, List<Path> scripts, Set<Path> deletedFiles, Set<Path> addedFiles, Set<Path> modifiedBinaryFiles, Map<Path, List<String>> unifiedDiffs) {
         super(deletedFiles, addedFiles, modifiedBinaryFiles, unifiedDiffs);
         if(scripts != null) {
             this.scripts.addAll(scripts);
@@ -62,7 +61,7 @@ public class WfDiffResult extends FileSystemDiffResult {
         }
     }
 
-    public WfDiffResult(Map<Gav, ConfigId> includedConfigs, List<ConfigModel> configs, List<Path> scripts, FileSystemDiffResult result) {
+    public WfDiffResult(Map<FPID, ConfigId> includedConfigs, List<ConfigModel> configs, List<Path> scripts, FileSystemDiffResult result) {
         this(includedConfigs, configs, scripts, result.getDeletedFiles(), result.getAddedFiles(), result.getModifiedBinaryFiles(), result.getUnifiedDiffs());
     }
 
@@ -70,7 +69,7 @@ public class WfDiffResult extends FileSystemDiffResult {
         return Collections.unmodifiableList(scripts);
     }
 
-    public Map<Gav, ConfigId> getIncludedConfigs() {
+    public Map<FPID, ConfigId> getIncludedConfigs() {
         return Collections.unmodifiableMap(includedConfigs);
     }
 
@@ -107,10 +106,10 @@ public class WfDiffResult extends FileSystemDiffResult {
             for (ConfigModel config : getConfigs()) {
                 fpBuilder.addConfig(config);
             }
-            for (Entry<Gav, ConfigId> entry : getIncludedConfigs().entrySet()) {
-                String key = getDefaultName(entry.getKey());
+            for (Entry<FPID, ConfigId> entry : getIncludedConfigs().entrySet()) {
+                String key = FeaturePackConfig.getDefaultOriginName(entry.getKey().getLocation());
                 if (!builders.containsKey(key)) {
-                    builders.put(key, FeaturePackConfig.builder(entry.getKey()));
+                    builders.put(key, FeaturePackConfig.builder(entry.getKey().getLocation()));
                 }
                 builders.get(key).includeDefaultConfig(entry.getValue());
             }
@@ -119,17 +118,6 @@ public class WfDiffResult extends FileSystemDiffResult {
             throw new ProvisioningException(ex);
         }
         updatedFiles.writeContent("pm/wildfly/tasks.xml", toTasks(), false);
-    }
-
-    private String getDefaultName(Gav gav) {
-        StringJoiner buf = new StringJoiner(":");
-        if (gav.getGroupId() != null) {
-            buf.add(gav.getGroupId());
-        }
-        if (gav.getArtifactId() != null) {
-            buf.add(gav.getArtifactId());
-        }
-        return buf.toString();
     }
 
     private String toTasks() {

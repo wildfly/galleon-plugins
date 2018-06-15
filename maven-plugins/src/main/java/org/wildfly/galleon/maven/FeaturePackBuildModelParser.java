@@ -32,6 +32,7 @@ import org.jboss.staxmapper.XMLMapper;
 public class FeaturePackBuildModelParser {
 
     private static final QName ROOT_2_0 = new QName(FeaturePackBuildModelParser20.NAMESPACE_2_0, FeaturePackBuildModelParser20.Element.BUILD.getLocalName());
+    private static final QName ROOT_3_0 = new QName(FeaturePackBuildModelParser30.NAMESPACE_3_0, FeaturePackBuildModelParser30.Element.BUILD.getLocalName());
 
     private static final XMLInputFactory INPUT_FACTORY = XMLInputFactory.newInstance();
 
@@ -40,6 +41,7 @@ public class FeaturePackBuildModelParser {
     public FeaturePackBuildModelParser() {
         mapper = XMLMapper.Factory.create();
         mapper.registerRootElement(ROOT_2_0, new FeaturePackBuildModelParser20());
+        mapper.registerRootElement(ROOT_3_0, new FeaturePackBuildModelParser30());
     }
 
     public WildFlyFeaturePackBuild parse(final InputStream input) throws XMLStreamException {

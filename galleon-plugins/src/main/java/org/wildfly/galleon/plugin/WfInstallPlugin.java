@@ -67,7 +67,6 @@ import nu.xom.Serializer;
 
 import org.jboss.galleon.ArtifactCoords;
 import org.jboss.galleon.ArtifactException;
-import org.jboss.galleon.ArtifactRepositoryManager;
 import org.jboss.galleon.Errors;
 import org.jboss.galleon.MessageWriter;
 import org.jboss.galleon.ProvisioningDescriptionException;
@@ -83,6 +82,7 @@ import org.jboss.galleon.plugin.ProvisioningPluginWithOptions;
 import org.jboss.galleon.runtime.FeaturePackRuntime;
 import org.jboss.galleon.runtime.PackageRuntime;
 import org.jboss.galleon.runtime.ProvisioningRuntime;
+import org.jboss.galleon.universe.FeaturePackLocation.FPID;
 import org.jboss.galleon.util.IoUtils;
 import org.jboss.galleon.util.CollectionUtils;
 import org.jboss.galleon.util.ZipUtils;
@@ -99,6 +99,7 @@ import org.wildfly.galleon.plugin.server.CliScriptRunner;
  */
 public class WfInstallPlugin extends ProvisioningPluginWithOptions implements InstallPlugin {
 
+    private static final String JAR = "jar";
     private static final String CONFIG_GEN_METHOD = "generate";
     private static final String CONFIG_GEN_PATH = "wildfly/wildfly-config-gen.jar";
     private static final String CONFIG_GEN_CLASS = "org.wildfly.galleon.plugin.config.generator.WfConfigGenerator";
@@ -110,7 +111,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private ProvisioningRuntime runtime;
     private PropertyResolver versionResolver;
 
-    private Map<ArtifactCoords.Gav, Properties> fpTasksProps = Collections.emptyMap();
+    private Map<FPID, Properties> fpTasksProps = Collections.emptyMap();
     private Properties mergedTaskProps = new Properties();
     private PropertyResolver mergedTaskPropsResolver;
 
@@ -124,7 +125,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private TransformerFactory xsltFactory;
     private Map<String, Transformer> xslTransformers = Collections.emptyMap();
 
-    private Map<ArtifactCoords.Gav, ExampleFpConfigs> exampleConfigs = Collections.emptyMap();
+    private Map<FPID, ExampleFpConfigs> exampleConfigs = Collections.emptyMap();
 
     @Override
     protected List<PluginOption> initPluginOptions() {
@@ -179,7 +180,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 } catch (IOException e) {
                     throw new ProvisioningException(Errors.readFile(tasksPropsPath), e);
                 }
-                fpTasksProps = CollectionUtils.put(fpTasksProps, fp.getGav(), fpProps);
+                fpTasksProps = CollectionUtils.put(fpTasksProps, fp.getFPID(), fpProps);
                 mergedTaskProps.putAll(fpProps);
             }
 
@@ -231,35 +232,16 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         final ProvisioningManager pm = ProvisioningManager.builder()
                 .setInstallationHome(examplesTmp)
                 .setMessageWriter(runtime.getMessageWriter())
-                .setArtifactResolver(new ArtifactRepositoryManager() {
-                    @Override
-                    public Path resolve(ArtifactCoords coords) throws ArtifactException {
-                        return runtime.resolveArtifact(coords);
-                    }
-
-                    @Override
-                    public void install(ArtifactCoords coords, Path artifact) throws ArtifactException {
-                        throw new UnsupportedOperationException();
-                    }
-
-                    @Override
-                    public void deploy(ArtifactCoords coords, Path artifact) throws ArtifactException {
-                        throw new UnsupportedOperationException();
-                    }
-
-                    @Override
-                    public String getHighestVersion(ArtifactCoords coords, String range) throws ArtifactException {
-                        throw new UnsupportedOperationException();
-                    }})
+                .setLayoutFactory(runtime.getLayoutFactory())
                 .build();
 
         List<Path> configPaths = new ArrayList<>();
         final ProvisioningConfig.Builder configBuilder = ProvisioningConfig.builder();
         for(FeaturePackRuntime fpRt : runtime.getFeaturePacks()) {
-            final FeaturePackConfig.Builder fpBuilder = FeaturePackConfig.builder(fpRt.getGav())
+            final FeaturePackConfig.Builder fpBuilder = FeaturePackConfig.builder(fpRt.getFPID().getLocation())
                     .setInheritConfigs(false)
                     .setInheritPackages(false);
-            final ExampleFpConfigs fpExampleConfigs = exampleConfigs.get(fpRt.getGav());
+            final ExampleFpConfigs fpExampleConfigs = exampleConfigs.get(fpRt.getFPID());
             if(fpExampleConfigs != null) {
                 for(Map.Entry<ConfigId, ConfigModel> config : fpExampleConfigs.getConfigs().entrySet()) {
                     final ConfigId configId = config.getKey();
@@ -331,9 +313,9 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         try {
             cp[0] = configGenJar.toUri().toURL();
             ArtifactCoords.Gav gav = ArtifactCoords.newGav(resolveRequiredGav("org.jboss.modules:jboss-modules"));
-            cp[1] = runtime.resolveArtifact(new ArtifactCoords(gav.getGroupId(), gav.getArtifactId(), gav.getVersion(), null, "jar")).toUri().toURL();
+            cp[1] = runtime.resolveArtifact(new ArtifactCoords(gav.getGroupId(), gav.getArtifactId(), gav.getVersion(), null, JAR)).toUri().toURL();
             gav = ArtifactCoords.newGav(resolveRequiredGav("org.wildfly.core:wildfly-cli"));
-            cp[2] = runtime.resolveArtifact(new ArtifactCoords(gav.getGroupId(), gav.getArtifactId(), gav.getVersion(), "client", "jar")).toUri().toURL();
+            cp[2] = runtime.resolveArtifact(new ArtifactCoords(gav.getGroupId(), gav.getArtifactId(), gav.getVersion(), "client", JAR)).toUri().toURL();
         } catch (IOException e) {
             throw new ProvisioningException("Failed to init classpath for " + runtime.getStagedDir(), e);
         }
@@ -393,7 +375,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             }
             final Path moduleDir = pmWfDir.resolve(WfConstants.MODULE);
             if(Files.exists(moduleDir)) {
-                processModules(fp.getGav(), pkg.getName(), moduleDir);
+                processModules(fp.getFPID(), pkg.getName(), moduleDir);
             }
             final Path tasksXml = pmWfDir.resolve(WfConstants.TASKS_XML);
             if(!Files.exists(tasksXml)) {
@@ -435,7 +417,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                     transformer.setParameter(param.getKey(), param.getValue());
                 }
             }
-            final Properties taskProps = fpTasksProps.get(fp.getGav());
+            final Properties taskProps = fpTasksProps.get(fp.getFPID());
             if (taskProps != null) {
                 for (Map.Entry<Object, Object> prop : taskProps.entrySet()) {
                     transformer.setParameter(prop.getKey().toString(), prop.getValue());
@@ -484,7 +466,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
     }
 
-    private void processModules(ArtifactCoords.Gav fp, String pkgName, Path fpModuleDir) throws ProvisioningException {
+    private void processModules(FPID fp, String pkgName, Path fpModuleDir) throws ProvisioningException {
         try {
             final Path installDir = runtime.getStagedDir();
             Files.walkFileTree(fpModuleDir, new SimpleFileVisitor<Path>() {
@@ -551,7 +533,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 }
                 final String resolved = versionResolver.resolveProperty(artifactName);
                 if (resolved != null) {
-                    final ArtifactCoords coords = fromJBossModules(resolved, "jar");
+                    final ArtifactCoords coords = fromJBossModules(resolved, JAR);
                     versionAttribute.setValue(coords.getVersion());
                 }
             }
@@ -581,7 +563,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                     continue;
                 }
 
-                final ArtifactCoords coords = fromJBossModules(coordsStr, "jar");
+                final ArtifactCoords coords = fromJBossModules(coordsStr, JAR);
                 final Path moduleArtifact;
 
                 try {
@@ -634,15 +616,15 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     }
 
     public void addExampleConfigs(FeaturePackRuntime fp, ExampleFpConfigs exampleConfigs) throws ProvisioningDescriptionException {
-        final ArtifactCoords.Gav originGav;
+        final FPID originFpId;
         if(exampleConfigs.getOrigin() != null) {
-            originGav = fp.getSpec().getFeaturePackDep(exampleConfigs.getOrigin()).getGav();
+            originFpId = fp.getSpec().getFeaturePackDep(exampleConfigs.getOrigin()).getLocation().getFPID();
         } else {
-            originGav = fp.getGav();
+            originFpId = fp.getFPID();
         }
-        ExampleFpConfigs existingConfigs = this.exampleConfigs.get(originGav);
+        ExampleFpConfigs existingConfigs = this.exampleConfigs.get(originFpId);
         if(existingConfigs == null) {
-            this.exampleConfigs = CollectionUtils.put(this.exampleConfigs, originGav, exampleConfigs);
+            this.exampleConfigs = CollectionUtils.put(this.exampleConfigs, originFpId, exampleConfigs);
         } else {
             existingConfigs.addAll(exampleConfigs);
         }
@@ -669,8 +651,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             throw new ProvisioningException("Failed to resolve the version of " + artifactStr);
         }
         try {
-            final ArtifactCoords coords = fromJBossModules(gavString, "jar");
-            final Path jarSrc = runtime.resolveArtifact(coords);
+            final ArtifactCoords coords = fromJBossModules(gavString, JAR);
+            final Path jarSrc = this.runtime.resolveArtifact(coords);
             String location = copyArtifact.getToLocation();
             if (!location.isEmpty() && location.charAt(location.length() - 1) == '/') {
                 // if the to location ends with a / then it is a directory

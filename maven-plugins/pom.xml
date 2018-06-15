@@ -87,7 +87,7 @@
     </dependency>
     <dependency>
       <groupId>org.jboss.galleon</groupId>
-      <artifactId>galleon-maven-plugins</artifactId>
+      <artifactId>galleon-maven-plugin</artifactId>
     </dependency>
     <dependency>
       <groupId>${project.groupId}</groupId>
@@ -187,6 +187,7 @@
             <goals>
               <goal>asciidoc-descriptor</goal>
             </goals>
+            <phase>prepare-package</phase>
           </execution>
         </executions>
       </plugin>
