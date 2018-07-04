@@ -71,7 +71,6 @@ import org.jboss.galleon.Constants;
 import org.jboss.galleon.Errors;
 import org.jboss.galleon.ProvisioningDescriptionException;
 import org.jboss.galleon.ProvisioningException;
-import org.jboss.galleon.config.ConfigId;
 import org.jboss.galleon.config.ConfigModel;
 import org.jboss.galleon.config.FeaturePackConfig;
 import org.jboss.galleon.layout.FeaturePackLayout;
@@ -79,6 +78,7 @@ import org.jboss.galleon.layout.FeaturePackLayoutDescriber;
 import org.jboss.galleon.maven.plugin.FpMavenErrors;
 import org.jboss.galleon.spec.FeaturePackSpec;
 import org.jboss.galleon.spec.PackageSpec;
+import org.jboss.galleon.universe.FeaturePackLocation;
 import org.jboss.galleon.util.IoUtils;
 import org.jboss.galleon.util.CollectionUtils;
 import org.jboss.galleon.util.PathFilter;
@@ -235,9 +235,6 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         final Path fpDir = workDir.resolve(project.getGroupId()).resolve(fpArtifactId).resolve(project.getVersion());
         final Path fpPackagesDir = fpDir.resolve(Constants.PACKAGES);
 
-        // feature-pack builder
-        final FeaturePackLayout.Builder fpBuilder = FeaturePackLayout.builder(
-                FeaturePackSpec.builder(ArtifactCoords.newGav(project.getGroupId(), fpArtifactId, project.getVersion())));
 
         // feature-pack build config
         try {
@@ -245,6 +242,18 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         } catch (ProvisioningException e) {
             throw new MojoExecutionException("Failed to load feature-pack config file", e);
         }
+
+        FeaturePackLocation fpl = wfFpConfig.getProducer();
+        String channel = fpl.getChannelName();
+        if(channel == null || channel.isEmpty()) {
+            final String v = project.getVersion();
+            final int i = v.indexOf('.');
+            channel = i < 0 ? v : v.substring(0, i);
+        }
+        fpl = new FeaturePackLocation(fpl.getUniverse(), fpl.getProducerName(), channel, null, project.getVersion());
+
+        // feature-pack builder
+        final FeaturePackLayout.Builder fpBuilder = FeaturePackLayout.builder(FeaturePackSpec.builder(fpl.getFPID()));
 
         for(String defaultPackage : wfFpConfig.getDefaultPackages()) {
             fpBuilder.getSpecBuilder().addDefaultPackage(defaultPackage);
@@ -373,7 +382,7 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
                                     IoUtils.recursiveDelete(target);
                                 }
                                 ZipUtils.zip(versionDir, target);
-                                debug("Attaching feature-pack " + target + " as a project artifact");
+                                debug("Attaching feature-pack %s as a project artifact", target);
                                 projectHelper.attachArtifact(project, "zip", target.toFile());
                             }
                         }
@@ -537,62 +546,29 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         }
 
         fpDependencies = new LinkedHashMap<>(wfFpConfig.getDependencies().size());
-        for (FeaturePackDependencySpec depSpec : wfFpConfig.getDependencies()) {
+        for (Map.Entry<ArtifactCoords.Gav, FeaturePackDependencySpec> depEntry : wfFpConfig.getDependencies().entrySet()) {
+            ArtifactCoords.Gav depGav = depEntry.getKey();
+            if (depGav.getVersion() == null) {
+                String gavStr = artifactVersions.getVersion(depGav.toString());
+                if (gavStr == null) {
+                    throw new MojoExecutionException("Failed resolve artifact version for " + depGav);
+                }
+                depGav = ArtifactCoords.newGav(gavStr);
+            }
+
+            final FeaturePackDependencySpec depSpec = depEntry.getValue();
             final FeaturePackConfig depConfig = depSpec.getTarget();
-            final String depStr = depConfig.getGav().toString();
-            String gavStr = artifactVersions.getVersion(depStr);
-            if (gavStr == null) {
-                throw new MojoExecutionException("Failed resolve artifact version for " + depStr);
+
+            FeaturePackLocation depFpl = depConfig.getLocation();
+            String channel = depFpl.getChannelName();
+            if(channel == null || channel.isEmpty()) {
+                final String v = depGav.getVersion();
+                int i = v.indexOf('.');
+                channel = i < 0 ? v : v.substring(0, i);
             }
-            final ArtifactCoords.Gav depGav = ArtifactCoords.newGav(gavStr);
-            final FeaturePackConfig.Builder depBuilder = FeaturePackConfig.builder(depGav);
-            depBuilder.setInheritPackages(depConfig.isInheritPackages());
-            if (depConfig.hasExcludedPackages()) {
-                try {
-                    depBuilder.excludeAllPackages(depConfig.getExcludedPackages()).build();
-                } catch (ProvisioningException e) {
-                    throw new MojoExecutionException("Failed to process dependencies", e);
-                }
-            }
-            if (depConfig.hasIncludedPackages()) {
-                try {
-                    depBuilder.includeAllPackages(depConfig.getIncludedPackages()).build();
-                } catch (ProvisioningException e) {
-                    throw new MojoExecutionException("Failed to process dependencies", e);
-                }
-            }
-            depBuilder.setInheritConfigs(depConfig.isInheritConfigs());
-            if (depConfig.hasDefinedConfigs()) {
-                for (ConfigModel config : depConfig.getDefinedConfigs()) {
-                    depBuilder.addConfig(config);
-                }
-            }
-            if (depConfig.hasExcludedConfigs()) {
-                for (ConfigId configId : depConfig.getExcludedConfigs()) {
-                    depBuilder.excludeDefaultConfig(configId);
-                }
-            }
-            if (depConfig.hasFullModelsExcluded()) {
-                for (Map.Entry<String, Boolean> entry : depConfig.getFullModelsExcluded().entrySet()) {
-                    depBuilder.excludeConfigModel(entry.getKey(), entry.getValue());
-                }
-            }
-            if (depConfig.hasFullModelsIncluded()) {
-                for (String model : depConfig.getFullModelsIncluded()) {
-                    depBuilder.includeConfigModel(model);
-                }
-            }
-            if (depConfig.hasIncludedConfigs()) {
-                for (ConfigId includedConfig : depConfig.getIncludedConfigs()) {
-                    depBuilder.includeDefaultConfig(includedConfig);
-                }
-            }
-            if (depConfig.hasDefinedConfigs()) {
-                for (ConfigModel config : depConfig.getDefinedConfigs()) {
-                    depBuilder.addConfig(config);
-                }
-            }
-            fpBuilder.addFeaturePackDep(depSpec.getName(), depBuilder.build());
+            depFpl = new FeaturePackLocation(depFpl.getUniverse(), depFpl.getProducerName(), channel, null, depGav.getVersion());
+
+            fpBuilder.addFeaturePackDep(depSpec.getName(), FeaturePackConfig.builder(depFpl).init(depConfig).build());
             final Path depZip = resolveArtifact(depGav.toArtifactCoords());
             fpDependencies.put(depSpec.getName(), FeaturePackLayoutDescriber.describeFeaturePackZip(depZip));
         }

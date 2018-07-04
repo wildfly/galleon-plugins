@@ -38,7 +38,6 @@ import javax.xml.stream.XMLStreamException;
 
 import org.jboss.galleon.MessageWriter;
 import org.jboss.galleon.ProvisioningException;
-import org.jboss.galleon.ArtifactCoords.Gav;
 import org.jboss.galleon.config.ConfigId;
 import org.jboss.galleon.config.ConfigModel;
 import org.jboss.galleon.diff.FileSystemDiff;
@@ -46,6 +45,7 @@ import org.jboss.galleon.plugin.DiffPlugin;
 import org.jboss.galleon.plugin.PluginOption;
 import org.jboss.galleon.plugin.ProvisioningPluginWithOptions;
 import org.jboss.galleon.runtime.ProvisioningRuntime;
+import org.jboss.galleon.universe.FeaturePackLocation.FPID;
 import org.jboss.galleon.util.PathFilter;
 import org.jboss.galleon.xml.ConfigXmlWriter;
 import org.wildfly.galleon.plugin.server.ClassLoaderHelper;
@@ -88,7 +88,7 @@ public class WfDiffPlugin extends ProvisioningPluginWithOptions implements DiffP
         Properties props = System.getProperties();
         ConfigModel config;
         Thread.currentThread().setContextClassLoader(newCl);
-        Map<Gav, ConfigId> includedConfigs = new HashMap<>();
+        Map<FPID, ConfigId> includedConfigs = new HashMap<>();
         try {
             final Class<?> wfDiffGenerator = newCl.loadClass("org.jboss.galleon.plugin.wildfly.WfDiffConfigGenerator");
             final Method exportDiff = wfDiffGenerator.getMethod("exportDiff", ProvisioningRuntime.class, Map.class, Path.class, Path.class);

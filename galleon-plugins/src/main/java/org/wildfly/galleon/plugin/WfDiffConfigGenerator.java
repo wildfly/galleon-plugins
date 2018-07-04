@@ -35,7 +35,6 @@ import javax.xml.stream.XMLStreamException;
 
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.Property;
-import org.jboss.galleon.ArtifactCoords;
 import org.jboss.galleon.ProvisioningDescriptionException;
 import org.jboss.galleon.ProvisioningException;
 import org.jboss.galleon.config.ConfigId;
@@ -50,6 +49,7 @@ import org.jboss.galleon.spec.FeatureAnnotation;
 import org.jboss.galleon.spec.FeatureId;
 import org.jboss.galleon.spec.FeatureParameterSpec;
 import org.jboss.galleon.spec.FeatureSpec;
+import org.jboss.galleon.universe.FeaturePackLocation.FPID;
 import org.wildfly.galleon.plugin.server.CompleteServerInvoker;
 import org.wildfly.galleon.plugin.server.EmbeddedServerInvoker;
 
@@ -70,7 +70,7 @@ public class WfDiffConfigGenerator {
     static final PluginOption PASSWORD = PluginOption.builder("password").setRequired().build();
     static final PluginOption SERVER_CONFIG = PluginOption.builder("server-config").setDefaultValue("standalone.xml").build();
 
-    public static ConfigModel exportDiff (ProvisioningRuntime runtime, Map<ArtifactCoords.Gav, ConfigId> includedConfigs, Path customizedInstallation, Path target) throws ProvisioningException {
+    public static ConfigModel exportDiff (ProvisioningRuntime runtime, Map<FPID, ConfigId> includedConfigs, Path customizedInstallation, Path target) throws ProvisioningException {
         String host = runtime.getOptionValue(HOST);
         String port = runtime.getOptionValue(PORT);
         String protocol = runtime.getOptionValue(PROTOCOL);
@@ -98,7 +98,7 @@ public class WfDiffConfigGenerator {
     }
 
     private static void createConfiguration(ProvisioningRuntime runtime, ConfigModel.Builder builder,
-            Map<ArtifactCoords.Gav, ConfigId> includedConfigBuilders, Path json)
+            Map<FPID, ConfigId> includedConfigBuilders, Path json)
             throws IOException, XMLStreamException, ProvisioningDescriptionException {
         try (InputStream in = Files.newInputStream(json)) {
             ModelNode featureDiff = ModelNode.fromBase64(in);
@@ -122,8 +122,8 @@ public class WfDiffConfigGenerator {
                         resolveParams(featureConfig, params, firstAnnotation);
                     }
                     if (feature.require("feature").require("exclude").asBoolean()) {
-                        if (!includedConfigBuilders.containsKey(dependencySpec.gav)) {
-                            includedConfigBuilders.put(dependencySpec.gav, new ConfigId("standalone", "standalone.xml"));
+                        if (!includedConfigBuilders.containsKey(dependencySpec.fpid)) {
+                            includedConfigBuilders.put(dependencySpec.fpid, new ConfigId("standalone", "standalone.xml"));
                         }
                         FeatureId.Builder idBuilder = FeatureId.builder(specName);
                         for(FeatureParameterSpec fparam : resolvedSpec.getIdParams()) {
@@ -142,13 +142,13 @@ public class WfDiffConfigGenerator {
         for (FeaturePackRuntime fp : runtime.getFeaturePacks()) {
             ResolvedFeatureSpec spec = fp.getResolvedFeatureSpec(name);
             if (spec != null) {
-                return new DependencySpec(FeaturePackConfig.getDefaultOriginName(fp.getSpec().getGav()), fp.getGav(), spec.getSpec());
+                return new DependencySpec(FeaturePackConfig.getDefaultOriginName(fp.getSpec().getFPID().getLocation()), fp.getFPID(), spec.getSpec());
             }
         }
         for (FeaturePackRuntime fp : runtime.getFeaturePacks()) {
             FeatureSpec spec = fp.getFeatureSpec(name);
             if (spec != null) {
-                return new DependencySpec(FeaturePackConfig.getDefaultOriginName(fp.getSpec().getGav()), fp.getGav(), spec);
+                return new DependencySpec(FeaturePackConfig.getDefaultOriginName(fp.getSpec().getFPID().getLocation()), fp.getFPID(), spec);
             }
         }
         return null;
@@ -191,13 +191,13 @@ public class WfDiffConfigGenerator {
     private static class DependencySpec {
 
         private final String fpName;
-        private final ArtifactCoords.Gav gav;
+        private final FPID fpid;
         private final FeatureSpec spec;
 
-        DependencySpec(String fpName, ArtifactCoords.Gav gav, FeatureSpec spec) {
+        DependencySpec(String fpName, FPID fpid, FeatureSpec spec) {
             this.fpName = fpName;
             this.spec = spec;
-            this.gav = gav;
+            this.fpid = fpid;
         }
     }
 }

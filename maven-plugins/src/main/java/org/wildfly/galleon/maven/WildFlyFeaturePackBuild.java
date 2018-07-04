@@ -20,10 +20,13 @@ package org.wildfly.galleon.maven;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
+import org.jboss.galleon.ArtifactCoords;
 import org.jboss.galleon.config.ConfigModel;
 import org.jboss.galleon.spec.CapabilitySpec;
+import org.jboss.galleon.universe.FeaturePackLocation;
 import org.jboss.galleon.util.CollectionUtils;
 
 /**
@@ -36,7 +39,8 @@ public class WildFlyFeaturePackBuild {
 
     public static class Builder {
 
-        private List<FeaturePackDependencySpec> dependencies = Collections.emptyList();
+        private FeaturePackLocation producer;
+        private Map<ArtifactCoords.Gav, FeaturePackDependencySpec> dependencies = Collections.emptyMap();
         private Set<String> schemaGroups = Collections.emptySet();
         private Set<String> defaultPackages = Collections.emptySet();
         private List<ConfigModel> configs = Collections.emptyList();
@@ -44,13 +48,18 @@ public class WildFlyFeaturePackBuild {
         private Builder() {
         }
 
+        public Builder setProducer(FeaturePackLocation producer) {
+            this.producer = producer;
+            return this;
+        }
+
         public Builder addDefaultPackage(String packageName) {
             defaultPackages = CollectionUtils.add(defaultPackages, packageName);
             return this;
         }
 
-        public Builder addDependency(FeaturePackDependencySpec dependency) {
-            dependencies = CollectionUtils.add(dependencies, dependency);
+        public Builder addDependency(ArtifactCoords.Gav gav, FeaturePackDependencySpec dependency) {
+            dependencies = CollectionUtils.put(dependencies, gav, dependency);
             return this;
         }
 
@@ -77,23 +86,29 @@ public class WildFlyFeaturePackBuild {
         return new Builder();
     }
 
-    private final List<FeaturePackDependencySpec> dependencies;
+    private final FeaturePackLocation producer;
+    private final Map<ArtifactCoords.Gav, FeaturePackDependencySpec> dependencies;
     private final Set<String> schemaGroups;
     private final Set<String> defaultPackages;
     private final List<ConfigModel> configs;
 
     private WildFlyFeaturePackBuild(Builder builder) {
+        this.producer = builder.producer;
         this.dependencies = CollectionUtils.unmodifiable(builder.dependencies);
         this.schemaGroups = CollectionUtils.unmodifiable(builder.schemaGroups);
         this.defaultPackages = CollectionUtils.unmodifiable(builder.defaultPackages);
         this.configs = CollectionUtils.unmodifiable(builder.configs);
     }
 
+    public FeaturePackLocation getProducer() {
+        return producer;
+    }
+
     public Collection<String> getDefaultPackages() {
         return defaultPackages;
     }
 
-    public List<FeaturePackDependencySpec> getDependencies() {
+    public Map<ArtifactCoords.Gav, FeaturePackDependencySpec> getDependencies() {
         return dependencies;
     }
 

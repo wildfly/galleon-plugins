@@ -17,11 +17,11 @@
 package org.wildfly.galleon.maven;
 
 import org.jboss.galleon.ArtifactCoords;
-import org.jboss.galleon.ArtifactCoords.Gav;
 import org.jboss.galleon.ProvisioningDescriptionException;
+import org.jboss.galleon.ArtifactCoords.Gav;
 import org.jboss.galleon.config.ConfigModel;
 import org.jboss.galleon.config.FeaturePackConfig;
-import org.jboss.galleon.universe.galleon1.LegacyGalleon1Universe;
+import org.jboss.galleon.universe.FeaturePackLocation;
 import org.jboss.galleon.util.ParsingUtils;
 import org.jboss.galleon.xml.ConfigXml;
 import org.jboss.galleon.xml.FeaturePackPackagesConfigParser10;
@@ -29,12 +29,12 @@ import org.jboss.galleon.xml.ProvisioningXmlParser10;
 import org.jboss.galleon.xml.XmlNameProvider;
 import org.jboss.staxmapper.XMLElementReader;
 import org.jboss.staxmapper.XMLExtendedStreamReader;
-
 import javax.xml.namespace.QName;
 import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
@@ -48,9 +48,9 @@ import java.util.Set;
  * @author Eduardo Martins
  * @author Alexey Loubyansky
  */
-class FeaturePackBuildModelParser20 implements XMLElementReader<WildFlyFeaturePackBuild.Builder> {
+class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePackBuild.Builder> {
 
-    public static final String NAMESPACE_2_0 = "urn:wildfly:feature-pack-build:2.0";
+    public static final String NAMESPACE_3_0 = "urn:wildfly:feature-pack-build:3.0";
 
     enum Element {
 
@@ -65,6 +65,7 @@ class FeaturePackBuildModelParser20 implements XMLElementReader<WildFlyFeaturePa
         PACKAGE("package"),
         PACKAGES("packages"),
         PACKAGE_SCHEMAS("package-schemas"),
+        PRODUCER("producer"),
 
         // default unknown element
         UNKNOWN(null);
@@ -72,25 +73,26 @@ class FeaturePackBuildModelParser20 implements XMLElementReader<WildFlyFeaturePa
         private static final Map<QName, Element> elements;
 
         static {
-            Map<QName, Element> elementsMap = new HashMap<QName, Element>(11);
-            elementsMap.put(new QName(NAMESPACE_2_0, Element.BUILD.getLocalName()), Element.BUILD);
-            elementsMap.put(new QName(NAMESPACE_2_0, Element.CONFIG.getLocalName()), Element.CONFIG);
-            elementsMap.put(new QName(NAMESPACE_2_0, Element.DEFAULT_CONFIGS.getLocalName()), Element.DEFAULT_CONFIGS);
-            elementsMap.put(new QName(NAMESPACE_2_0, Element.DEFAULT_PACKAGES.getLocalName()), Element.DEFAULT_PACKAGES);
-            elementsMap.put(new QName(NAMESPACE_2_0, Element.DEPENDENCIES.getLocalName()), Element.DEPENDENCIES);
-            elementsMap.put(new QName(NAMESPACE_2_0, Element.DEPENDENCY.getLocalName()), Element.DEPENDENCY);
-            elementsMap.put(new QName(NAMESPACE_2_0, Element.GROUP.getLocalName()), Element.GROUP);
-            elementsMap.put(new QName(NAMESPACE_2_0, Element.NAME.getLocalName()), Element.NAME);
-            elementsMap.put(new QName(NAMESPACE_2_0, Element.PACKAGE.getLocalName()), Element.PACKAGE);
-            elementsMap.put(new QName(NAMESPACE_2_0, Element.PACKAGES.getLocalName()), Element.PACKAGES);
-            elementsMap.put(new QName(NAMESPACE_2_0, Element.PACKAGE_SCHEMAS.getLocalName()), Element.PACKAGE_SCHEMAS);
+            Map<QName, Element> elementsMap = new HashMap<QName, Element>(12);
+            elementsMap.put(new QName(NAMESPACE_3_0, Element.BUILD.getLocalName()), Element.BUILD);
+            elementsMap.put(new QName(NAMESPACE_3_0, Element.CONFIG.getLocalName()), Element.CONFIG);
+            elementsMap.put(new QName(NAMESPACE_3_0, Element.DEFAULT_CONFIGS.getLocalName()), Element.DEFAULT_CONFIGS);
+            elementsMap.put(new QName(NAMESPACE_3_0, Element.DEFAULT_PACKAGES.getLocalName()), Element.DEFAULT_PACKAGES);
+            elementsMap.put(new QName(NAMESPACE_3_0, Element.DEPENDENCIES.getLocalName()), Element.DEPENDENCIES);
+            elementsMap.put(new QName(NAMESPACE_3_0, Element.DEPENDENCY.getLocalName()), Element.DEPENDENCY);
+            elementsMap.put(new QName(NAMESPACE_3_0, Element.GROUP.getLocalName()), Element.GROUP);
+            elementsMap.put(new QName(NAMESPACE_3_0, Element.NAME.getLocalName()), Element.NAME);
+            elementsMap.put(new QName(NAMESPACE_3_0, Element.PACKAGE.getLocalName()), Element.PACKAGE);
+            elementsMap.put(new QName(NAMESPACE_3_0, Element.PACKAGES.getLocalName()), Element.PACKAGES);
+            elementsMap.put(new QName(NAMESPACE_3_0, Element.PACKAGE_SCHEMAS.getLocalName()), Element.PACKAGE_SCHEMAS);
+            elementsMap.put(new QName(NAMESPACE_3_0, Element.PRODUCER.getLocalName()), Element.PRODUCER);
             elements = elementsMap;
         }
 
         static Element of(QName qName) {
             QName name;
             if (qName.getNamespaceURI().equals("")) {
-                name = new QName(NAMESPACE_2_0, qName.getLocalPart());
+                name = new QName(NAMESPACE_3_0, qName.getLocalPart());
             } else {
                 name = qName;
             }
@@ -119,6 +121,7 @@ class FeaturePackBuildModelParser20 implements XMLElementReader<WildFlyFeaturePa
         ARTIFACT_ID("artifact-id"),
         GROUP_ID("group-id"),
         NAME("name"),
+        PRODUCER("producer"),
         VERSION("version"),
 
         // default unknown attribute
@@ -127,10 +130,11 @@ class FeaturePackBuildModelParser20 implements XMLElementReader<WildFlyFeaturePa
         private static final Map<QName, Attribute> attributes;
 
         static {
-            Map<QName, Attribute> attributesMap = new HashMap<QName, Attribute>(4);
+            Map<QName, Attribute> attributesMap = new HashMap<QName, Attribute>(5);
             attributesMap.put(new QName(ARTIFACT_ID.getLocalName()), ARTIFACT_ID);
             attributesMap.put(new QName(GROUP_ID.getLocalName()), GROUP_ID);
             attributesMap.put(new QName(NAME.getLocalName()), NAME);
+            attributesMap.put(new QName(PRODUCER.getLocalName()), PRODUCER);
             attributesMap.put(new QName(VERSION.getLocalName()), VERSION);
             attributes = attributesMap;
         }
@@ -162,20 +166,29 @@ class FeaturePackBuildModelParser20 implements XMLElementReader<WildFlyFeaturePa
         }
     }
 
-    FeaturePackBuildModelParser20() {
+    FeaturePackBuildModelParser30() {
     }
 
     @Override
     public void readElement(final XMLExtendedStreamReader reader, final WildFlyFeaturePackBuild.Builder builder) throws XMLStreamException {
 
-        final Set<Attribute> required = EnumSet.noneOf(Attribute.class);
+        FeaturePackLocation fpl = null;
         final int count = reader.getAttributeCount();
-        if (count != 0) {
-            throw ParsingUtils.unexpectedContent(reader);
+        for (int i = 0; i < count; i++) {
+            final Attribute attribute = Attribute.of(reader.getAttributeName(i));
+            switch (attribute) {
+                case PRODUCER:
+                    fpl = FeaturePackLocation.fromString(reader.getAttributeValue(i));
+                    break;
+                default:
+                    throw ParsingUtils.unexpectedContent(reader);
+            }
         }
-        if (!required.isEmpty()) {
-            throw ParsingUtils.missingAttributes(reader.getLocation(), required);
+        if (fpl == null) {
+            throw ParsingUtils.missingAttributes(reader.getLocation(), Collections.singleton(Attribute.PRODUCER));
         }
+        builder.setProducer(fpl);
+
         while (reader.hasNext()) {
             switch (reader.nextTag()) {
                 case XMLStreamConstants.END_ELEMENT: {
@@ -267,11 +280,12 @@ class FeaturePackBuildModelParser20 implements XMLElementReader<WildFlyFeaturePa
     }
 
     private void parseDependency(XMLExtendedStreamReader reader, final WildFlyFeaturePackBuild.Builder builder) throws XMLStreamException {
+        FeaturePackLocation fpl = null;
         String groupId = null;
         String artifactId = null;
         String version = null;
         final int count = reader.getAttributeCount();
-        final Set<Attribute> required = EnumSet.of(Attribute.GROUP_ID, Attribute.ARTIFACT_ID);
+        final Set<Attribute> required = EnumSet.of(Attribute.GROUP_ID, Attribute.ARTIFACT_ID, Attribute.PRODUCER);
         for (int i = 0; i < count; i++) {
             final Attribute attribute = Attribute.of(reader.getAttributeName(i));
             required.remove(attribute);
@@ -281,6 +295,9 @@ class FeaturePackBuildModelParser20 implements XMLElementReader<WildFlyFeaturePa
                     break;
                 case ARTIFACT_ID:
                     artifactId = reader.getAttributeValue(i);
+                    break;
+                case PRODUCER:
+                    fpl = FeaturePackLocation.fromString(reader.getAttributeValue(i));
                     break;
                 case VERSION:
                     version = reader.getAttributeValue(i);
@@ -292,9 +309,9 @@ class FeaturePackBuildModelParser20 implements XMLElementReader<WildFlyFeaturePa
         if (!required.isEmpty()) {
             throw ParsingUtils.missingAttributes(reader.getLocation(), required);
         }
-        String depName = null;
         final Gav gav = ArtifactCoords.newGav(groupId, artifactId, version);
-        final FeaturePackConfig.Builder depBuilder = FeaturePackConfig.builder(LegacyGalleon1Universe.toFpl(gav));
+        String depName = null;
+        final FeaturePackConfig.Builder depBuilder = FeaturePackConfig.builder(fpl);
         while (reader.hasNext()) {
             switch (reader.nextTag()) {
                 case XMLStreamConstants.END_ELEMENT: {
