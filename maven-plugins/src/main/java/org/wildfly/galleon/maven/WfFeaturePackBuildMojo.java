@@ -148,7 +148,7 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
 
     /**
      * A path relative to {@link #configDir} that represents the directory under which of resources such as
-     * {@code configuration/standalone/subsystems.xml}, {modules}, {subsystem-templates}, etc.
+     * {@code packages}, {@code feature_groups}, etc.
      */
     @Parameter(alias = "resources-dir", defaultValue = "src/main/resources", property = "wildfly.feature.pack.resourcesDir", required = true)
     private String resourcesDir;
