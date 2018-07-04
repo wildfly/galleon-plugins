@@ -27,7 +27,7 @@
     <version>2.0.0.Alpha1-SNAPSHOT</version>
   </parent>
 
-  <artifactId>wildfly-galleon-maven-plugins</artifactId>
+  <artifactId>wildfly-galleon-maven-plugin</artifactId>
   <packaging>maven-plugin</packaging>
 
   <name>WildFly Galleon Maven Plugins</name>
