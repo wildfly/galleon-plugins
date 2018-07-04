@@ -1,4 +1,4 @@
-include::../../../../../maven-plugins/target/generated-sources/plugin/build-feature-pack-mojo.adoc[]
+include::../../../../../maven-plugin/target/generated-sources/plugin/build-feature-pack-mojo.adoc[]
 
 include::wildfly-feature-pack-build-xml/index.adoc[]
 

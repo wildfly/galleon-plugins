@@ -45,7 +45,7 @@
   <modules>
     <module>galleon-plugins</module>
     <module>config-gen</module>
-    <module>maven-plugins</module>
+    <module>maven-plugin</module>
     <module>feature-spec-gen</module>
   </modules>
 
@@ -159,7 +159,7 @@
 
       <dependency>
         <groupId>${project.groupId}</groupId>
-        <artifactId>wildfly-galleon-maven-plugins</artifactId>
+        <artifactId>wildfly-galleon-maven-plugin</artifactId>
         <version>${project.version}</version>
       </dependency>
 

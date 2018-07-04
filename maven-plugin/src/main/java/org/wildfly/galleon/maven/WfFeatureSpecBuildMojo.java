@@ -203,7 +203,7 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
         }
 
         final URL[] specGenCp = new URL[3];
-        Artifact artifact = project.getPluginArtifactMap().get("org.wildfly.galleon-plugins:wildfly-galleon-maven-plugins");
+        Artifact artifact = project.getPluginArtifactMap().get("org.wildfly.galleon-plugins:wildfly-galleon-maven-plugin");
         specGenCp[0] = resolveArtifact(artifact.getGroupId(), "wildfly-feature-spec-gen", artifact.getVersion(), null, "jar").toURI().toURL();
         artifact = buildArtifacts.get("org.jboss.modules:jboss-modules");
         specGenCp[1] = resolveArtifact(artifact.getGroupId(), artifact.getArtifactId(), artifact.getVersion(), null, "jar").toURI().toURL();

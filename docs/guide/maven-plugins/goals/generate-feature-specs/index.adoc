@@ -1,4 +1,4 @@
-include::../../../../../maven-plugins/target/generated-sources/plugin/generate-feature-specs-mojo.adoc[]
+include::../../../../../maven-plugin/target/generated-sources/plugin/generate-feature-specs-mojo.adoc[]
 
 #### Sample Configuration
 
