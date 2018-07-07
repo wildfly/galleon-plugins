@@ -66,6 +66,7 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
         PACKAGES("packages"),
         PACKAGE_SCHEMAS("package-schemas"),
         PRODUCER("producer"),
+        TRANSITIVE("transitive"),
 
         // default unknown element
         UNKNOWN(null);
@@ -73,7 +74,7 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
         private static final Map<QName, Element> elements;
 
         static {
-            Map<QName, Element> elementsMap = new HashMap<QName, Element>(12);
+            Map<QName, Element> elementsMap = new HashMap<>(12);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.BUILD.getLocalName()), Element.BUILD);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.CONFIG.getLocalName()), Element.CONFIG);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.DEFAULT_CONFIGS.getLocalName()), Element.DEFAULT_CONFIGS);
@@ -86,6 +87,7 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
             elementsMap.put(new QName(NAMESPACE_3_0, Element.PACKAGES.getLocalName()), Element.PACKAGES);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.PACKAGE_SCHEMAS.getLocalName()), Element.PACKAGE_SCHEMAS);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.PRODUCER.getLocalName()), Element.PRODUCER);
+            elementsMap.put(new QName(NAMESPACE_3_0, Element.TRANSITIVE.getLocalName()), Element.TRANSITIVE);
             elements = elementsMap;
         }
 
@@ -130,7 +132,7 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
         private static final Map<QName, Attribute> attributes;
 
         static {
-            Map<QName, Attribute> attributesMap = new HashMap<QName, Attribute>(5);
+            Map<QName, Attribute> attributesMap = new HashMap<>(5);
             attributesMap.put(new QName(ARTIFACT_ID.getLocalName()), ARTIFACT_ID);
             attributesMap.put(new QName(GROUP_ID.getLocalName()), GROUP_ID);
             attributesMap.put(new QName(NAME.getLocalName()), NAME);
@@ -216,6 +218,9 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
                                 throw new XMLStreamException("Failed to create a config model instance", e);
                             }
                             break;
+                        case TRANSITIVE:
+                            parseTransitive(reader, builder);
+                            break;
                         default:
                             throw ParsingUtils.unexpectedContent(reader);
                     }
@@ -264,7 +269,7 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
                     final Element element = Element.of(reader.getName());
                     switch (element) {
                         case DEPENDENCY:
-                            parseDependency(reader, builder);
+                            parseDependency(reader, builder, false);
                             break;
                         default:
                             throw ParsingUtils.unexpectedContent(reader);
@@ -279,7 +284,7 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
         throw ParsingUtils.endOfDocument(reader.getLocation());
     }
 
-    private void parseDependency(XMLExtendedStreamReader reader, final WildFlyFeaturePackBuild.Builder builder) throws XMLStreamException {
+    private static void parseDependency(XMLExtendedStreamReader reader, final WildFlyFeaturePackBuild.Builder builder, boolean transitive) throws XMLStreamException {
         FeaturePackLocation fpl = null;
         String groupId = null;
         String artifactId = null;
@@ -311,7 +316,7 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
         }
         final Gav gav = ArtifactCoords.newGav(groupId, artifactId, version);
         String depName = null;
-        final FeaturePackConfig.Builder depBuilder = FeaturePackConfig.builder(fpl);
+        final FeaturePackConfig.Builder depBuilder = transitive ? FeaturePackConfig.transitiveBuilder(fpl) : FeaturePackConfig.builder(fpl);
         while (reader.hasNext()) {
             switch (reader.nextTag()) {
                 case XMLStreamConstants.END_ELEMENT: {
@@ -353,6 +358,32 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
                 }
             }
         }
+    }
+
+    private static void parseTransitive(XMLExtendedStreamReader reader, WildFlyFeaturePackBuild.Builder builder) throws XMLStreamException {
+        ParsingUtils.parseNoAttributes(reader);
+        while (reader.hasNext()) {
+            switch (reader.nextTag()) {
+                case XMLStreamConstants.END_ELEMENT: {
+                    return;
+                }
+                case XMLStreamConstants.START_ELEMENT: {
+                    final Element element = Element.of(reader.getName());
+                    switch (element) {
+                        case DEPENDENCY:
+                            parseDependency(reader, builder, true);
+                            break;
+                        default:
+                            throw ParsingUtils.unexpectedContent(reader);
+                    }
+                    break;
+                }
+                default: {
+                    throw ParsingUtils.unexpectedContent(reader);
+                }
+            }
+        }
+        throw ParsingUtils.endOfDocument(reader.getLocation());
     }
 
     private String parseName(final XMLStreamReader reader) throws XMLStreamException {
