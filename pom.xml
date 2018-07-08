@@ -29,7 +29,7 @@
 
   <groupId>org.wildfly.galleon-plugins</groupId>
   <artifactId>wildfly-provisioning-parent</artifactId>
-  <version>2.0.0.Alpha3-SNAPSHOT</version>
+  <version>2.0.0.Alpha3</version>
   <packaging>pom</packaging>
 
   <name>WildFly Galleon Plugins Parent</name>
