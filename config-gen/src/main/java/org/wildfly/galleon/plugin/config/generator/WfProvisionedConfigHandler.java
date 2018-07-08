@@ -457,11 +457,18 @@ public class WfProvisionedConfigHandler implements ProvisionedConfigHandler, Aut
         }
 
         ops = Collections.emptyList();
-        for (FeatureAnnotation annotation : spec.getAnnotations()) {
-            if(!annotation.getName().equals(WfConstants.JBOSS_OP)) {
-                continue;
+        try {
+            for (FeatureAnnotation annotation : spec.getAnnotations()) {
+                if (!annotation.getName().equals(WfConstants.JBOSS_OP)) {
+                    continue;
+                }
+                ops = CollectionUtils.addAll(ops, nextAnnotation(spec, annotation));
             }
-            ops = CollectionUtils.addAll(ops, nextAnnotation(spec, annotation));
+        } catch(ProvisioningException | RuntimeException | Error t) {
+            if(scriptWriter != null) {
+                closeScriptWriter();
+            }
+            throw t;
         }
         specOps.put(spec.getId(), ops);
     }
@@ -483,8 +490,15 @@ public class WfProvisionedConfigHandler implements ProvisionedConfigHandler, Aut
         if (ops.isEmpty()) {
             return;
         }
-        for(ManagedOp op : ops) {
-            op.toCommandLine(feature);
+        try {
+            for (ManagedOp op : ops) {
+                op.toCommandLine(feature);
+            }
+        } catch (ProvisioningException | RuntimeException | Error t) {
+            if(scriptWriter != null) {
+                closeScriptWriter();
+            }
+            throw t;
         }
     }
 
@@ -496,7 +510,14 @@ public class WfProvisionedConfigHandler implements ProvisionedConfigHandler, Aut
             writeScript("batch");
             inBatch = true;
         }
-        configGen.startBatch();
+        try {
+            configGen.startBatch();
+        } catch(ProvisioningException | RuntimeException | Error t) {
+            if(scriptWriter != null) {
+                closeScriptWriter();
+            }
+            throw t;
+        }
     }
 
     @Override
@@ -507,10 +528,11 @@ public class WfProvisionedConfigHandler implements ProvisionedConfigHandler, Aut
         }
         try {
             configGen.endBatch();
-        } catch(Throwable t) {
+        } catch(ProvisioningException | RuntimeException | Error t) {
             if(scriptWriter != null) {
                 closeScriptWriter();
             }
+            throw t;
         }
     }
 
