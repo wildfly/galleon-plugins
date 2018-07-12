@@ -73,8 +73,8 @@ import org.jboss.galleon.ProvisioningDescriptionException;
 import org.jboss.galleon.ProvisioningException;
 import org.jboss.galleon.config.ConfigModel;
 import org.jboss.galleon.config.FeaturePackConfig;
-import org.jboss.galleon.layout.FeaturePackLayout;
-import org.jboss.galleon.layout.FeaturePackLayoutDescriber;
+import org.jboss.galleon.layout.FeaturePackDescriber;
+import org.jboss.galleon.layout.FeaturePackDescription;
 import org.jboss.galleon.maven.plugin.FpMavenErrors;
 import org.jboss.galleon.spec.FeaturePackSpec;
 import org.jboss.galleon.spec.PackageSpec;
@@ -194,7 +194,7 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
     private MavenProjectArtifactVersions artifactVersions;
 
     private WildFlyFeaturePackBuild wfFpConfig;
-    private Map<String, FeaturePackLayout> fpDependencies = Collections.emptyMap();
+    private Map<String, FeaturePackDescription> fpDependencies = Collections.emptyMap();
     private Map<String, PackageSpec.Builder> extendedPackages = Collections.emptyMap();
 
     @Override
@@ -253,7 +253,7 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         fpl = new FeaturePackLocation(fpl.getUniverse(), fpl.getProducerName(), channel, null, project.getVersion());
 
         // feature-pack builder
-        final FeaturePackLayout.Builder fpBuilder = FeaturePackLayout.builder(FeaturePackSpec.builder(fpl.getFPID()));
+        final FeaturePackDescription.Builder fpBuilder = FeaturePackDescription.builder(FeaturePackSpec.builder(fpl.getFPID()));
 
         for(String defaultPackage : wfFpConfig.getDefaultPackages()) {
             fpBuilder.getSpecBuilder().addDefaultPackage(defaultPackage);
@@ -299,8 +299,8 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         }
 
         if (!fpDependencies.isEmpty() && !extendedPackages.isEmpty()) {
-            for (Map.Entry<String, FeaturePackLayout> fpDep : fpDependencies.entrySet()) {
-                final FeaturePackLayout fpDepLayout = fpDep.getValue();
+            for (Map.Entry<String, FeaturePackDescription> fpDep : fpDependencies.entrySet()) {
+                final FeaturePackDescription fpDepLayout = fpDep.getValue();
                 for(Map.Entry<String, PackageSpec.Builder> entry : extendedPackages.entrySet()) {
                     if(fpDepLayout.hasPackage(entry.getKey())) {
                         entry.getValue().addPackageDep(fpDep.getKey(), entry.getKey());
@@ -323,7 +323,7 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
             }
         }
 
-        final FeaturePackLayout fpLayout;
+        final FeaturePackDescription fpLayout;
         try {
             fpLayout = fpBuilder.build();
             FeaturePackXmlWriter.getInstance().write(fpLayout.getSpec(), fpDir.resolve(Constants.FEATURE_PACK_XML));
@@ -394,7 +394,7 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         }
     }
 
-    private static PackageSpec addPackage(final Path fpPackagesDir, final FeaturePackLayout.Builder fpBuilder,
+    private static PackageSpec addPackage(final Path fpPackagesDir, final FeaturePackDescription.Builder fpBuilder,
             final PackageSpec.Builder pkgBuilder) throws MojoExecutionException {
         final PackageSpec pkg = pkgBuilder.build();
         fpBuilder.addPackage(pkg);
@@ -414,7 +414,7 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         return pkgBuilder;
     }
 
-    private void addModulesAll(final Path srcModulesDir, final FeaturePackLayout.Builder fpBuilder, final Path targetResources, final Path fpPackagesDir) throws MojoExecutionException {
+    private void addModulesAll(final Path srcModulesDir, final FeaturePackDescription.Builder fpBuilder, final Path targetResources, final Path fpPackagesDir) throws MojoExecutionException {
         debug("WfFeaturePackBuildMojo adding modules.all");
         final PackageSpec.Builder modulesAll = getExtendedPackage(WfConstants.MODULES_ALL, true);
         try(Stream<Path> layers = Files.list(srcModulesDir)) {
@@ -482,7 +482,7 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         }
     }
 
-    private void addDocsSchemas(final Path fpPackagesDir, final FeaturePackLayout.Builder fpBuilder)
+    private void addDocsSchemas(final Path fpPackagesDir, final FeaturePackDescription.Builder fpBuilder)
             throws MojoExecutionException {
         getExtendedPackage(WfConstants.DOCS_SCHEMA, true);
         getExtendedPackage(WfConstants.DOCS, true).addPackageDep(WfConstants.DOCS_SCHEMA, true);
@@ -509,7 +509,7 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         }
     }
 
-    private void addConfigPackages(final Path configDir, final Path packagesDir, final FeaturePackLayout.Builder fpBuilder) throws MojoExecutionException {
+    private void addConfigPackages(final Path configDir, final Path packagesDir, final FeaturePackDescription.Builder fpBuilder) throws MojoExecutionException {
         if(!Files.exists(configDir)) {
             return;
         }
@@ -570,11 +570,11 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
 
             fpBuilder.addFeaturePackDep(depSpec.getName(), FeaturePackConfig.builder(depFpl).init(depConfig).build());
             final Path depZip = resolveArtifact(depGav.toArtifactCoords());
-            fpDependencies.put(depSpec.getName(), FeaturePackLayoutDescriber.describeFeaturePackZip(depZip));
+            fpDependencies.put(depSpec.getName(), FeaturePackDescriber.describeFeaturePackZip(depZip));
         }
     }
 
-    private void packageContent(FeaturePackLayout.Builder fpBuilder, Path contentDir, Path packagesDir) throws IOException, MojoExecutionException {
+    private void packageContent(FeaturePackDescription.Builder fpBuilder, Path contentDir, Path packagesDir) throws IOException, MojoExecutionException {
         try(DirectoryStream<Path> stream = Files.newDirectoryStream(contentDir)) {
             for(Path p : stream) {
                 final String pkgName = p.getFileName().toString();
@@ -665,7 +665,7 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         });
     }
 
-    private void packageModules(FeaturePackLayout.Builder fpBuilder,
+    private void packageModules(FeaturePackDescription.Builder fpBuilder,
             Path resourcesDir, Map<String, Path> moduleXmlByPkgName, Path packagesDir, PackageSpec.Builder modulesAll)
             throws IOException, MojoExecutionException {
 
@@ -693,10 +693,10 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
                             pkgSpecBuilder.addPackageDep(depName, moduleDep.isOptional());
                             continue;
                         }
-                        Map.Entry<String, FeaturePackLayout> depSrc = null;
+                        Map.Entry<String, FeaturePackDescription> depSrc = null;
                         if (!fpDependencies.isEmpty()) {
                             Set<String> alternativeSrc = Collections.emptySet();
-                            for (Map.Entry<String, FeaturePackLayout> depEntry : fpDependencies.entrySet()) {
+                            for (Map.Entry<String, FeaturePackDescription> depEntry : fpDependencies.entrySet()) {
                                 if (depEntry.getValue().hasPackage(depName)) {
                                     if (depSrc != null) {
                                         alternativeSrc = CollectionUtils.add(alternativeSrc, depSrc.getKey());
