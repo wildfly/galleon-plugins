@@ -109,6 +109,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private static final PluginOption OPTION_FORK_EMBEDDED = PluginOption.builder("jboss-fork-embedded").build();
 
     private ProvisioningRuntime runtime;
+    private MessageWriter log;
     private PropertyResolver versionResolver;
 
     private Map<FPID, Properties> fpTasksProps = Collections.emptyMap();
@@ -142,10 +143,10 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     @Override
     public void postInstall(ProvisioningRuntime runtime) throws ProvisioningException {
 
-        final MessageWriter messageWriter = runtime.getMessageWriter();
-        messageWriter.verbose("WildFly Galleon install plugin");
-
         this.runtime = runtime;
+        log = runtime.getMessageWriter();
+        log.verbose("WildFly Galleon Installation Plugin");
+
         thinServer = runtime.isOptionSet(OPTION_MVN_DIST);
 
         final Map<String, String> artifactVersions = new HashMap<>();
@@ -205,13 +206,13 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             processPackages(fp);
         }
 
-        generateConfigs(runtime, messageWriter);
+        generateConfigs(runtime);
 
         // TODO this needs to be revisited
         for(FeaturePackRuntime fp : runtime.getFeaturePacks()) {
             final Path finalizeCli = fp.getResource(WfConstants.WILDFLY, WfConstants.SCRIPTS, "finalize.cli");
             if(Files.exists(finalizeCli)) {
-                CliScriptRunner.runCliScript(runtime.getStagedDir(), finalizeCli, messageWriter);
+                CliScriptRunner.runCliScript(runtime.getStagedDir(), finalizeCli, log);
             }
         }
 
@@ -231,7 +232,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         final Path examplesTmp = runtime.getTmpPath("example-configs");
         final ProvisioningManager pm = ProvisioningManager.builder()
                 .setInstallationHome(examplesTmp)
-                .setMessageWriter(runtime.getMessageWriter())
+                .setMessageWriter(log)
                 .setLayoutFactory(runtime.getLayoutFactory())
                 .build();
 
@@ -275,7 +276,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             configBuilder.addFeaturePackDep(fpBuilder.build());
         }
         try {
-            runtime.getMessageWriter().verbose("Generating example configs");
+            log.verbose("Generating example configs");
             ProvisioningConfig config = configBuilder.build();
             Map<String, String> options = runtime.getPluginOptions();
             if(!options.containsKey(OPTION_MVN_DIST.getName())) {
@@ -299,7 +300,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
     }
 
-    private void generateConfigs(ProvisioningRuntime runtime, final MessageWriter messageWriter) throws ProvisioningException {
+    private void generateConfigs(ProvisioningRuntime runtime) throws ProvisioningException {
         if(!runtime.hasConfigs()) {
             return;
         }
@@ -319,11 +320,10 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         } catch (IOException e) {
             throw new ProvisioningException("Failed to init classpath for " + runtime.getStagedDir(), e);
         }
-        if(runtime.getMessageWriter().isVerboseEnabled()) {
-            final MessageWriter mw = runtime.getMessageWriter();
-            mw.verbose("Config generator classpath:");
+        if(log.isVerboseEnabled()) {
+            log.verbose("Config generator classpath:");
             for(int i = 0; i < cp.length; ++i) {
-                mw.verbose(i+1 + ". %s", cp[i]);
+                log.verbose(i+1 + ". " + cp[i]);
             }
         }
 
@@ -368,6 +368,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     }
 
     private void processPackages(final FeaturePackRuntime fp) throws ProvisioningException {
+        log.verbose("Processing packages of %s", fp.getFPID());
         for(PackageRuntime pkg : fp.getPackages()) {
             final Path pmWfDir = pkg.getResource(WfConstants.PM, WfConstants.WILDFLY);
             if(!Files.exists(pmWfDir)) {
@@ -375,7 +376,9 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             }
             final Path moduleDir = pmWfDir.resolve(WfConstants.MODULE);
             if(Files.exists(moduleDir)) {
+                log.verbose("Processing jboss modules for %s", pkg.getName());
                 processModules(fp.getFPID(), pkg.getName(), moduleDir);
+                log.verbose(" Processed jboss modules for %s", pkg.getName());
             }
             final Path tasksXml = pmWfDir.resolve(WfConstants.TASKS_XML);
             if(!Files.exists(tasksXml)) {
@@ -383,6 +386,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             }
             final WildFlyPackageTasks pkgTasks = WildFlyPackageTasks.load(tasksXml);
             if (pkgTasks.hasTasks()) {
+                log.verbose("Processing package tasks for %s", pkg.getName());
                 for(WildFlyPackageTask task : pkgTasks.getTasks()) {
                     if(task.getPhase() == WildFlyPackageTask.Phase.PROCESSING) {
                         task.execute(this, pkg);
@@ -391,11 +395,13 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                         finalizingTasksPkgs = CollectionUtils.add(finalizingTasksPkgs, pkg);
                     }
                 }
+                log.verbose("Processed package tasks for %s", pkg.getName());
             }
             if (pkgTasks.hasMkDirs()) {
                 mkdirs(pkgTasks, this.runtime.getStagedDir());
             }
         }
+        log.verbose("Processed packages of %s", fp.getFPID());
     }
 
     public void xslTransform(FeaturePackRuntime fp, XslTransform xslt, Path pmWfDir) throws ProvisioningException {
@@ -567,7 +573,9 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 final Path moduleArtifact;
 
                 try {
+                    log.verbose("Resolving %s", coords);
                     moduleArtifact = runtime.resolveArtifact(coords);
+                    log.verbose("  resolved");
                 } catch (ProvisioningException e) {
                     throw new IOException(e);
                 }
@@ -584,8 +592,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                         final File target = new File(targetDir.toFile(),
                                 new StringBuilder().append(artifactFileName.substring(0, lastDot)).append("-jandex")
                                         .append(artifactFileName.substring(lastDot)).toString());
-                        JandexIndexer.createIndex(moduleArtifact.toFile(), new FileOutputStream(target),
-                                runtime.getMessageWriter());
+                        JandexIndexer.createIndex(moduleArtifact.toFile(), new FileOutputStream(target), log);
                         finalFileName = target.getName();
                     } else {
                         finalFileName = artifactFileName;
@@ -652,6 +659,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
         try {
             final ArtifactCoords coords = fromJBossModules(gavString, JAR);
+            log.verbose("Resolving artifact %s ", coords.toString());
             final Path jarSrc = this.runtime.resolveArtifact(coords);
             String location = copyArtifact.getToLocation();
             if (!location.isEmpty() && location.charAt(location.length() - 1) == '/') {
@@ -663,15 +671,16 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             final Path jarTarget = runtime.getStagedDir().resolve(location);
 
             Files.createDirectories(jarTarget.getParent());
+            log.verbose("Copying artifact %s to %s", jarSrc, jarTarget);
             if (copyArtifact.isExtract()) {
                 extractArtifact(jarSrc, jarTarget, copyArtifact);
             } else {
                 IoUtils.copy(jarSrc, jarTarget);
             }
-            runtime.getMessageWriter().verbose("    Copying artifact %s to %s", jarSrc, jarTarget);
             if(schemaGroups.contains(coords.getGroupId())) {
                 extractSchemas(jarSrc);
             }
+            log.verbose("  copied");
         } catch (IOException e) {
             throw new ProvisioningException("Failed to copy artifact " + gavString, e);
         }
