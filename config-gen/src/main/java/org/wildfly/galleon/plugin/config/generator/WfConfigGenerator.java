@@ -37,6 +37,8 @@ import org.jboss.dmr.ModelNode;
 import org.jboss.galleon.Errors;
 import org.jboss.galleon.MessageWriter;
 import org.jboss.galleon.ProvisioningException;
+import org.jboss.galleon.layout.ProvisioningLayoutFactory;
+import org.jboss.galleon.progresstracking.ProgressTracker;
 import org.jboss.galleon.runtime.ProvisioningRuntime;
 import org.jboss.galleon.state.ProvisionedConfig;
 import org.wildfly.core.embedded.EmbeddedManagedProcess;
@@ -100,8 +102,14 @@ public class WfConfigGenerator implements ForkedEmbeddedUtil.ForkCallback {
             initScriptWriter(runtime);
         }
 
+        final ProgressTracker<ProvisionedConfig> progressTracker = runtime.getLayoutFactory()
+                .getProgressTracker(ProvisioningLayoutFactory.TRACK_CONFIGS);
+
         try(WfProvisionedConfigHandler configHandler = new WfProvisionedConfigHandler(runtime, this)) {
-            for (ProvisionedConfig config : runtime.getConfigs()) {
+            final List<ProvisionedConfig> configs = runtime.getConfigs();
+            progressTracker.starting(configs.size());
+            for (ProvisionedConfig config : configs) {
+                progressTracker.processing(config);
                 if (runtime.getMessageWriter().isVerboseEnabled()) {
                     final StringBuilder msg = new StringBuilder(64).append("Feature config");
                     if (config.getModel() != null) {
@@ -119,7 +127,9 @@ public class WfConfigGenerator implements ForkedEmbeddedUtil.ForkCallback {
                     }
                 }
                 config.handle(configHandler);
+                progressTracker.processed(config);
             }
+            progressTracker.complete();
         }
 
         if(forkEmbedded) {

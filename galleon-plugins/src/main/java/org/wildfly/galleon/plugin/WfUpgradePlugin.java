@@ -38,9 +38,11 @@ public class WfUpgradePlugin implements UpgradePlugin {
     @Override
     public void upgrade(ProvisioningRuntime runtime, Path customizedInstallation) throws ProvisioningException {
         try {
-            FileSystemMerge fsMerge = FileSystemMerge.Factory.getInstance(Strategy.OURS, runtime.getMessageWriter(),runtime.getInstallDir(), customizedInstallation);
+            //FileSystemMerge fsMerge = FileSystemMerge.Factory.getInstance(Strategy.OURS, runtime.getMessageWriter(),runtime.getInstallDir(), customizedInstallation);
+            FileSystemMerge fsMerge = FileSystemMerge.Factory.getInstance(Strategy.OURS, runtime.getMessageWriter(),runtime.getStagedDir(), customizedInstallation);
             fsMerge.executeUpdate(runtime.getDiff());
-            EmbeddedServerInvoker embeddedServer = new EmbeddedServerInvoker(runtime.getMessageWriter(), runtime.getInstallDir().toAbsolutePath(), null);
+            //EmbeddedServerInvoker embeddedServer = new EmbeddedServerInvoker(runtime.getMessageWriter(), runtime.getInstallDir().toAbsolutePath(), null);
+            EmbeddedServerInvoker embeddedServer = new EmbeddedServerInvoker(runtime.getMessageWriter(), runtime.getStagedDir().toAbsolutePath(), null);
             for(Path script :  ((WfDiffResult)runtime.getDiff()).getScripts()) {
                 List<String> lines = Files.readAllLines(script);
                 embeddedServer.execute(lines);

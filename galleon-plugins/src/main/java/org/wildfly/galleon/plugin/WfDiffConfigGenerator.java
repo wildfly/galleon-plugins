@@ -78,7 +78,8 @@ public class WfDiffConfigGenerator {
         String password = runtime.getOptionValue(PASSWORD);
         String serverConfig = runtime.getOptionValue(SERVER_CONFIG);
         CompleteServerInvoker server = new CompleteServerInvoker(customizedInstallation.toAbsolutePath(), runtime.getMessageWriter(), serverConfig);
-        EmbeddedServerInvoker embeddedServer = new EmbeddedServerInvoker(runtime.getMessageWriter(), runtime.getInstallDir().toAbsolutePath(), serverConfig);
+        //EmbeddedServerInvoker embeddedServer = new EmbeddedServerInvoker(runtime.getMessageWriter(), runtime.getInstallDir().toAbsolutePath(), serverConfig);
+        EmbeddedServerInvoker embeddedServer = new EmbeddedServerInvoker(runtime.getMessageWriter(), runtime.getStagedDir().toAbsolutePath(), serverConfig);
         try {
             Files.createDirectories(target);
             server.startServer();
