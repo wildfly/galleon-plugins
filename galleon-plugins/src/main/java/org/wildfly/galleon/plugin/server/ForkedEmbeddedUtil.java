@@ -32,6 +32,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.jboss.galleon.Errors;
 import org.jboss.galleon.ProvisioningException;
@@ -51,6 +53,25 @@ public class ForkedEmbeddedUtil {
         default void forkedEmbeddedMessage(String msg) {}
     }
 
+    private static int javaVersion = -1;
+
+    private static int getJavaVersion() {
+        if (javaVersion < 0) {
+            try {
+                String vmVersionStr = System.getProperty("java.specification.version", null);
+                Matcher matcher = Pattern.compile("^(?:1\\.)?(\\d+)$").matcher(vmVersionStr); // match 1.<number> or <number>
+                if (matcher.find()) {
+                    javaVersion = Integer.valueOf(matcher.group(1));
+                } else {
+                    throw new RuntimeException("Unknown version of jvm " + vmVersionStr);
+                }
+            } catch (Exception e) {
+                javaVersion = 8;
+            }
+        }
+        return javaVersion;
+    }
+
     public static void fork(ForkCallback callback, String... args) throws ProvisioningException {
         final Path props = storeSystemProps();
         try {
@@ -65,8 +86,13 @@ public class ForkedEmbeddedUtil {
         final StringBuilder cp = new StringBuilder();
         collectCpUrls(System.getProperty("java.home"), Thread.currentThread().getContextClassLoader(), cp);
 
-        final List<String> argsList = new ArrayList<>(6 + args.length);
+        final List<String> argsList = new ArrayList<>(9 + args.length);
         argsList.add("java");
+        argsList.add("-server");
+        if (getJavaVersion() >= 11) {
+            argsList.add("--add-modules");
+            argsList.add("java.se");
+        }
         argsList.add("-cp");
         argsList.add(cp.toString());
         argsList.add(ForkedEmbeddedUtil.class.getName());
