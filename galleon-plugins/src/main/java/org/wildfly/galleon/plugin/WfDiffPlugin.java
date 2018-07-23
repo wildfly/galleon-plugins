@@ -82,9 +82,11 @@ public class WfDiffPlugin extends ProvisioningPluginWithOptions implements DiffP
     public void computeDiff(ProvisioningRuntime runtime, Path customizedInstallation, Path target) throws ProvisioningException {
         final MessageWriter messageWriter = runtime.getMessageWriter();
         messageWriter.verbose("WildFly diff plug-in");
-        FileSystemDiff diff = new FileSystemDiff(messageWriter, runtime.getInstallDir(), customizedInstallation);
+        //FileSystemDiff diff = new FileSystemDiff(messageWriter, runtime.getInstallDir(), customizedInstallation);
+        FileSystemDiff diff = new FileSystemDiff(messageWriter, runtime.getStagedDir(), customizedInstallation);
         final ClassLoader originalCl = Thread.currentThread().getContextClassLoader();
-        URLClassLoader newCl = ClassLoaderHelper.prepareProvisioningClassLoader(runtime.getInstallDir(), originalCl);
+        //URLClassLoader newCl = ClassLoaderHelper.prepareProvisioningClassLoader(runtime.getInstallDir(), originalCl);
+        URLClassLoader newCl = ClassLoaderHelper.prepareProvisioningClassLoader(runtime.getStagedDir(), originalCl);
         Properties props = System.getProperties();
         ConfigModel config;
         Thread.currentThread().setContextClassLoader(newCl);
