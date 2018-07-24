@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.wildfly.galleon.plugin;
+package org.wildfly.galleon.plugin.config.generator;
 
 import static org.jboss.galleon.Constants.GLN_UNDEFINED;
 import static org.wildfly.galleon.plugin.WfConstants.ADDR_PARAMS;
@@ -27,21 +27,20 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
 import javax.xml.stream.XMLStreamException;
 
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.Property;
-import org.jboss.galleon.ProvisioningDescriptionException;
 import org.jboss.galleon.ProvisioningException;
 import org.jboss.galleon.config.ConfigId;
 import org.jboss.galleon.config.ConfigModel;
 import org.jboss.galleon.config.FeatureConfig;
 import org.jboss.galleon.config.FeaturePackConfig;
-import org.jboss.galleon.plugin.PluginOption;
 import org.jboss.galleon.runtime.FeaturePackRuntime;
 import org.jboss.galleon.runtime.ProvisioningRuntime;
 import org.jboss.galleon.runtime.ResolvedFeatureSpec;
@@ -50,8 +49,9 @@ import org.jboss.galleon.spec.FeatureId;
 import org.jboss.galleon.spec.FeatureParameterSpec;
 import org.jboss.galleon.spec.FeatureSpec;
 import org.jboss.galleon.universe.FeaturePackLocation.FPID;
-import org.wildfly.galleon.plugin.server.CompleteServerInvoker;
-import org.wildfly.galleon.plugin.server.EmbeddedServerInvoker;
+import org.jboss.galleon.util.IoUtils;
+import org.jboss.galleon.xml.ConfigXmlWriter;
+import org.wildfly.galleon.plugin.WfDiffPlugin;
 
 /**
  *
@@ -60,47 +60,58 @@ import org.wildfly.galleon.plugin.server.EmbeddedServerInvoker;
 public class WfDiffConfigGenerator {
 
     private static final String CONFIGURE_SYNC = "/synchronization=simple:add(host=%s, port=%s, protocol=%s, username=%s, password=%s)";
-    private static final String EXPORT_DIFF = "attachment save --overwrite --operation=/synchronization=simple:export-diff --file=%s";
-    private static final String EXPORT_FEATURE = "attachment save --overwrite --operation=/synchronization=simple:feature-diff --file=%s";
+    private static final String EXPORT_DIFF = "attachment save --overwrite --operation=/synchronization=simple:export-diff --file=";
+    private static final String EXPORT_FEATURE = "attachment save --overwrite --operation=/synchronization=simple:feature-diff --file=";
 
-    static final PluginOption HOST = PluginOption.builder("host").setDefaultValue("127.0.0.1").build();
-    static final PluginOption PORT = PluginOption.builder("port").setDefaultValue("9990").build();
-    static final PluginOption PROTOCOL = PluginOption.builder("protocol").setDefaultValue("remote+http").build();
-    static final PluginOption USERNAME = PluginOption.builder("username").setRequired().build();
-    static final PluginOption PASSWORD = PluginOption.builder("password").setRequired().build();
-    static final PluginOption SERVER_CONFIG = PluginOption.builder("server-config").setDefaultValue("standalone.xml").build();
-
-    public static ConfigModel exportDiff (ProvisioningRuntime runtime, Map<FPID, ConfigId> includedConfigs, Path customizedInstallation, Path target) throws ProvisioningException {
-        String host = runtime.getOptionValue(HOST);
-        String port = runtime.getOptionValue(PORT);
-        String protocol = runtime.getOptionValue(PROTOCOL);
-        String username = runtime.getOptionValue(USERNAME);
-        String password = runtime.getOptionValue(PASSWORD);
-        String serverConfig = runtime.getOptionValue(SERVER_CONFIG);
+    public static List<ConfigModel> exportDiff (ProvisioningRuntime runtime, Map<FPID, ConfigId> includedConfigs, Path customizedInstallation, Path target) throws ProvisioningException {
+        final String host = runtime.getOptionValue(WfDiffPlugin.HOST);
+        final String port = runtime.getOptionValue(WfDiffPlugin.PORT);
+        final String protocol = runtime.getOptionValue(WfDiffPlugin.PROTOCOL);
+        final String username = runtime.getOptionValue(WfDiffPlugin.USERNAME);
+        final String password = runtime.getOptionValue(WfDiffPlugin.PASSWORD);
+        final String serverConfig = runtime.getOptionValue(WfDiffPlugin.SERVER_CONFIG);
         CompleteServerInvoker server = new CompleteServerInvoker(customizedInstallation.toAbsolutePath(), runtime.getMessageWriter(), serverConfig);
-        //EmbeddedServerInvoker embeddedServer = new EmbeddedServerInvoker(runtime.getMessageWriter(), runtime.getInstallDir().toAbsolutePath(), serverConfig);
-        EmbeddedServerInvoker embeddedServer = new EmbeddedServerInvoker(runtime.getMessageWriter(), runtime.getStagedDir().toAbsolutePath(), serverConfig);
+
+        Path script = null;
         try {
             Files.createDirectories(target);
-            server.startServer();
-            embeddedServer.execute(
+
+            script = writeScript(runtime,
+                    //"embed-server --admin-only --std-out=echo --server-config=" + serverConfig,
+                    "embed-server --admin-only --server-config=" + serverConfig,
                     String.format(CONFIGURE_SYNC, host, port, protocol, username, password),
-                    String.format(EXPORT_DIFF, target.resolve("finalize.cli").toAbsolutePath()),
-                    String.format(EXPORT_FEATURE, target.resolve("feature_config.dmr").toAbsolutePath()));
+                    EXPORT_DIFF + target.resolve("finalize.cli").toAbsolutePath(),
+                    EXPORT_FEATURE + target.resolve("feature_config.dmr").toAbsolutePath(),
+                    "stop-embedded-server"
+                    );
+
+            server.startServer();
+            runtime.getMessageWriter().print("Identifying config differences");
+            ScriptRunner.runCliScript(runtime.getStagedDir(), script, runtime.getMessageWriter());
+            runtime.getMessageWriter().print("Identified config differences");
+            server.stopServer();
+
             ConfigModel.Builder configBuilder = ConfigModel.builder().setName("standalone.xml").setModel("standalone");
             createConfiguration(runtime, configBuilder, includedConfigs, target.resolve("feature_config.dmr").toAbsolutePath());
-            return configBuilder.build();
+            final ConfigModel config = configBuilder.build();
+            ConfigXmlWriter.getInstance().write(config, target.resolve("config.xml"));
+            return Collections.singletonList(config);
         } catch (IOException | XMLStreamException ex) {
             runtime.getMessageWriter().error(ex, "Couldn't compute the WildFly Model diff because of %s", ex.getMessage());
             throw new ProvisioningException("Couldn't compute the WildFly Model diff", ex);
         } finally {
-            server.stopServer();
+            if(server.isServerActive()) {
+                server.stopServer();
+            }
+            if(script != null) {
+                IoUtils.recursiveDelete(script);
+            }
         }
     }
 
     private static void createConfiguration(ProvisioningRuntime runtime, ConfigModel.Builder builder,
             Map<FPID, ConfigId> includedConfigBuilders, Path json)
-            throws IOException, XMLStreamException, ProvisioningDescriptionException {
+            throws IOException, XMLStreamException, ProvisioningException {
         try (InputStream in = Files.newInputStream(json)) {
             ModelNode featureDiff = ModelNode.fromBase64(in);
             for (ModelNode feature : featureDiff.asList()) {
@@ -139,7 +150,7 @@ public class WfDiffConfigGenerator {
         }
     }
 
-    private static DependencySpec getFeatureSpec(ProvisioningRuntime runtime, String name) throws ProvisioningDescriptionException {
+    private static DependencySpec getFeatureSpec(ProvisioningRuntime runtime, String name) throws ProvisioningException {
         for (FeaturePackRuntime fp : runtime.getFeaturePacks()) {
             ResolvedFeatureSpec spec = fp.getResolvedFeatureSpec(name);
             if (spec != null) {
@@ -199,6 +210,19 @@ public class WfDiffConfigGenerator {
             this.fpName = fpName;
             this.spec = spec;
             this.fpid = fpid;
+        }
+    }
+
+    private static Path writeScript(ProvisioningRuntime runtime, String... commands) throws ProvisioningException {
+        try {
+            final Path script = runtime.getTmpPath("diff-gen.cli");
+            if(!Files.exists(script.getParent())) {
+                Files.createDirectories(script.getParent());
+            }
+            Files.write(script, Arrays.asList(commands));
+            return script;
+        } catch (IOException e) {
+            throw new ProvisioningException("Failed to create a script", e);
         }
     }
 }
