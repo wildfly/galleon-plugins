@@ -164,7 +164,7 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
      * The name of the release the feature-pack represents which will be stored in the feature-pack's
      * `resources/wildfly/wildfly-tasks.properties` as `product.release.name` property.
      */
-    @Parameter(alias="release-name", defaultValue = "${product.release.name}", required=true)
+    @Parameter(alias="release-name", defaultValue = "${product.release.name}")
     private String releaseName;
 
     /**
@@ -742,7 +742,9 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         final Properties properties = new Properties();
         properties.put("project.version", project.getVersion());
         properties.put("version", project.getVersion()); // needed for licenses.xsl
-        properties.put("product.release.name", releaseName);
+        if (releaseName != null) {
+            properties.put("product.release.name", releaseName);
+        }
         if(taskPropsFile != null) {
             final Path p = taskPropsFile.toPath();
             if(!Files.exists(p)) {
