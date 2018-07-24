@@ -80,8 +80,6 @@ import org.jboss.galleon.layout.ProvisioningLayoutFactory;
 import org.jboss.galleon.plugin.InstallPlugin;
 import org.jboss.galleon.plugin.PluginOption;
 import org.jboss.galleon.plugin.ProvisioningPluginWithOptions;
-import org.jboss.galleon.progresstracking.DefaultProgressTracker;
-import org.jboss.galleon.progresstracking.ProgressCallback;
 import org.jboss.galleon.progresstracking.ProgressTracker;
 import org.jboss.galleon.runtime.FeaturePackRuntime;
 import org.jboss.galleon.runtime.PackageRuntime;
@@ -208,11 +206,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         mergedTaskPropsResolver = new MapPropertyResolver(mergedTaskProps);
         versionResolver = new MapPropertyResolver(artifactVersions);
 
-        if(runtime.getLayoutFactory().hasProgressCallback(ProvisioningLayoutFactory.TRACK_PACKAGES)) {
-            pkgProgressTracker = runtime.getLayoutFactory().getProgressTracker(ProvisioningLayoutFactory.TRACK_PACKAGES);
-        } else {
-            pkgProgressTracker = getDefaultPackageTracker();
-        }
+        pkgProgressTracker = runtime.getLayoutFactory().getProgressTracker(ProvisioningLayoutFactory.TRACK_PACKAGES);
         long pkgsTotal = 0;
         for(FeaturePackRuntime fp : runtime.getFeaturePacks()) {
             pkgsTotal += fp.getPackageNames().size();
@@ -850,40 +844,5 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             }
         }
         return new ArtifactCoords(groupId, artifactId, version, classifier, extension);
-    }
-
-    private DefaultProgressTracker<PackageRuntime> getDefaultPackageTracker() {
-        return new DefaultProgressTracker<>(new ProgressCallback<PackageRuntime>() {
-
-            @Override
-            public long getProgressPulsePct() {
-                return 5;
-            }
-
-            @Override
-            public long getMinPulseIntervalMs() {
-                return 1500;
-            }
-
-            @Override
-            public long getMaxPulseIntervalMs() {
-                return 1500;
-            }
-
-            @Override
-            public void starting(ProgressTracker<PackageRuntime> tracker) {
-                log.print("Installing packages");
-            }
-
-            @Override
-            public void pulse(ProgressTracker<PackageRuntime> tracker) {
-                log.print("  %s of %s packages installed (%s%%)", tracker.getProcessedVolume(), tracker.getTotalVolume(), ((double)Math.round(tracker.getProgress()*10))/10);
-            }
-
-            @Override
-            public void complete(ProgressTracker<PackageRuntime> tracker) {
-                log.print("Complete.");
-            }
-        });
     }
 }
