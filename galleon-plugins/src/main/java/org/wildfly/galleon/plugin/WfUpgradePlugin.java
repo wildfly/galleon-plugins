@@ -24,6 +24,7 @@ import java.util.List;
 
 import org.jboss.galleon.ProvisioningException;
 import org.jboss.galleon.diff.FileSystemMerge;
+import org.jboss.galleon.diff.ProvisioningDiffResult;
 import org.jboss.galleon.diff.Strategy;
 import org.jboss.galleon.plugin.UpgradePlugin;
 import org.jboss.galleon.runtime.ProvisioningRuntime;
@@ -36,14 +37,14 @@ import org.wildfly.galleon.plugin.server.EmbeddedServerInvoker;
 public class WfUpgradePlugin implements UpgradePlugin {
 
     @Override
-    public void upgrade(ProvisioningRuntime runtime, Path customizedInstallation) throws ProvisioningException {
+    public void upgrade(ProvisioningRuntime runtime, ProvisioningDiffResult diff, Path customizedInstallation) throws ProvisioningException {
         try {
             //FileSystemMerge fsMerge = FileSystemMerge.Factory.getInstance(Strategy.OURS, runtime.getMessageWriter(),runtime.getInstallDir(), customizedInstallation);
             FileSystemMerge fsMerge = FileSystemMerge.Factory.getInstance(Strategy.OURS, runtime.getMessageWriter(),runtime.getStagedDir(), customizedInstallation);
-            fsMerge.executeUpdate(runtime.getDiff());
+            fsMerge.executeUpdate(diff);
             //EmbeddedServerInvoker embeddedServer = new EmbeddedServerInvoker(runtime.getMessageWriter(), runtime.getInstallDir().toAbsolutePath(), null);
             EmbeddedServerInvoker embeddedServer = new EmbeddedServerInvoker(runtime.getMessageWriter(), runtime.getStagedDir().toAbsolutePath(), null);
-            for(Path script :  ((WfDiffResult)runtime.getDiff()).getScripts()) {
+            for(Path script :  ((WfDiffResult)diff).getScripts()) {
                 List<String> lines = Files.readAllLines(script);
                 embeddedServer.execute(lines);
             }
