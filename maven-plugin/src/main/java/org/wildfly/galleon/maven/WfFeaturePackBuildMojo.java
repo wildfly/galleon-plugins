@@ -267,9 +267,9 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
             throw new MojoExecutionException("Failed to process dependencies", e);
         }
 
-        final Path srcModulesDir = targetResources.resolve(WfConstants.MODULES).resolve(WfConstants.SYSTEM).resolve(WfConstants.LAYERS);
+        final Path srcModulesDir = targetResources.resolve(WfConstants.MODULES);
         if (Files.exists(srcModulesDir)) {
-            addModulesAll(srcModulesDir, fpBuilder, targetResources, fpPackagesDir);
+            addModulePackages(srcModulesDir, fpBuilder, targetResources, fpPackagesDir);
         } else{
             getLog().warn("No modules found at " + srcModulesDir);
         }
@@ -414,22 +414,40 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         return pkgBuilder;
     }
 
-    private void addModulesAll(final Path srcModulesDir, final FeaturePackDescription.Builder fpBuilder, final Path targetResources, final Path fpPackagesDir) throws MojoExecutionException {
-        debug("WfFeaturePackBuildMojo adding modules.all");
-        final PackageSpec.Builder modulesAll = getExtendedPackage(WfConstants.MODULES_ALL, true);
-        try(Stream<Path> layers = Files.list(srcModulesDir)) {
-            final Map<String, Path> moduleXmlByPkgName = new HashMap<>();
-            final Iterator<Path> i = layers.iterator();
-            while(i.hasNext()) {
-                findModules(i.next(), moduleXmlByPkgName);
-                if (moduleXmlByPkgName.isEmpty()) {
-                    throw new MojoExecutionException("Modules not found in " + srcModulesDir);
+    private void addModulePackages(final Path srcModulesDir, final FeaturePackDescription.Builder fpBuilder, final Path targetResources, final Path fpPackagesDir) throws MojoExecutionException {
+        debug("WfFeaturePackBuildMojo adding module packages");
+        final Path layersDir = srcModulesDir.resolve(WfConstants.SYSTEM).resolve(WfConstants.LAYERS);
+        if (Files.exists(layersDir)) {
+            final PackageSpec.Builder modulesAll = getExtendedPackage(WfConstants.MODULES_ALL, true);
+            try (Stream<Path> layers = Files.list(layersDir)) {
+                final Map<String, Path> moduleXmlByPkgName = new HashMap<>();
+                final Iterator<Path> i = layers.iterator();
+                while (i.hasNext()) {
+                    final Path layerDir = i.next();
+                    findModules(layerDir, moduleXmlByPkgName);
+                    if (moduleXmlByPkgName.isEmpty()) {
+                        throw new MojoExecutionException("Modules not found in " + layerDir);
+                    }
                 }
+                packageModules(fpBuilder, targetResources, moduleXmlByPkgName, fpPackagesDir, modulesAll);
+            } catch (IOException e) {
+                throw new MojoExecutionException("Failed to process modules content", e);
             }
-            packageModules(fpBuilder, targetResources, moduleXmlByPkgName, fpPackagesDir, modulesAll);
-        } catch (IOException e) {
-            throw new MojoExecutionException("Failed to process modules content", e);
         }
+        final Path layersConf = srcModulesDir.resolve(WfConstants.LAYERS_CONF);
+        if(!Files.exists(layersConf)) {
+            return;
+        }
+        final Path targetPath = fpPackagesDir.resolve(WfConstants.LAYERS_CONF).resolve(Constants.CONTENT).resolve(WfConstants.MODULES).resolve(WfConstants.LAYERS_CONF);
+        try {
+            Files.createDirectories(targetPath.getParent());
+            IoUtils.copy(layersConf, targetPath);
+        } catch (IOException e) {
+            throw new MojoExecutionException(Errors.copyFile(layersConf, targetPath), e);
+        }
+        final PackageSpec.Builder pkgBuilder = PackageSpec.builder(WfConstants.LAYERS_CONF);
+        addPackage(fpPackagesDir, fpBuilder, pkgBuilder);
+        fpBuilder.getSpecBuilder().addDefaultPackage(WfConstants.LAYERS_CONF);
     }
 
     private void copyDirIfExists(final Path srcDir, final Path targetDir) throws MojoExecutionException {
