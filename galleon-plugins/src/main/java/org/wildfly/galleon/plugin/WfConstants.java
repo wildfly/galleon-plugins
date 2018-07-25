@@ -40,6 +40,7 @@ public interface WfConstants {
     String HOST = "host";
     String LAYOUT = "layout";
     String LAYERS = "layers";
+    String LAYERS_CONF = "layers.conf";
     String MODULE = "module";
     String MODULE_XML = "module.xml";
     String MODULES = "modules";
