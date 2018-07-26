@@ -435,7 +435,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     }
 
     private void processPackages(final FeaturePackRuntime fp) throws ProvisioningException {
-        log.verbose("Processing packages of %s", fp.getFPID());
+        log.verbose("Processing %s packages", fp.getFPID());
         for(PackageRuntime pkg : fp.getPackages()) {
             pkgProgressTracker.processing(pkg);
             final Path pmWfDir = pkg.getResource(WfConstants.PM, WfConstants.WILDFLY);
@@ -445,9 +445,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             }
             final Path moduleDir = pmWfDir.resolve(WfConstants.MODULE);
             if(Files.exists(moduleDir)) {
-                log.verbose("Processing jboss modules for %s", pkg.getName());
                 processModules(fp.getFPID(), pkg.getName(), moduleDir);
-                log.verbose(" Processed jboss modules for %s", pkg.getName());
             }
             final Path tasksXml = pmWfDir.resolve(WfConstants.TASKS_XML);
             if(!Files.exists(tasksXml)) {
@@ -456,7 +454,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             }
             final WildFlyPackageTasks pkgTasks = WildFlyPackageTasks.load(tasksXml);
             if (pkgTasks.hasTasks()) {
-                log.verbose("Processing package tasks for %s", pkg.getName());
+                log.verbose("Processing %s package %s tasks", fp.getFPID(), pkg.getName());
                 for(WildFlyPackageTask task : pkgTasks.getTasks()) {
                     if(task.getPhase() == WildFlyPackageTask.Phase.PROCESSING) {
                         task.execute(this, pkg);
@@ -465,14 +463,12 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                         finalizingTasksPkgs = CollectionUtils.add(finalizingTasksPkgs, pkg);
                     }
                 }
-                log.verbose("Processed package tasks for %s", pkg.getName());
             }
             if (pkgTasks.hasMkDirs()) {
                 mkdirs(pkgTasks, this.runtime.getStagedDir());
             }
             pkgProgressTracker.processed(pkg);
         }
-        log.verbose("Processed packages of %s", fp.getFPID());
     }
 
     public void xslTransform(FeaturePackRuntime fp, XslTransform xslt, Path pmWfDir) throws ProvisioningException {
@@ -610,8 +606,11 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 }
                 final String resolved = versionResolver.resolveProperty(artifactName);
                 if (resolved != null) {
-                    final ArtifactCoords coords = fromJBossModules(resolved, JAR);
-                    versionAttribute.setValue(coords.getVersion());
+                    try {
+                        versionAttribute.setValue(toArtifactCoords(resolved, false).getVersion());
+                    } catch (ProvisioningException e) {
+                        throw new IOException("Failed to resolve artifact coordinates for " + resolved, e);
+                    }
                 }
             }
         }
@@ -640,16 +639,21 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                     continue;
                 }
 
-                final ArtifactCoords coords = fromJBossModules(coordsStr, JAR);
+                ArtifactCoords coords;
+                try {
+                    coords = toArtifactCoords(coordsStr, false);
+                } catch (ProvisioningException e) {
+                    throw new IOException("Failed to resolve full coordinates for " + coordsStr, e);
+                }
                 final Path moduleArtifact;
 
+                log.verbose("Resolving %s", coords);
                 try {
-                    log.verbose("Resolving %s", coords);
                     moduleArtifact = runtime.resolveArtifact(coords);
-                    log.verbose("  resolved");
-                } catch (ProvisioningException e) {
-                    throw new IOException(e);
+                } catch (ArtifactException e) {
+                    throw new IOException("Failed to resolve artifact " + coords, e);
                 }
+
                 if (thinServer) {
                     // ignore jandex variable, just resolve coordinates to a string
                     attribute.setValue(coordsStr);
@@ -720,17 +724,13 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     }
 
     public void copyArtifact(CopyArtifact copyArtifact) throws ProvisioningException, ArtifactException {
-        final String artifactStr = copyArtifact.getArtifact();
-        final String gavString = versionResolver.resolveProperty(artifactStr);
-        if(gavString == null) {
-            if(copyArtifact.isOptional()) {
-                return;
-            }
-            throw new ProvisioningException("Failed to resolve the version of " + artifactStr);
+        final ArtifactCoords coords = toArtifactCoords(copyArtifact.getArtifact(), copyArtifact.isOptional());
+        if(coords == null) {
+            return;
         }
         try {
-            final ArtifactCoords coords = fromJBossModules(gavString, JAR);
-            log.verbose("Resolving artifact %s ", coords.toString());
+
+            log.verbose("Resolving artifact %s ", coords);
             final Path jarSrc = this.runtime.resolveArtifact(coords);
             String location = copyArtifact.getToLocation();
             if (!location.isEmpty() && location.charAt(location.length() - 1) == '/') {
@@ -751,9 +751,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             if(schemaGroups.contains(coords.getGroupId())) {
                 extractSchemas(jarSrc);
             }
-            log.verbose("  copied");
         } catch (IOException e) {
-            throw new ProvisioningException("Failed to copy artifact " + gavString, e);
+            throw new ProvisioningException("Failed to copy artifact " + coords, e);
         }
     }
 
@@ -879,8 +878,9 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
     }
 
-    private static ArtifactCoords fromJBossModules(String str, String extension) {
-        final String[] parts = str.split(":");
+    private ArtifactCoords toArtifactCoords(String str, boolean optional) throws ProvisioningException {
+
+        String[] parts = str.split(":");
         if(parts.length < 2) {
             throw new IllegalArgumentException("Unexpected artifact coordinates format: " + str);
         }
@@ -888,17 +888,38 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         final String artifactId = parts[1];
         String version = null;
         String classifier = null;
+        String ext = JAR;
         if(parts.length > 2) {
             if(!parts[2].isEmpty()) {
                 version = parts[2];
             }
-            if(parts.length > 3 && !parts[3].isEmpty()) {
+            if(parts.length > 3) {
                 classifier = parts[3];
-                if(parts.length > 4) {
-                    throw new IllegalArgumentException("Unexpected artifact coordinates format: " + str);
+                if(parts.length > 4 && !parts[4].isEmpty()) {
+                    ext = parts[4];
+                    if (parts.length > 5) {
+                        throw new IllegalArgumentException("Unexpected artifact coordinates format: " + str);
+                    }
                 }
             }
         }
-        return new ArtifactCoords(groupId, artifactId, version, classifier, extension);
+
+        if(version != null) {
+            return new ArtifactCoords(groupId, artifactId, version, classifier, ext);
+        }
+
+        final String resolvedStr = versionResolver.resolveProperty(groupId + ':' + artifactId);
+        if (resolvedStr == null) {
+            if (optional) {
+                return null;
+            }
+            throw new ProvisioningException("Failed to resolve the version of " + str);
+        }
+
+        parts = resolvedStr.split(":");
+        if(parts.length < 3) {
+            throw new ProvisioningException("Failed to resolve version for artifact: " + resolvedStr);
+        }
+        return new ArtifactCoords(groupId, artifactId, parts[2], classifier, ext);
     }
 }
