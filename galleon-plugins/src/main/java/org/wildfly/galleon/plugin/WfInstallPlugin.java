@@ -70,6 +70,7 @@ import nu.xom.Serializer;
 import org.jboss.galleon.ArtifactCoords;
 import org.jboss.galleon.ArtifactException;
 import org.jboss.galleon.Errors;
+import org.jboss.galleon.Gav;
 import org.jboss.galleon.MessageWriter;
 import org.jboss.galleon.ProvisioningDescriptionException;
 import org.jboss.galleon.ProvisioningException;
@@ -380,9 +381,9 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         final URL[] cp = new URL[3];
         try {
             cp[0] = configGenJar.toUri().toURL();
-            ArtifactCoords.Gav gav = ArtifactCoords.newGav(resolveRequiredGav("org.jboss.modules:jboss-modules"));
+            Gav gav = Gav.parse(resolveRequiredGav("org.jboss.modules:jboss-modules"));
             cp[1] = runtime.resolveArtifact(new ArtifactCoords(gav.getGroupId(), gav.getArtifactId(), gav.getVersion(), null, JAR)).toUri().toURL();
-            gav = ArtifactCoords.newGav(resolveRequiredGav("org.wildfly.core:wildfly-cli"));
+            gav = Gav.parse(resolveRequiredGav("org.wildfly.core:wildfly-cli"));
             cp[2] = runtime.resolveArtifact(new ArtifactCoords(gav.getGroupId(), gav.getArtifactId(), gav.getVersion(), "client", JAR)).toUri().toURL();
         } catch (IOException e) {
             throw new ProvisioningException("Failed to init classpath for " + runtime.getStagedDir(), e);

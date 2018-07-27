@@ -69,6 +69,7 @@ import org.eclipse.aether.resolution.ArtifactResult;
 import org.jboss.galleon.ArtifactCoords;
 import org.jboss.galleon.Constants;
 import org.jboss.galleon.Errors;
+import org.jboss.galleon.Gav;
 import org.jboss.galleon.ProvisioningDescriptionException;
 import org.jboss.galleon.ProvisioningException;
 import org.jboss.galleon.config.ConfigModel;
@@ -564,14 +565,14 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         }
 
         fpDependencies = new LinkedHashMap<>(wfFpConfig.getDependencies().size());
-        for (Map.Entry<ArtifactCoords.Gav, FeaturePackDependencySpec> depEntry : wfFpConfig.getDependencies().entrySet()) {
-            ArtifactCoords.Gav depGav = depEntry.getKey();
+        for (Map.Entry<Gav, FeaturePackDependencySpec> depEntry : wfFpConfig.getDependencies().entrySet()) {
+            Gav depGav = depEntry.getKey();
             if (depGav.getVersion() == null) {
                 String gavStr = artifactVersions.getVersion(depGav.toString());
                 if (gavStr == null) {
                     throw new MojoExecutionException("Failed resolve artifact version for " + depGav);
                 }
-                depGav = ArtifactCoords.newGav(gavStr);
+                depGav = Gav.parse(gavStr);
             }
 
             final FeaturePackDependencySpec depSpec = depEntry.getValue();
@@ -587,7 +588,7 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
             depFpl = new FeaturePackLocation(depFpl.getUniverse(), depFpl.getProducerName(), channel, null, depGav.getVersion());
 
             fpBuilder.addFeaturePackDep(depSpec.getName(), FeaturePackConfig.builder(depFpl).init(depConfig).build());
-            final Path depZip = resolveArtifact(depGav.toArtifactCoords());
+            final Path depZip = resolveArtifact(depGav.toArtifactCoords("zip"));
             fpDependencies.put(depSpec.getName(), FeaturePackDescriber.describeFeaturePackZip(depZip));
         }
     }
