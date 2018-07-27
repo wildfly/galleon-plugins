@@ -23,7 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.jboss.galleon.ArtifactCoords;
+import org.jboss.galleon.Gav;
 import org.jboss.galleon.config.ConfigModel;
 import org.jboss.galleon.spec.CapabilitySpec;
 import org.jboss.galleon.universe.FeaturePackLocation;
@@ -40,7 +40,7 @@ public class WildFlyFeaturePackBuild {
     public static class Builder {
 
         private FeaturePackLocation producer;
-        private Map<ArtifactCoords.Gav, FeaturePackDependencySpec> dependencies = Collections.emptyMap();
+        private Map<Gav, FeaturePackDependencySpec> dependencies = Collections.emptyMap();
         private Set<String> schemaGroups = Collections.emptySet();
         private Set<String> defaultPackages = Collections.emptySet();
         private List<ConfigModel> configs = Collections.emptyList();
@@ -58,7 +58,7 @@ public class WildFlyFeaturePackBuild {
             return this;
         }
 
-        public Builder addDependency(ArtifactCoords.Gav gav, FeaturePackDependencySpec dependency) {
+        public Builder addDependency(Gav gav, FeaturePackDependencySpec dependency) {
             dependencies = CollectionUtils.put(dependencies, gav, dependency);
             return this;
         }
@@ -87,7 +87,7 @@ public class WildFlyFeaturePackBuild {
     }
 
     private final FeaturePackLocation producer;
-    private final Map<ArtifactCoords.Gav, FeaturePackDependencySpec> dependencies;
+    private final Map<Gav, FeaturePackDependencySpec> dependencies;
     private final Set<String> schemaGroups;
     private final Set<String> defaultPackages;
     private final List<ConfigModel> configs;
@@ -108,7 +108,7 @@ public class WildFlyFeaturePackBuild {
         return defaultPackages;
     }
 
-    public Map<ArtifactCoords.Gav, FeaturePackDependencySpec> getDependencies() {
+    public Map<Gav, FeaturePackDependencySpec> getDependencies() {
         return dependencies;
     }
 

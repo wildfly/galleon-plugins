@@ -16,9 +16,19 @@
  */
 package org.wildfly.galleon.maven;
 
-import org.jboss.galleon.ArtifactCoords;
+import java.util.Collections;
+import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+
+import javax.xml.namespace.QName;
+import javax.xml.stream.XMLStreamConstants;
+import javax.xml.stream.XMLStreamException;
+import javax.xml.stream.XMLStreamReader;
+
+import org.jboss.galleon.Gav;
 import org.jboss.galleon.ProvisioningDescriptionException;
-import org.jboss.galleon.ArtifactCoords.Gav;
 import org.jboss.galleon.config.ConfigModel;
 import org.jboss.galleon.config.FeaturePackConfig;
 import org.jboss.galleon.universe.FeaturePackLocation;
@@ -29,16 +39,6 @@ import org.jboss.galleon.xml.ProvisioningXmlParser10;
 import org.jboss.galleon.xml.XmlNameProvider;
 import org.jboss.staxmapper.XMLElementReader;
 import org.jboss.staxmapper.XMLExtendedStreamReader;
-import javax.xml.namespace.QName;
-import javax.xml.stream.XMLStreamConstants;
-import javax.xml.stream.XMLStreamException;
-import javax.xml.stream.XMLStreamReader;
-
-import java.util.Collections;
-import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
 
 /**
  * Parses the WildFly-based feature pack build config file (i.e. the config file that is
@@ -314,7 +314,7 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
         if (!required.isEmpty()) {
             throw ParsingUtils.missingAttributes(reader.getLocation(), required);
         }
-        final Gav gav = ArtifactCoords.newGav(groupId, artifactId, version);
+        final Gav gav = new Gav(groupId, artifactId, version);
         String depName = null;
         final FeaturePackConfig.Builder depBuilder = transitive ? FeaturePackConfig.transitiveBuilder(fpl) : FeaturePackConfig.builder(fpl);
         while (reader.hasNext()) {
