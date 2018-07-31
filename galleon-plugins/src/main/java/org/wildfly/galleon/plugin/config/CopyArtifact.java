@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.List;
 
 import org.jboss.galleon.ProvisioningException;
+import org.jboss.galleon.model.Gaec;
 import org.jboss.galleon.runtime.PackageRuntime;
 import org.jboss.galleon.util.CollectionUtils;
 import org.wildfly.galleon.plugin.WfInstallPlugin;
@@ -36,7 +37,7 @@ import org.wildfly.galleon.plugin.WildFlyPackageTask;
  */
 public class CopyArtifact implements WildFlyPackageTask {
 
-    private String artifact;
+    private Gaec artifact;
     private String toLocation;
     private boolean extract;
     private List<FileFilter> filters = Collections.emptyList();
@@ -45,7 +46,7 @@ public class CopyArtifact implements WildFlyPackageTask {
     public CopyArtifact() {
     }
 
-    public void setArtifact(String artifact) {
+    public void setArtifact(Gaec artifact) {
         this.artifact = artifact;
     }
 
@@ -61,7 +62,7 @@ public class CopyArtifact implements WildFlyPackageTask {
         filters = CollectionUtils.add(filters, filter);
     }
 
-    public String getArtifact() {
+    public Gaec getArtifact() {
         return artifact;
     }
 

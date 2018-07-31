@@ -22,7 +22,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import javax.xml.stream.XMLStreamException;
 
-import org.jboss.galleon.ArtifactCoords;
 import org.jboss.galleon.Errors;
 import org.jboss.galleon.ProvisioningException;
 
@@ -32,10 +31,6 @@ import org.jboss.galleon.ProvisioningException;
  */
 class Util {
 
-    interface ArtifactProcessor {
-        void process(ArtifactCoords coords) throws IOException;
-    }
-
     static WildFlyFeaturePackBuild loadFeaturePackBuildConfig(Path configFile) throws ProvisioningException {
         try (InputStream configStream = Files.newInputStream(configFile)) {
             return new FeaturePackBuildModelParser().parse(configStream);
@@ -43,12 +38,6 @@ class Util {
             throw new ProvisioningException(Errors.parseXml(configFile), e);
         } catch (IOException e) {
             throw new ProvisioningException(Errors.openFile(configFile), e);
-        }
-    }
-
-    static void processModuleArtifacts(final ModuleParseResult parsedModule, ArtifactProcessor ap) throws IOException {
-        for(ModuleParseResult.ArtifactName artName : parsedModule.artifacts) {
-            ap.process(ArtifactCoordsUtil.fromJBossModules(artName.getArtifactCoords(), "jar"));
         }
     }
 

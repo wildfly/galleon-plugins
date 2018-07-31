@@ -38,6 +38,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -66,7 +67,6 @@ import org.eclipse.aether.repository.RemoteRepository;
 import org.eclipse.aether.resolution.ArtifactRequest;
 import org.eclipse.aether.resolution.ArtifactResolutionException;
 import org.eclipse.aether.resolution.ArtifactResult;
-import org.jboss.galleon.ArtifactCoords;
 import org.jboss.galleon.Constants;
 import org.jboss.galleon.Errors;
 import org.jboss.galleon.ProvisioningDescriptionException;
@@ -76,6 +76,9 @@ import org.jboss.galleon.config.FeaturePackConfig;
 import org.jboss.galleon.layout.FeaturePackDescriber;
 import org.jboss.galleon.layout.FeaturePackDescription;
 import org.jboss.galleon.maven.plugin.FpMavenErrors;
+import org.jboss.galleon.model.Gaec;
+import org.jboss.galleon.model.GaecOrGaecv;
+import org.jboss.galleon.model.Gaecv;
 import org.jboss.galleon.spec.FeaturePackSpec;
 import org.jboss.galleon.spec.PackageSpec;
 import org.jboss.galleon.universe.FeaturePackLocation;
@@ -466,7 +469,8 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         mkdirs(pluginsDir);
         Path wfPlugInPath;
         try {
-            wfPlugInPath = resolveArtifact(ArtifactCoords.newInstance(mvnPluginsArtifact.getGroupId(), WfConstants.WF_GALLEON_PLUGINS, mvnPluginsArtifact.getVersion(), "jar"));
+            Gaecv gaecv = Gaecv.builder().groupId(mvnPluginsArtifact.getGroupId()).artifactId(WfConstants.WF_GALLEON_PLUGINS).extension("jar").version(mvnPluginsArtifact.getVersion()).build();
+            wfPlugInPath = resolveArtifact(gaecv);
         } catch (ProvisioningException e) {
             throw new MojoExecutionException("Failed to build feature-pack", e);
         }
@@ -481,7 +485,8 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         mkdirs(resourcesDir);
         Path wfPlugInPath;
         try {
-            wfPlugInPath = resolveArtifact(ArtifactCoords.newInstance(mvnPluginsArtifact.getGroupId(), WfConstants.WF_CONFIG_GEN, mvnPluginsArtifact.getVersion(), "jar"));
+            Gaecv gaecv = Gaecv.builder().groupId(mvnPluginsArtifact.getGroupId()).artifactId(WfConstants.WF_CONFIG_GEN).extension("jar").version(mvnPluginsArtifact.getVersion()).build();
+            wfPlugInPath = resolveArtifact(gaecv);
         } catch (ProvisioningException e) {
             throw new MojoExecutionException("Failed to build feature-pack", e);
         }
@@ -564,15 +569,9 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         }
 
         fpDependencies = new LinkedHashMap<>(wfFpConfig.getDependencies().size());
-        for (Map.Entry<ArtifactCoords.Gav, FeaturePackDependencySpec> depEntry : wfFpConfig.getDependencies().entrySet()) {
-            ArtifactCoords.Gav depGav = depEntry.getKey();
-            if (depGav.getVersion() == null) {
-                String gavStr = artifactVersions.getVersion(depGav.toString());
-                if (gavStr == null) {
-                    throw new MojoExecutionException("Failed resolve artifact version for " + depGav);
-                }
-                depGav = ArtifactCoords.newGav(gavStr);
-            }
+        for (Entry<GaecOrGaecv, FeaturePackDependencySpec> depEntry : wfFpConfig.getDependencies().entrySet()) {
+            final GaecOrGaecv depGav = depEntry.getKey();
+            final Gaecv resolved = !depGav.isVersionResolved() ? artifactVersions.getVersion(depGav.getGaec()) : depGav.getGaecv();
 
             final FeaturePackDependencySpec depSpec = depEntry.getValue();
             final FeaturePackConfig depConfig = depSpec.getTarget();
@@ -580,14 +579,14 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
             FeaturePackLocation depFpl = depConfig.getLocation();
             String channel = depFpl.getChannelName();
             if(channel == null || channel.isEmpty()) {
-                final String v = depGav.getVersion();
+                final String v = resolved.getVersion();
                 int i = v.indexOf('.');
                 channel = i < 0 ? v : v.substring(0, i);
             }
-            depFpl = new FeaturePackLocation(depFpl.getUniverse(), depFpl.getProducerName(), channel, null, depGav.getVersion());
+            depFpl = new FeaturePackLocation(depFpl.getUniverse(), depFpl.getProducerName(), channel, null, resolved.getVersion());
 
             fpBuilder.addFeaturePackDep(depSpec.getName(), FeaturePackConfig.builder(depFpl).init(depConfig).build());
-            final Path depZip = resolveArtifact(depGav.toArtifactCoords());
+            final Path depZip = resolveArtifact(resolved);
             fpDependencies.put(depSpec.getName(), FeaturePackDescriber.describeFeaturePackZip(depZip));
         }
     }
@@ -797,10 +796,14 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         }
     }
 
-    private Path resolveArtifact(ArtifactCoords coords) throws ProvisioningException {
+    private Path resolveArtifact(Gaecv coords) throws ProvisioningException {
         final ArtifactResult result;
         try {
-            result = repoSystem.resolveArtifact(repoSession, getArtifactRequest(coords));
+            final ArtifactRequest req = new ArtifactRequest();
+            final Gaec gaec = coords.getGaec();
+            req.setArtifact(new DefaultArtifact(gaec.getGroupId(), gaec.getArtifactId(), gaec.getClassifier(), gaec.getExtension(), coords.getVersion()));
+            req.setRepositories(remoteRepos);
+            result = repoSystem.resolveArtifact(repoSession, req);
         } catch (ArtifactResolutionException e) {
             throw new ProvisioningException(FpMavenErrors.artifactResolution(coords), e);
         }
@@ -810,15 +813,9 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         if(result.isMissing()) {
             throw new ProvisioningException(FpMavenErrors.artifactMissing(coords));
         }
-        return Paths.get(result.getArtifact().getFile().toURI());
+        return result.getArtifact().getFile().toPath();
     }
 
-    private ArtifactRequest getArtifactRequest(ArtifactCoords coords) {
-        final ArtifactRequest req = new ArtifactRequest();
-        req.setArtifact(new DefaultArtifact(coords.getGroupId(), coords.getArtifactId(), coords.getClassifier(), coords.getExtension(), coords.getVersion()));
-        req.setRepositories(remoteRepos);
-        return req;
-    }
 
     private static void ensureLineEndings(Path file) throws MojoExecutionException {
         try {

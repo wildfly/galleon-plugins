@@ -44,13 +44,11 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.stream.Stream;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.transform.Transformer;
@@ -59,15 +57,6 @@ import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.stream.StreamSource;
 
-import nu.xom.Attribute;
-import nu.xom.Builder;
-import nu.xom.Document;
-import nu.xom.Element;
-import nu.xom.Elements;
-import nu.xom.ParsingException;
-import nu.xom.Serializer;
-
-import org.jboss.galleon.ArtifactCoords;
 import org.jboss.galleon.ArtifactException;
 import org.jboss.galleon.Errors;
 import org.jboss.galleon.MessageWriter;
@@ -79,6 +68,8 @@ import org.jboss.galleon.config.ConfigModel;
 import org.jboss.galleon.config.FeaturePackConfig;
 import org.jboss.galleon.config.ProvisioningConfig;
 import org.jboss.galleon.layout.ProvisioningLayoutFactory;
+import org.jboss.galleon.model.Gaec;
+import org.jboss.galleon.model.Gaecv;
 import org.jboss.galleon.plugin.InstallPlugin;
 import org.jboss.galleon.plugin.PluginOption;
 import org.jboss.galleon.plugin.ProvisioningPluginWithOptions;
@@ -87,9 +78,9 @@ import org.jboss.galleon.runtime.FeaturePackRuntime;
 import org.jboss.galleon.runtime.PackageRuntime;
 import org.jboss.galleon.runtime.ProvisioningRuntime;
 import org.jboss.galleon.universe.FeaturePackLocation.FPID;
+import org.jboss.galleon.util.CollectionUtils;
 import org.jboss.galleon.util.IoUtils;
 import org.jboss.galleon.util.StringUtils;
-import org.jboss.galleon.util.CollectionUtils;
 import org.jboss.galleon.util.ZipUtils;
 import org.wildfly.galleon.plugin.config.CopyArtifact;
 import org.wildfly.galleon.plugin.config.CopyPath;
@@ -97,6 +88,14 @@ import org.wildfly.galleon.plugin.config.DeletePath;
 import org.wildfly.galleon.plugin.config.ExampleFpConfigs;
 import org.wildfly.galleon.plugin.config.XslTransform;
 import org.wildfly.galleon.plugin.server.CliScriptRunner;
+
+import nu.xom.Attribute;
+import nu.xom.Builder;
+import nu.xom.Document;
+import nu.xom.Element;
+import nu.xom.Elements;
+import nu.xom.ParsingException;
+import nu.xom.Serializer;
 
 /**
  *
@@ -115,7 +114,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
     private ProvisioningRuntime runtime;
     private MessageWriter log;
-    private PropertyResolver versionResolver;
+    private VersionResolver versionResolver;
 
     private Map<FPID, Properties> fpTasksProps = Collections.emptyMap();
     private Properties mergedTaskProps = new Properties();
@@ -156,7 +155,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
         thinServer = runtime.isOptionSet(OPTION_MVN_DIST);
 
-        final Map<String, String> artifactVersions = new HashMap<>();
+        final VersionResolver.Builder vrBuilder = VersionResolver.builder();
         for(FeaturePackRuntime fp : runtime.getFeaturePacks()) {
             final Path wfRes = fp.getResource(WfConstants.WILDFLY);
             if(!Files.exists(wfRes)) {
@@ -164,20 +163,10 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             }
 
             final Path artifactProps = wfRes.resolve(WfConstants.ARTIFACT_VERSIONS_PROPS);
-            if(Files.exists(artifactProps)) {
-                try (Stream<String> lines = Files.lines(artifactProps)) {
-                    final Iterator<String> iterator = lines.iterator();
-                    while (iterator.hasNext()) {
-                        final String line = iterator.next();
-                        final int i = line.indexOf('=');
-                        if (i < 0) {
-                            throw new ProvisioningException("Failed to locate '=' character in " + line);
-                        }
-                        artifactVersions.put(line.substring(0, i), line.substring(i + 1));
-                    }
-                } catch (IOException e) {
-                    throw new ProvisioningException(Errors.readFile(artifactProps), e);
-                }
+            try {
+                vrBuilder.load(artifactProps);
+            } catch (IOException e) {
+                throw new ProvisioningException("Could not load "+ artifactProps, e);
             }
 
             final Path tasksPropsPath = wfRes.resolve(WfConstants.WILDFLY_TASKS_PROPS);
@@ -207,7 +196,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             }
         }
         mergedTaskPropsResolver = new MapPropertyResolver(mergedTaskProps);
-        versionResolver = new MapPropertyResolver(artifactVersions);
+        versionResolver = vrBuilder.build();
 
         pkgProgressTracker = runtime.getLayoutFactory().getProgressTracker(ProvisioningLayoutFactory.TRACK_PACKAGES);
         long pkgsTotal = 0;
@@ -380,10 +369,10 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         final URL[] cp = new URL[3];
         try {
             cp[0] = configGenJar.toUri().toURL();
-            ArtifactCoords.Gav gav = ArtifactCoords.newGav(resolveRequiredGav("org.jboss.modules:jboss-modules"));
-            cp[1] = runtime.resolveArtifact(new ArtifactCoords(gav.getGroupId(), gav.getArtifactId(), gav.getVersion(), null, JAR)).toUri().toURL();
-            gav = ArtifactCoords.newGav(resolveRequiredGav("org.wildfly.core:wildfly-cli"));
-            cp[2] = runtime.resolveArtifact(new ArtifactCoords(gav.getGroupId(), gav.getArtifactId(), gav.getVersion(), "client", JAR)).toUri().toURL();
+            Gaecv gav = versionResolver.resolveVersion(Gaec.parse("org.jboss.modules:jboss-modules:jar:"));
+            cp[1] = runtime.resolveArtifact(gav).toUri().toURL();
+            gav = versionResolver.resolveVersion(Gaec.parse("org.wildfly.core:wildfly-cli:jar:client"));
+            cp[2] = runtime.resolveArtifact(gav).toUri().toURL();
         } catch (IOException e) {
             throw new ProvisioningException("Failed to init classpath for " + runtime.getStagedDir(), e);
         }
@@ -424,14 +413,6 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             } catch (IOException e) {
             }
         }
-    }
-
-    private String resolveRequiredGav(String artifactGa) throws ProvisioningException {
-        String gavStr = versionResolver.resolveProperty(artifactGa);
-        if(gavStr == null) {
-            throw new ProvisioningException("Failed to resolve version of " + artifactGa);
-        }
-        return gavStr;
     }
 
     private void processPackages(final FeaturePackRuntime fp) throws ProvisioningException {
@@ -604,14 +585,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 } else {
                     artifactName = exprBody;
                 }
-                final String resolved = versionResolver.resolveProperty(artifactName);
-                if (resolved != null) {
-                    try {
-                        versionAttribute.setValue(toArtifactCoords(resolved, false).getVersion());
-                    } catch (ProvisioningException e) {
-                        throw new IOException("Failed to resolve artifact coordinates for " + resolved, e);
-                    }
-                }
+                final Gaecv resolved = versionResolver.resolveVersion(Gaec.parse(artifactName));
+                versionAttribute.setValue(resolved.getVersion());
             }
         }
         // replace all artifact declarations
@@ -632,19 +607,9 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                         jandex = coordsStr.indexOf("jandex", optionsIndex) >= 0;
                         coordsStr = coordsStr.substring(0, optionsIndex);
                     }
-                    coordsStr = versionResolver.resolveProperty(coordsStr);
                 }
+                final Gaecv coords = versionResolver.resolveVersion(Gaec.parse(coordsStr));
 
-                if(coordsStr == null) {
-                    continue;
-                }
-
-                ArtifactCoords coords;
-                try {
-                    coords = toArtifactCoords(coordsStr, false);
-                } catch (ProvisioningException e) {
-                    throw new IOException("Failed to resolve full coordinates for " + coordsStr, e);
-                }
                 final Path moduleArtifact;
 
                 log.verbose("Resolving %s", coords);
@@ -678,7 +643,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                     attribute.setLocalName("path");
                     attribute.setValue(finalFileName);
                 }
-                if (schemaGroups.contains(coords.getGroupId())) {
+                if (schemaGroups.contains(coords.getGaec().getGroupId())) {
                     extractSchemas(moduleArtifact);
                 }
             }
@@ -724,12 +689,11 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     }
 
     public void copyArtifact(CopyArtifact copyArtifact) throws ProvisioningException, ArtifactException {
-        final ArtifactCoords coords = toArtifactCoords(copyArtifact.getArtifact(), copyArtifact.isOptional());
+        final Gaecv coords = versionResolver.resolveVersion(copyArtifact.getArtifact());
         if(coords == null) {
             return;
         }
         try {
-
             log.verbose("Resolving artifact %s ", coords);
             final Path jarSrc = this.runtime.resolveArtifact(coords);
             String location = copyArtifact.getToLocation();
@@ -748,7 +712,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             } else {
                 IoUtils.copy(jarSrc, jarTarget);
             }
-            if(schemaGroups.contains(coords.getGroupId())) {
+            if(schemaGroups.contains(coords.getGaec().getGroupId())) {
                 extractSchemas(jarSrc);
             }
         } catch (IOException e) {
@@ -878,48 +842,4 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
     }
 
-    private ArtifactCoords toArtifactCoords(String str, boolean optional) throws ProvisioningException {
-
-        String[] parts = str.split(":");
-        if(parts.length < 2) {
-            throw new IllegalArgumentException("Unexpected artifact coordinates format: " + str);
-        }
-        final String groupId = parts[0];
-        final String artifactId = parts[1];
-        String version = null;
-        String classifier = null;
-        String ext = JAR;
-        if(parts.length > 2) {
-            if(!parts[2].isEmpty()) {
-                version = parts[2];
-            }
-            if(parts.length > 3) {
-                classifier = parts[3];
-                if(parts.length > 4 && !parts[4].isEmpty()) {
-                    ext = parts[4];
-                    if (parts.length > 5) {
-                        throw new IllegalArgumentException("Unexpected artifact coordinates format: " + str);
-                    }
-                }
-            }
-        }
-
-        if(version != null) {
-            return new ArtifactCoords(groupId, artifactId, version, classifier, ext);
-        }
-
-        final String resolvedStr = versionResolver.resolveProperty(groupId + ':' + artifactId);
-        if (resolvedStr == null) {
-            if (optional) {
-                return null;
-            }
-            throw new ProvisioningException("Failed to resolve the version of " + str);
-        }
-
-        parts = resolvedStr.split(":");
-        if(parts.length < 3) {
-            throw new ProvisioningException("Failed to resolve version for artifact: " + resolvedStr);
-        }
-        return new ArtifactCoords(groupId, artifactId, parts[2], classifier, ext);
-    }
 }

@@ -30,8 +30,9 @@ repositories:
     includes:
     - org.jboss.galleon
     urls:
-    - git:git@github.com:wildfly/galleon.git
+    - git:https://github.com/ppalaga/galleon.git
     buildVersionPattern: .*-SNAPSHOT
+    buildRef: revision-33845044c78299ea017fce652e4e9e530ffd7b74
     buildArguments:
     - -Denforcer.skip
     - -Dlicense.skip

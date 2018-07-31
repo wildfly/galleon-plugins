@@ -24,11 +24,7 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Stream;
 
 import org.jboss.galleon.Errors;
 import org.jboss.galleon.MessageWriter;
@@ -36,6 +32,7 @@ import org.jboss.galleon.ProvisioningException;
 import org.jboss.galleon.config.ConfigModel;
 import org.jboss.galleon.layout.FeaturePackLayout;
 import org.jboss.galleon.layout.ProvisioningLayout;
+import org.jboss.galleon.model.Gaec;
 import org.jboss.galleon.plugin.UserConfigDiffPlugin;
 import org.jboss.galleon.repo.RepositoryArtifactResolver;
 import org.jboss.galleon.state.ProvisionedState;
@@ -59,15 +56,15 @@ public class WfUserConfigDiffPlugin implements UserConfigDiffPlugin {
             throw new ProvisioningException(Errors.pathDoesNotExist(configGenJar));
         }
 
-        final PropertyResolver propertyResolver = getPropertyResolver(layout);
+        final VersionResolver versionResolver = getPropertyResolver(layout);
 
         final URL[] cp = new URL[4];
         try {
             cp[0] = configGenJar.toUri().toURL();
             cp[1] = resolve(currentState, "jboss-modules.jar").toUri().toURL();
             final RepositoryArtifactResolver maven = layout.getFactory().getUniverseResolver().getArtifactResolver("repository.maven");
-            cp[2] = maven.resolve(toArtifactCoords("org.wildfly.core:wildfly-cli::client", propertyResolver)).toUri().toURL();
-            cp[3] = maven.resolve(toArtifactCoords("org.wildfly.core:wildfly-launcher", propertyResolver)).toUri().toURL();
+            cp[2] = maven.resolve(versionResolver.resolveVersion(Gaec.parse("org.wildfly.core:wildfly-cli:jar:client"))).getPath().toUri().toURL();
+            cp[3] = maven.resolve(versionResolver.resolveVersion(Gaec.parse("org.wildfly.core:wildfly-launcher:jar:"))).getPath().toUri().toURL();
         } catch (IOException e) {
             throw new ProvisioningException("Failed to init classpath", e);
         }
@@ -115,8 +112,8 @@ public class WfUserConfigDiffPlugin implements UserConfigDiffPlugin {
         return p;
     }
 
-    private PropertyResolver getPropertyResolver(ProvisioningLayout<?> layout) throws ProvisioningException {
-        final Map<String, String> artifactVersions = new HashMap<>();
+    private VersionResolver getPropertyResolver(ProvisioningLayout<?> layout) throws ProvisioningException {
+        final VersionResolver.Builder vrBuilder = VersionResolver.builder();
         for(FeaturePackLayout fp : layout.getOrderedFeaturePacks()) {
             final Path wfRes = fp.getResource(WfConstants.WILDFLY);
             if(!Files.exists(wfRes)) {
@@ -124,64 +121,13 @@ public class WfUserConfigDiffPlugin implements UserConfigDiffPlugin {
             }
 
             final Path artifactProps = wfRes.resolve(WfConstants.ARTIFACT_VERSIONS_PROPS);
-            if(Files.exists(artifactProps)) {
-                try (Stream<String> lines = Files.lines(artifactProps)) {
-                    final Iterator<String> iterator = lines.iterator();
-                    while (iterator.hasNext()) {
-                        final String line = iterator.next();
-                        final int i = line.indexOf('=');
-                        if (i < 0) {
-                            throw new ProvisioningException("Failed to locate '=' character in " + line);
-                        }
-                        artifactVersions.put(line.substring(0, i), line.substring(i + 1));
-                    }
-                } catch (IOException e) {
-                    throw new ProvisioningException(Errors.readFile(artifactProps), e);
-                }
+            try {
+                vrBuilder.load(artifactProps);
+            } catch (IOException e) {
+                throw new ProvisioningException("Could not load "+ artifactProps, e);
             }
         }
-        return new MapPropertyResolver(artifactVersions);
+        return vrBuilder.build();
     }
 
-    private String toArtifactCoords(String str, PropertyResolver versionResolver) throws ProvisioningException {
-
-        String[] parts = str.split(":");
-        if(parts.length < 2) {
-            throw new IllegalArgumentException("Unexpected artifact coordinates format: " + str);
-        }
-        final String groupId = parts[0];
-        final String artifactId = parts[1];
-        String version = null;
-        String classifier = "";
-        String ext = "jar";
-        if(parts.length > 2) {
-            if(!parts[2].isEmpty()) {
-                version = parts[2];
-            }
-            if(parts.length > 3) {
-                classifier = parts[3];
-                if(parts.length > 4 && !parts[4].isEmpty()) {
-                    ext = parts[4];
-                    if (parts.length > 5) {
-                        throw new IllegalArgumentException("Unexpected artifact coordinates format: " + str);
-                    }
-                }
-            }
-        }
-
-        if(version != null) {
-            return groupId + ':' + artifactId + ':' + ext + ':' + classifier + ':' + version;
-        }
-
-        final String resolvedStr = versionResolver.resolveProperty(groupId + ':' + artifactId);
-        if (resolvedStr == null) {
-            throw new ProvisioningException("Failed to resolve the version of " + str);
-        }
-
-        parts = resolvedStr.split(":");
-        if(parts.length < 3) {
-            throw new ProvisioningException("Failed to resolve version for artifact: " + resolvedStr);
-        }
-        return groupId + ':' + artifactId + ':' + ext + ':' + classifier + ':' + parts[2];
-    }
 }
