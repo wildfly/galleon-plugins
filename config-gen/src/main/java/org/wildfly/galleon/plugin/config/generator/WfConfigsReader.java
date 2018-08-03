@@ -156,6 +156,8 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
     private ConfigSpecMapper specMapper = new ConfigSpecMapper();
     private Map<String, FeatureSpec> loadedSpecs = Collections.emptyMap();
     private List<ConfigModel> userConfigs = Collections.emptyList();
+    private String configModel;
+    private String configName;
 
     @Override
     protected String getHome(ProvisioningRuntime runtime) {
@@ -178,10 +180,14 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
                 continue;
             }
             this.provisionedConfig = config;
+            this.configModel = config.getModel();
+            this.configName = config.getName();
             readConfig(path);
             this.provisionedConfig = null;
         }
+        configModel = WfConstants.STANDALONE;
         for(Path newConfig : actualStandaloneConfigs.values()) {
+            configName = newConfig.getFileName().toString();
             readConfig(newConfig);
         }
     }
@@ -279,7 +285,7 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
                     feature.setParam(prop.getName(), prop.getValue().asString());
                 }
                 if(configBuilder == null) {
-                    configBuilder = ConfigModel.builder(provisionedConfig.getModel(), provisionedConfig.getName());
+                    configBuilder = ConfigModel.builder(configModel, configName);
                 }
                 configBuilder.addFeature(feature);
                 log.print("Added feature %s", feature);
@@ -342,7 +348,7 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
             }
             if (feature != null) {
                 if(configBuilder == null) {
-                    configBuilder = ConfigModel.builder(provisionedConfig.getModel(), provisionedConfig.getName());
+                    configBuilder = ConfigModel.builder(configModel, configName);
                 }
                 configBuilder.addFeature(feature);
             }
