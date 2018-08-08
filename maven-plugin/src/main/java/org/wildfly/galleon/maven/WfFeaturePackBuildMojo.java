@@ -147,8 +147,8 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
     private File configDir;
 
     /**
-     * A path relative to {@link #configDir} that represents the directory under which of resources such as
-     * {@code packages}, {@code feature_groups}, etc.
+     * Represents the directory containing child directories {@code packages}, {@code feature_groups}, {@code modules}
+     * etc. Either an absolute path or a path relative to {@link #configDir}.
      */
     @Parameter(alias = "resources-dir", defaultValue = "src/main/resources", property = "wildfly.feature.pack.resourcesDir", required = true)
     private String resourcesDir;
@@ -209,19 +209,8 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
     private void doExecute() throws MojoExecutionException, MojoFailureException {
         artifactVersions = MavenProjectArtifactVersions.getInstance(project);
 
-        /* normalize resourcesDir */
-        if (!resourcesDir.isEmpty()) {
-            switch (resourcesDir.charAt(0)) {
-            case '/':
-            case '\\':
-                break;
-            default:
-                resourcesDir = "/" + resourcesDir;
-                break;
-            }
-        }
         final Path targetResources = Paths.get(buildName, Constants.RESOURCES);
-        final Path specsDir = Paths.get(configDir.getAbsolutePath()).resolve(resourcesDir);
+        final Path specsDir = configDir.getAbsoluteFile().toPath().resolve(resourcesDir);
         if (Files.exists(specsDir)) {
             try {
                 IoUtils.copy(specsDir, targetResources);
