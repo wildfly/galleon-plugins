@@ -21,8 +21,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.TreeMap;
 
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.project.MavenProject;
@@ -38,7 +38,7 @@ class MavenProjectArtifactVersions {
         return new MavenProjectArtifactVersions(project);
     }
 
-    private final Map<String, String> versions = new HashMap<String, String>();
+    private final Map<String, String> versions = new TreeMap<String, String>();
 
     private MavenProjectArtifactVersions(MavenProject project) {
         for (Artifact artifact : project.getArtifacts()) {
