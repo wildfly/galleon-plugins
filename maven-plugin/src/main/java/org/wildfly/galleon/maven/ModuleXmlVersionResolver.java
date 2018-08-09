@@ -52,7 +52,8 @@ import org.apache.maven.artifact.Artifact;
 import org.apache.maven.artifact.DefaultArtifact;
 import org.apache.maven.artifact.handler.DefaultArtifactHandler;
 import org.apache.maven.plugin.logging.Log;
-import org.jboss.galleon.ArtifactCoords;
+import org.jboss.galleon.model.Gaec;
+import org.jboss.galleon.model.Gaecv;
 
 /**
  *
@@ -211,9 +212,10 @@ public class ModuleXmlVersionResolver {
                     }
                 } else {
                     attributes.add(attribute);
-                    final ArtifactCoords coords = ArtifactCoords.fromString(artifactName);
-                    hardcodedArtifacts.add(new DefaultArtifact(coords.getGroupId(), coords.getArtifactId(), coords.getVersion(),
-                            "provided", coords.getExtension(), coords.getClassifier(), new DefaultArtifactHandler(coords.getExtension())));
+                    final Gaecv coords = Gaecv.parse(artifactName);
+                    final Gaec gaec = coords.getGaec();
+                    hardcodedArtifacts.add(new DefaultArtifact(gaec.getGroupId(), gaec.getArtifactId(), coords.getVersion(),
+                            "provided", gaec.getExtension(), gaec.getClassifier(), new DefaultArtifactHandler(gaec.getExtension())));
                 }
             } else {
                 attributes.add(attribute);

@@ -16,11 +16,10 @@
  */
 package org.wildfly.galleon.maven;
 
-import org.jboss.galleon.ArtifactCoords;
-import org.jboss.galleon.ArtifactCoords.Gav;
 import org.jboss.galleon.ProvisioningDescriptionException;
 import org.jboss.galleon.config.ConfigModel;
 import org.jboss.galleon.config.FeaturePackConfig;
+import org.jboss.galleon.model.GaecOrGaecv;
 import org.jboss.galleon.universe.galleon1.LegacyGalleon1Universe;
 import org.jboss.galleon.util.ParsingUtils;
 import org.jboss.galleon.xml.ConfigXml;
@@ -267,9 +266,7 @@ class FeaturePackBuildModelParser20 implements XMLElementReader<WildFlyFeaturePa
     }
 
     private void parseDependency(XMLExtendedStreamReader reader, final WildFlyFeaturePackBuild.Builder builder) throws XMLStreamException {
-        String groupId = null;
-        String artifactId = null;
-        String version = null;
+        final GaecOrGaecv.Builder gaecBuilder = GaecOrGaecv.builder().extension("zip");
         final int count = reader.getAttributeCount();
         final Set<Attribute> required = EnumSet.of(Attribute.GROUP_ID, Attribute.ARTIFACT_ID);
         for (int i = 0; i < count; i++) {
@@ -277,13 +274,13 @@ class FeaturePackBuildModelParser20 implements XMLElementReader<WildFlyFeaturePa
             required.remove(attribute);
             switch (attribute) {
                 case GROUP_ID:
-                    groupId = reader.getAttributeValue(i);
+                    gaecBuilder.groupId(reader.getAttributeValue(i));
                     break;
                 case ARTIFACT_ID:
-                    artifactId = reader.getAttributeValue(i);
+                    gaecBuilder.artifactId(reader.getAttributeValue(i));
                     break;
                 case VERSION:
-                    version = reader.getAttributeValue(i);
+                    gaecBuilder.version(reader.getAttributeValue(i));
                     break;
                 default:
                     throw ParsingUtils.unexpectedContent(reader);
@@ -293,7 +290,7 @@ class FeaturePackBuildModelParser20 implements XMLElementReader<WildFlyFeaturePa
             throw ParsingUtils.missingAttributes(reader.getLocation(), required);
         }
         String depName = null;
-        final Gav gav = ArtifactCoords.newGav(groupId, artifactId, version);
+        final GaecOrGaecv gav = gaecBuilder.build();
         final FeaturePackConfig.Builder depBuilder = FeaturePackConfig.builder(LegacyGalleon1Universe.toFpl(gav));
         while (reader.hasNext()) {
             switch (reader.nextTag()) {

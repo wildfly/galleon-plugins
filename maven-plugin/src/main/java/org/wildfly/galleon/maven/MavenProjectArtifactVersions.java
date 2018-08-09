@@ -16,16 +16,20 @@
  */
 package org.wildfly.galleon.maven;
 
-import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Properties;
 
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.project.MavenProject;
+import org.jboss.galleon.model.Gaec;
+import org.jboss.galleon.model.Gaecv;
 
 /**
  * Maps groupId:artifactId[::classifier] to groupId:artifactId[::classifier]:version
@@ -38,36 +42,27 @@ class MavenProjectArtifactVersions {
         return new MavenProjectArtifactVersions(project);
     }
 
-    private final Map<String, String> versions = new HashMap<String, String>();
+    private final Map<Gaec, Gaecv> versions = new HashMap<>();
 
     private MavenProjectArtifactVersions(MavenProject project) {
-        for (Artifact artifact : project.getArtifacts()) {
-            final StringBuilder buf = new StringBuilder(artifact.getGroupId()).append(':').
-                    append(artifact.getArtifactId());
-            final String classifier = artifact.getClassifier();
-            final StringBuilder version = new StringBuilder(buf);
-            if(classifier != null && !classifier.isEmpty()) {
-                buf.append("::").append(classifier);
-                version.append(':').append(artifact.getVersion()).append(':').append(classifier);
-            } else {
-                version.append(':').append(artifact.getVersion());
-            }
-            versions.put(buf.toString(), version.toString());
+        for (Artifact a : project.getArtifacts()) {
+            final Gaec gaec = new Gaec(a.getGroupId(), a.getArtifactId(), a.getType(), a.getClassifier());
+            final Gaecv gaecv = new Gaecv(gaec, a.getVersion());
+            versions.put(gaec, gaecv);
         }
     }
 
-    String getVersion(String gac) {
-        return versions.get(gac);
+    Gaecv getVersion(Gaec gaec) {
+        return versions.get(gaec);
     }
 
     void store(Path target) throws IOException {
-        try(BufferedWriter writer = Files.newBufferedWriter(target, StandardOpenOption.CREATE)) {
-            for(Map.Entry<String, String> entry : versions.entrySet()) {
-                writer.write(entry.getKey());
-                writer.write('=');
-                writer.write(entry.getValue());
-                writer.newLine();
-            }
+        Properties props = new Properties();
+        for (Entry<Gaec, Gaecv> en : versions.entrySet()) {
+            props.setProperty(en.getKey().toString(), en.getValue().toString());
+        }
+        try(OutputStream out = Files.newOutputStream(target, StandardOpenOption.CREATE)) {
+            props.store(out, null);
         }
     }
 }

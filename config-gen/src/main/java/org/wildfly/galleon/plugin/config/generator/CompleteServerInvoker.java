@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.wildfly.galleon.plugin.server;
+package org.wildfly.galleon.plugin.config.generator;
 
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
@@ -25,6 +25,7 @@ import java.util.Properties;
 
 import org.jboss.galleon.MessageWriter;
 import org.jboss.galleon.ProvisioningException;
+import org.wildfly.galleon.plugin.server.ClassLoaderHelper;
 
 /**
  *
@@ -49,7 +50,7 @@ public class CompleteServerInvoker {
         Properties props = System.getProperties();
         try {
             Thread.currentThread().setContextClassLoader(newCl);
-            final Class<?> serverClass = newCl.loadClass("org.jboss.galleon.plugin.wildfly.server.CompleteServer");
+            final Class<?> serverClass = newCl.loadClass("org.wildfly.galleon.plugin.config.generator.CompleteServer");
             server = serverClass.getConstructor(Path.class, String.class).newInstance(installationDir, serverConfig);
             final Method startServerMethod = serverClass.getMethod("startServer");
             startServerMethod.invoke(server);
@@ -69,6 +70,7 @@ public class CompleteServerInvoker {
                 final Method stopServerMethod = server.getClass().getMethod("stopServer");
                 stopServerMethod.invoke(server);
             }
+            server = null;
         } catch (NoSuchMethodException | SecurityException | IllegalAccessException | IllegalArgumentException | InvocationTargetException ex) {
             throw new ProvisioningException(ex.getMessage(), ex);
         } finally {
@@ -77,21 +79,7 @@ public class CompleteServerInvoker {
         }
     }
 
-//
-//    private static void resetProperties(Path wildfly) {
-//        Path jbossBaseDir = wildfly.resolve("standalone");
-//        System.setProperty(SYSPROP_KEY_JBOSS_SERVER_BASE_DIR, jbossBaseDir.toString());
-//        System.setProperty(SYSPROP_KEY_JBOSS_SERVER_CONFIG_DIR, jbossBaseDir.resolve("configuration").toString());
-//        System.setProperty(SYSPROP_KEY_JBOSS_SERVER_DATA_DIR, jbossBaseDir.resolve("data").toString());
-//        System.setProperty(SYSPROP_KEY_JBOSS_SERVER_DEPLOY_DIR, jbossBaseDir.resolve("data").resolve("content").toString());
-//        System.setProperty(SYSPROP_KEY_JBOSS_SERVER_TEMP_DIR, jbossBaseDir.resolve("data").resolve("tmp").toString());
-//        System.setProperty(SYSPROP_KEY_JBOSS_SERVER_LOG_DIR, jbossBaseDir.resolve("log").toString());
-//        jbossBaseDir = wildfly.resolve("domain");
-//        System.setProperty(SYSPROP_KEY_JBOSS_DOMAIN_BASE_DIR, jbossBaseDir.toString());
-//        System.setProperty(SYSPROP_KEY_JBOSS_DOMAIN_CONFIG_DIR, jbossBaseDir.resolve("configuration").toString());
-//        System.setProperty(SYSPROP_KEY_JBOSS_DOMAIN_DATA_DIR, jbossBaseDir.resolve("data").toString());
-//        System.setProperty(SYSPROP_KEY_JBOSS_DOMAIN_DEPLOYMENT_DIR, jbossBaseDir.resolve("data").resolve("content").toString());
-//        System.setProperty(SYSPROP_KEY_JBOSS_DOMAIN_TEMP_DIR, jbossBaseDir.resolve("data").resolve("tmp").toString());
-//        System.setProperty(SYSPROP_KEY_JBOSS_DOMAIN_LOG_DIR, jbossBaseDir.resolve("log").toString());
-//    }
+    public boolean isServerActive() {
+        return server == null;
+    }
 }

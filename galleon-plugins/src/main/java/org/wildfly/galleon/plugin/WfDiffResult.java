@@ -22,7 +22,6 @@ import static org.wildfly.galleon.plugin.config.WildFlyPackageTasksParser.NAMESP
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -33,21 +32,17 @@ import org.jboss.galleon.config.ConfigModel;
 import org.jboss.galleon.config.FeaturePackConfig;
 import org.jboss.galleon.creator.FeaturePackBuilder;
 import org.jboss.galleon.creator.PackageBuilder;
-import org.jboss.galleon.diff.FileSystemDiffResult;
+import org.jboss.galleon.diff.ProvisioningDiffResult;
 import org.jboss.galleon.runtime.ProvisioningRuntime;
 import org.jboss.galleon.universe.FeaturePackLocation.FPID;
-
 import java.util.Set;
 
 /**
  *
  * @author Emmanuel Hugonnet (c) 2017 Red Hat, inc.
  */
-public class WfDiffResult extends FileSystemDiffResult {
-    private final List<Path> scripts = new ArrayList<>();
-    private final List<ConfigModel> configs = new ArrayList<>();
-    private final Map<FPID, ConfigId> includedConfigs = new HashMap<>();
-
+public class WfDiffResult extends ProvisioningDiffResult {
+    final List<Path> scripts = new ArrayList<>();
     public WfDiffResult(Map<FPID, ConfigId> includedConfigs, List<ConfigModel> configs, List<Path> scripts, Set<Path> deletedFiles, Set<Path> addedFiles, Set<Path> modifiedBinaryFiles, Map<Path, List<String>> unifiedDiffs) {
         super(deletedFiles, addedFiles, modifiedBinaryFiles, unifiedDiffs);
         if(scripts != null) {
@@ -61,7 +56,7 @@ public class WfDiffResult extends FileSystemDiffResult {
         }
     }
 
-    public WfDiffResult(Map<FPID, ConfigId> includedConfigs, List<ConfigModel> configs, List<Path> scripts, FileSystemDiffResult result) {
+    public WfDiffResult(Map<FPID, ConfigId> includedConfigs, List<ConfigModel> configs, List<Path> scripts, ProvisioningDiffResult result) {
         this(includedConfigs, configs, scripts, result.getDeletedFiles(), result.getAddedFiles(), result.getModifiedBinaryFiles(), result.getUnifiedDiffs());
     }
 
@@ -69,21 +64,11 @@ public class WfDiffResult extends FileSystemDiffResult {
         return Collections.unmodifiableList(scripts);
     }
 
-    public Map<FPID, ConfigId> getIncludedConfigs() {
-        return Collections.unmodifiableMap(includedConfigs);
-    }
-
-    public List<ConfigModel> getConfigs() {
-        return Collections.unmodifiableList(configs);
-    }
-
     @Override
-    public FileSystemDiffResult merge(FileSystemDiffResult result) {
+    public WfDiffResult merge(ProvisioningDiffResult result) {
         super.merge(result);
         if (result instanceof WfDiffResult) {
             this.scripts.addAll(((WfDiffResult) result).getScripts());
-            this.includedConfigs.putAll(((WfDiffResult) result).getIncludedConfigs());
-            this.configs.addAll(((WfDiffResult) result).getConfigs());
         }
         return this;
     }

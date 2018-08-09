@@ -18,6 +18,7 @@ package org.wildfly.galleon.plugin.config;
 
 import org.jboss.galleon.ProvisioningDescriptionException;
 import org.jboss.galleon.config.ConfigModel;
+import org.jboss.galleon.model.Gaec;
 import org.jboss.galleon.util.ParsingUtils;
 import org.jboss.galleon.xml.ConfigXml;
 import org.jboss.galleon.xml.XmlNameProvider;
@@ -434,7 +435,7 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
             required.remove(attribute);
             switch (attribute) {
                 case ARTIFACT:
-                    builder.setArtifact(reader.getAttributeValue(i));
+                    builder.setArtifact(Gaec.parse(reader.getAttributeValue(i)));
                     break;
                 case TO_LOCATION:
                     builder.setToLocation(reader.getAttributeValue(i));
