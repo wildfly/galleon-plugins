@@ -44,9 +44,11 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -115,7 +117,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
     private ProvisioningRuntime runtime;
     private MessageWriter log;
-    private PropertyResolver versionResolver;
+    private VersionResolver versionResolver;
 
     private Map<FPID, Properties> fpTasksProps = Collections.emptyMap();
     private Properties mergedTaskProps = new Properties();
@@ -156,29 +158,33 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
         thinServer = runtime.isOptionSet(OPTION_MVN_DIST);
 
-        final Map<String, String> artifactVersions = new HashMap<>();
+        final VersionResolver.Builder vrBuilder = new VersionResolver.Builder();
         for(FeaturePackRuntime fp : runtime.getFeaturePacks()) {
             final Path wfRes = fp.getResource(WfConstants.WILDFLY);
             if(!Files.exists(wfRes)) {
                 continue;
             }
 
+            FpInfo.Builder fpInfoBuilder = new FpInfo.Builder().packageNames(fp.getPackageNames());
+
             final Path artifactProps = wfRes.resolve(WfConstants.ARTIFACT_VERSIONS_PROPS);
             if(Files.exists(artifactProps)) {
-                try (Stream<String> lines = Files.lines(artifactProps)) {
+                try(Stream<String> lines = Files.lines(artifactProps)) {
                     final Iterator<String> iterator = lines.iterator();
-                    while (iterator.hasNext()) {
+                    while(iterator.hasNext()) {
                         final String line = iterator.next();
                         final int i = line.indexOf('=');
-                        if (i < 0) {
+                        if(i < 0) {
                             throw new ProvisioningException("Failed to locate '=' character in " + line);
                         }
-                        artifactVersions.put(line.substring(0, i), line.substring(i + 1));
+                        fpInfoBuilder.artifactVersion(line.substring(0, i), line.substring(i + 1));
                     }
                 } catch (IOException e) {
                     throw new ProvisioningException(Errors.readFile(artifactProps), e);
                 }
             }
+
+            vrBuilder.featurePack(fpInfoBuilder.build());
 
             final Path tasksPropsPath = wfRes.resolve(WfConstants.WILDFLY_TASKS_PROPS);
             if(Files.exists(tasksPropsPath)) {
@@ -207,7 +213,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             }
         }
         mergedTaskPropsResolver = new MapPropertyResolver(mergedTaskProps);
-        versionResolver = new MapPropertyResolver(artifactVersions);
+        versionResolver = vrBuilder.build();
 
         pkgProgressTracker = runtime.getLayoutFactory().getProgressTracker(ProvisioningLayoutFactory.TRACK_PACKAGES);
         long pkgsTotal = 0;
@@ -380,9 +386,9 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         final URL[] cp = new URL[3];
         try {
             cp[0] = configGenJar.toUri().toURL();
-            ArtifactCoords.Gav gav = ArtifactCoords.newGav(resolveRequiredGav("org.jboss.modules:jboss-modules"));
+            ArtifactCoords.Gav gav = ArtifactCoords.newGav(resolveRequiredGav("misc.common", "org.jboss.modules:jboss-modules"));
             cp[1] = runtime.resolveArtifact(new ArtifactCoords(gav.getGroupId(), gav.getArtifactId(), gav.getVersion(), null, JAR)).toUri().toURL();
-            gav = ArtifactCoords.newGav(resolveRequiredGav("org.wildfly.core:wildfly-cli"));
+            gav = ArtifactCoords.newGav(resolveRequiredGav("org.jboss.as.cli", "org.wildfly.core:wildfly-cli"));
             cp[2] = runtime.resolveArtifact(new ArtifactCoords(gav.getGroupId(), gav.getArtifactId(), gav.getVersion(), "client", JAR)).toUri().toURL();
         } catch (IOException e) {
             throw new ProvisioningException("Failed to init classpath for " + runtime.getStagedDir(), e);
@@ -426,8 +432,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
     }
 
-    private String resolveRequiredGav(String artifactGa) throws ProvisioningException {
-        String gavStr = versionResolver.resolveProperty(artifactGa);
+    private String resolveRequiredGav(String packageName, String artifactGa) throws ProvisioningException {
+        String gavStr = versionResolver.resolveVersion(packageName, artifactGa);
         if(gavStr == null) {
             throw new ProvisioningException("Failed to resolve version of " + artifactGa);
         }
@@ -539,13 +545,12 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
     }
 
-    private void processModules(FPID fp, String pkgName, Path fpModuleDir) throws ProvisioningException {
+    private void processModules(FPID fp, final String pkgName, Path fpModuleDir) throws ProvisioningException {
         try {
             final Path installDir = runtime.getStagedDir();
             Files.walkFileTree(fpModuleDir, new SimpleFileVisitor<Path>() {
                 @Override
-                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs)
-                    throws IOException {
+                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
                     final Path targetDir = installDir.resolve(fpModuleDir.relativize(dir));
                     try {
                         Files.copy(dir, targetDir);
@@ -557,10 +562,9 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                     return FileVisitResult.CONTINUE;
                 }
                 @Override
-                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
-                    throws IOException {
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
                     if(file.getFileName().toString().equals(WfConstants.MODULE_XML)) {
-                        processModuleTemplate(fpModuleDir, installDir, file);
+                        processModuleTemplate(pkgName, fpModuleDir, installDir, file);
                     } else {
                         Files.copy(file, installDir.resolve(fpModuleDir.relativize(file)), StandardCopyOption.REPLACE_EXISTING);
                     }
@@ -572,7 +576,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
     }
 
-    private void processModuleTemplate(Path fpModuleDir, final Path installDir, Path moduleTemplate) throws IOException {
+    private void processModuleTemplate(String pkgName, Path fpModuleDir, final Path installDir, Path moduleTemplate)
+            throws IOException {
         final Builder builder = new Builder(false);
         final Document document;
         try (BufferedReader reader = Files.newBufferedReader(moduleTemplate, StandardCharsets.UTF_8)) {
@@ -604,10 +609,10 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 } else {
                     artifactName = exprBody;
                 }
-                final String resolved = versionResolver.resolveProperty(artifactName);
+                final String resolved = versionResolver.resolveVersion(pkgName, artifactName);
                 if (resolved != null) {
                     try {
-                        versionAttribute.setValue(toArtifactCoords(resolved, false).getVersion());
+                        versionAttribute.setValue(toArtifactCoords(pkgName, resolved, false).getVersion());
                     } catch (ProvisioningException e) {
                         throw new IOException("Failed to resolve artifact coordinates for " + resolved, e);
                     }
@@ -632,7 +637,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                         jandex = coordsStr.indexOf("jandex", optionsIndex) >= 0;
                         coordsStr = coordsStr.substring(0, optionsIndex);
                     }
-                    coordsStr = versionResolver.resolveProperty(coordsStr);
+                    coordsStr = versionResolver.resolveVersion(pkgName, coordsStr);
                 }
 
                 if(coordsStr == null) {
@@ -641,7 +646,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
                 ArtifactCoords coords;
                 try {
-                    coords = toArtifactCoords(coordsStr, false);
+                    coords = toArtifactCoords(pkgName, coordsStr, false);
                 } catch (ProvisioningException e) {
                     throw new IOException("Failed to resolve full coordinates for " + coordsStr, e);
                 }
@@ -723,8 +728,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
     }
 
-    public void copyArtifact(CopyArtifact copyArtifact) throws ProvisioningException, ArtifactException {
-        final ArtifactCoords coords = toArtifactCoords(copyArtifact.getArtifact(), copyArtifact.isOptional());
+    public void copyArtifact(String packageName, CopyArtifact copyArtifact) throws ProvisioningException, ArtifactException {
+        final ArtifactCoords coords = toArtifactCoords(packageName, copyArtifact.getArtifact(), copyArtifact.isOptional());
         if(coords == null) {
             return;
         }
@@ -878,11 +883,11 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
     }
 
-    private ArtifactCoords toArtifactCoords(String str, boolean optional) throws ProvisioningException {
+    private ArtifactCoords toArtifactCoords(String packageName, String artifact, boolean optional) throws ProvisioningException {
 
-        String[] parts = str.split(":");
+        String[] parts = artifact.split(":");
         if(parts.length < 2) {
-            throw new IllegalArgumentException("Unexpected artifact coordinates format: " + str);
+            throw new IllegalArgumentException("Unexpected artifact coordinates format: " + artifact);
         }
         final String groupId = parts[0];
         final String artifactId = parts[1];
@@ -898,7 +903,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 if(parts.length > 4 && !parts[4].isEmpty()) {
                     ext = parts[4];
                     if (parts.length > 5) {
-                        throw new IllegalArgumentException("Unexpected artifact coordinates format: " + str);
+                        throw new IllegalArgumentException("Unexpected artifact coordinates format: " + artifact);
                     }
                 }
             }
@@ -908,12 +913,12 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             return new ArtifactCoords(groupId, artifactId, version, classifier, ext);
         }
 
-        final String resolvedStr = versionResolver.resolveProperty(groupId + ':' + artifactId);
+        final String resolvedStr = versionResolver.resolveVersion(packageName, groupId + ':' + artifactId);
         if (resolvedStr == null) {
             if (optional) {
                 return null;
             }
-            throw new ProvisioningException("Failed to resolve the version of " + str);
+            throw new ProvisioningException("Failed to resolve the version of " + artifact);
         }
 
         parts = resolvedStr.split(":");
@@ -921,5 +926,95 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             throw new ProvisioningException("Failed to resolve version for artifact: " + resolvedStr);
         }
         return new ArtifactCoords(groupId, artifactId, parts[2], classifier, ext);
+    }
+
+    /**
+     * {@link #packageNames} combined with {@link #artifactToVersion} {@link Map} both related to a specific feature
+     * pack.
+     */
+    static class FpInfo {
+        FpInfo(Set<String> packageNames, Map<String, String> artifactToVersion) {
+            super();
+            this.packageNames = packageNames;
+            this.artifactToVersion = artifactToVersion;
+        }
+
+        static class Builder {
+            private Set<String> packageNames = new HashSet<>();
+            private Map<String, String> artifactToVersion = new HashMap<>();
+
+            FpInfo build() {
+                final Set<String> pns = packageNames;
+                packageNames = null;
+                final Map<String, String> versions = artifactToVersion;
+                artifactToVersion = null;
+                return new FpInfo(pns, versions);
+            }
+
+            Builder packageNames(Set<String> packageNames) {
+                this.packageNames.addAll(packageNames);
+                return this;
+            }
+
+            Builder packageName(String packageName) {
+                packageNames.add(packageName);
+                return this;
+            }
+
+            Builder artifactVersion(String artifact, String version) {
+                artifactToVersion.put(artifact, version);
+                return this;
+            }
+        }
+
+        private final Set<String> packageNames;
+        private final Map<String, String> artifactToVersion;
+    }
+
+    /**
+     * Resolves artifact coordinates to versioned artifact coordinates.
+     */
+    static class VersionResolver {
+
+        static class Builder {
+            private List<FpInfo> featurePacks = new ArrayList<>();
+
+            Builder featurePack(FpInfo fpInfo) {
+                featurePacks.add(fpInfo);
+                return this;
+            }
+
+            VersionResolver build() {
+                List<FpInfo> m = featurePacks;
+                featurePacks = null;
+                return new VersionResolver(m);
+            }
+        }
+
+        private final List<FpInfo> featurePacks;
+
+        VersionResolver(List<FpInfo> featurePacks) {
+            super();
+            this.featurePacks = featurePacks;
+        }
+
+        /**
+         * @param packageName the name of the Galleon package the given artifact resists in
+         * @param artifact    versionless artifact coordinates
+         * @return versioned artifact coordinates
+         */
+        String resolveVersion(String packageName, String artifact) {
+            ListIterator<FpInfo> it = featurePacks.listIterator(featurePacks.size());
+            while(it.hasPrevious()) {
+                FpInfo fp = it.previous();
+                if(fp.packageNames.contains(packageName)) {
+                    final String result = fp.artifactToVersion.get(artifact);
+                    if(result != null) {
+                        return result;
+                    }
+                }
+            }
+            return null;
+        }
     }
 }

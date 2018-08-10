@@ -96,6 +96,6 @@ public class CopyArtifact implements WildFlyPackageTask {
 
     @Override
     public void execute(WfInstallPlugin plugin, PackageRuntime pkg) throws ProvisioningException {
-        plugin.copyArtifact(this);
+        plugin.copyArtifact(pkg.getName(), this);
     }
 }
