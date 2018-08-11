@@ -29,6 +29,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -37,6 +38,7 @@ import java.util.regex.Pattern;
 
 import org.jboss.galleon.Errors;
 import org.jboss.galleon.ProvisioningException;
+import org.jboss.galleon.util.CollectionUtils;
 import org.jboss.galleon.util.IoUtils;
 
 
@@ -45,6 +47,8 @@ import org.jboss.galleon.util.IoUtils;
  * @author Alexey Loubyansky
  */
 public class ForkedEmbeddedUtil {
+
+    public static final String FORKED_EMBEDDED_ERROR_START = "Forked embedded process has failed with the following error:";
 
     public interface ForkCallback {
 
@@ -109,10 +113,16 @@ public class ForkedEmbeddedUtil {
             throw new ProvisioningException("Failed to start a feature spec reading process", e);
         }
 
+        List<String> trace = null;
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
             String line = reader.readLine();
             while (line != null) {
                 callback.forkedEmbeddedMessage(line);
+                if(trace != null) {
+                    trace.add(line);
+                } else if(FORKED_EMBEDDED_ERROR_START.equals(line)) {
+                    trace = new ArrayList<>();
+                }
                 line = reader.readLine();
             }
             if (p.isAlive()) {
@@ -124,8 +134,18 @@ public class ForkedEmbeddedUtil {
             }
 
             int exitCode = p.exitValue();
-            if (exitCode != 0){
-                throw new ProvisioningException("Forked embedded process has failed");
+            if (exitCode != 0) {
+                Throwable t = null;
+                if(trace != null) {
+                    t = parseException(trace, 0);
+                    if(t == null) {
+                        System.out.println(FORKED_EMBEDDED_ERROR_START);
+                        for(String l : trace) {
+                            System.out.println(l);
+                        }
+                    }
+                }
+                throw new ProvisioningException("Forked embedded process has failed", t);
             }
         } catch (IOException e) {
             throw new ProvisioningException("Forked embedded process has failed", e);
@@ -174,8 +194,23 @@ public class ForkedEmbeddedUtil {
             }
             ((ForkCallback)o).forkedForEmbedded(args.length == 2 ? new String[0] : Arrays.copyOfRange(args, 2, args.length));
 
-        } catch (Throwable t){
-            t.printStackTrace(System.err);
+        } catch (Throwable t) {
+            System.err.println(FORKED_EMBEDDED_ERROR_START);
+            final StringBuilder buf = new StringBuilder();
+            while(t != null) {
+                buf.setLength(0);
+                buf.append(t.getClass().getName());
+                if(t.getMessage() != null) {
+                    buf.append(": ").append(t.getMessage());
+                }
+                System.err.println(buf.toString());
+                for(StackTraceElement e : t.getStackTrace()) {
+                    buf.setLength(0);
+                    buf.append("\tat ").append(e.toString());
+                    System.err.println(buf.toString());
+                }
+                t = t.getCause();
+            }
             System.exit(1);
         }
     }
@@ -218,5 +253,91 @@ public class ForkedEmbeddedUtil {
                 buf.append(file);
             }
         }
+    }
+
+    private static Throwable parseException(List<String> trace, int offset) {
+        final String classAndMsg = trace.get(offset);
+        String className = null;
+        List<Class<?>> ctorArgTypes = Collections.emptyList();
+        List<Object> ctorArgs = Collections.emptyList();
+        int i = classAndMsg.indexOf(':');
+        if(i < 0) {
+            className = classAndMsg;
+        } else {
+            className = classAndMsg.substring(0, i);
+            ctorArgTypes = CollectionUtils.add(ctorArgTypes, String.class);
+            ctorArgs = CollectionUtils.add(ctorArgs, classAndMsg.substring(i + 1).trim());
+        }
+
+        final List<StackTraceElement> stack = new ArrayList<>(trace.size() - offset - 1);
+        for(i = offset + 1; i < trace.size(); ++i) {
+            final StackTraceElement ste = stackTraceElementFromString(trace.get(i));
+            if(ste == null) {
+                final Throwable cause = parseException(trace, i);
+                if(cause == null) {
+                    return null;
+                }
+                ctorArgTypes = CollectionUtils.add(ctorArgTypes, Throwable.class);
+                ctorArgs = CollectionUtils.add(ctorArgs, cause);
+                break;
+            }
+            stack.add(ste);
+        }
+
+        final Throwable t;
+        try {
+            final Class<?> excClass = Thread.currentThread().getContextClassLoader().loadClass(className);
+            if(ctorArgTypes.isEmpty()) {
+                t = (Throwable) excClass.newInstance();
+            } else {
+                t = (Throwable) excClass.getConstructor(ctorArgTypes.toArray(new Class[ctorArgTypes.size()]))
+                        .newInstance(ctorArgs.toArray(new Object[ctorArgs.size()]));
+            }
+        } catch (Throwable e) {
+            return null;
+        }
+        t.setStackTrace(stack.toArray(new StackTraceElement[stack.size()]));
+        return t;
+    }
+
+    private static StackTraceElement stackTraceElementFromString(String line) {
+        int i = line.length() - 1;
+        if(i < 0) {
+            return null;
+        }
+        if(line.charAt(i) != ')') {
+            return null;
+        }
+        int pos = line.lastIndexOf(':');
+        if(pos < 0) {
+            return null;
+        }
+        final int lineNumber = Integer.parseInt(line.substring(pos + 1, i));
+        i = pos;
+        pos = line.lastIndexOf('(');
+        if(pos < 0) {
+            return null;
+        }
+        final String file = line.substring(pos + 1, i);
+        i = pos;
+        while(--pos >= 0) {
+            if(line.charAt(pos) == '.') {
+                break;
+            }
+        }
+        if(pos < 0) {
+            return null;
+        }
+        final String method = line.substring(pos + 1, i);
+        i = pos;
+        while(--pos >= 0) {
+            if(Character.isWhitespace(line.charAt(pos))) {
+                break;
+            }
+        }
+        if(pos < 0) {
+            return null;
+        }
+        return new StackTraceElement(line.substring(pos + 1, i), method, file, lineNumber);
     }
 }
