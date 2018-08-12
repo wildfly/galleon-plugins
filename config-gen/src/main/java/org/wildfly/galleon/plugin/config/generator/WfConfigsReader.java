@@ -146,9 +146,9 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
         final WfConfigsReader reader = new WfConfigsReader();
         reader.log = log;
         reader.home = home;
-        reader.generate(layout, provisionedState, home, log, true);
+        reader.generate(layout, provisionedState, home, log, false);
 
-        Path baseDir = Paths.get("/home/olubyans/galleon-scripts");
+        Path baseDir = Paths.get(System.getProperty("user.home")).resolve("galleon-scripts");
         for(ConfigModel config : reader.userConfigs) {
             try {
                 ConfigXmlWriter.getInstance().write(config, baseDir.resolve(config.getName()));
