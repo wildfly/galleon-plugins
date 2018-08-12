@@ -35,7 +35,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
-import org.jboss.galleon.ArtifactCoords;
 import org.jboss.galleon.Errors;
 import org.jboss.galleon.MessageWriter;
 import org.jboss.galleon.ProvisioningException;
@@ -49,6 +48,8 @@ import org.jboss.galleon.plugin.ProvisioningPluginWithOptions;
 import org.jboss.galleon.runtime.FeaturePackRuntime;
 import org.jboss.galleon.runtime.ProvisioningRuntime;
 import org.jboss.galleon.universe.FeaturePackLocation.FPID;
+import org.jboss.galleon.universe.maven.MavenArtifact;
+import org.jboss.galleon.universe.maven.repo.MavenRepoManager;
 import org.jboss.galleon.util.PathFilter;
 
 /**
@@ -79,6 +80,9 @@ public class WfDiffPlugin extends ProvisioningPluginWithOptions implements DiffP
     public static final PluginOption PASSWORD = PluginOption.builder("password").setDefaultValue("galleon").build();
     public static final PluginOption SERVER_CONFIG = PluginOption.builder("server-config").setDefaultValue("standalone.xml").build();
 
+    private PropertyResolver versionResolver;
+    private MavenRepoManager maven;
+
     @Override
     protected List<PluginOption> initPluginOptions() {
         return Arrays.asList(
@@ -100,17 +104,16 @@ public class WfDiffPlugin extends ProvisioningPluginWithOptions implements DiffP
             throw new ProvisioningException(Errors.pathDoesNotExist(configGenJar));
         }
 
-        final PropertyResolver propertyResolver = getPropertyResolver(runtime);
+        versionResolver = getPropertyResolver(runtime);
+        maven = (MavenRepoManager) runtime.getArtifactResolver(MavenRepoManager.REPOSITORY_ID);
+
 
         final URL[] cp = new URL[4];
         try {
             cp[0] = configGenJar.toUri().toURL();
-            ArtifactCoords.Gav gav = ArtifactCoords.newGav(resolveRequiredGav(propertyResolver, "org.jboss.modules:jboss-modules"));
-            cp[1] = runtime.resolveArtifact(new ArtifactCoords(gav.getGroupId(), gav.getArtifactId(), gav.getVersion(), null, "jar")).toUri().toURL();
-            gav = ArtifactCoords.newGav(resolveRequiredGav(propertyResolver, "org.wildfly.core:wildfly-cli"));
-            cp[2] = runtime.resolveArtifact(new ArtifactCoords(gav.getGroupId(), gav.getArtifactId(), gav.getVersion(), "client", "jar")).toUri().toURL();
-            gav = ArtifactCoords.newGav(resolveRequiredGav(propertyResolver, "org.wildfly.core:wildfly-launcher"));
-            cp[3] = runtime.resolveArtifact(new ArtifactCoords(gav.getGroupId(), gav.getArtifactId(), gav.getVersion(), null, "jar")).toUri().toURL();
+            cp[1] = resolveRequiredArtifact("org.jboss.modules:jboss-modules", MavenArtifact.EXT_JAR, null).toUri().toURL();
+            cp[2] = resolveRequiredArtifact("org.wildfly.core:wildfly-cli", MavenArtifact.EXT_JAR, "client").toUri().toURL();
+            cp[3] = resolveRequiredArtifact("org.wildfly.core:wildfly-launcher", MavenArtifact.EXT_JAR, null).toUri().toURL();
         } catch (IOException e) {
             throw new ProvisioningException("Failed to init classpath for " + runtime.getStagedDir(), e);
         }
@@ -152,6 +155,20 @@ public class WfDiffPlugin extends ProvisioningPluginWithOptions implements DiffP
                 // Collections.singletonList(target.resolve("finalize.cli").toAbsolutePath()),
                 Collections.emptyList(),
                 diff.diff(getFilter(runtime)));
+    }
+
+    private Path resolveRequiredArtifact(String ga, String ext, String classifier) throws ProvisioningException {
+        String gavStr = versionResolver.resolveProperty(ga);
+        if(gavStr == null) {
+            throw new ProvisioningException("Failed to resolve version of " + ga);
+        }
+        final MavenArtifact artifact = MavenArtifact.fromString(gavStr);
+        artifact.setExtension(MavenArtifact.EXT_JAR);
+        if(classifier != null) {
+            artifact.setClassifier(classifier);
+        }
+        maven.resolve(artifact);
+        return artifact.getPath();
     }
 
     private PathFilter getFilter(ProvisioningRuntime runtime) {
