@@ -74,7 +74,7 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
         private static final Map<QName, Element> elements;
 
         static {
-            Map<QName, Element> elementsMap = new HashMap<QName, Element>();
+            Map<QName, Element> elementsMap = new HashMap<QName, Element>(17);
             elementsMap.put(new QName(NAMESPACE_2_0, Element.CONFIG.getLocalName()), Element.CONFIG);
             elementsMap.put(new QName(NAMESPACE_2_0, Element.COPY_ARTIFACT.getLocalName()), Element.COPY_ARTIFACT);
             elementsMap.put(new QName(NAMESPACE_2_0, Element.COPY_PATH.getLocalName()), Element.COPY_PATH);
@@ -127,6 +127,7 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
         ARTIFACT("artifact"),
         BASEDIR("basedir"),
         EXTRACT("extract"),
+        FEATURE_PACK_VERSION("feature-pack-version"),
         GROUP("group"),
         INCLUDE("include"),
         MODEL("model"),
@@ -152,10 +153,11 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
         private static final Map<QName, Attribute> attributes;
 
         static {
-            Map<QName, Attribute> attributesMap = new HashMap<QName, Attribute>();
+            Map<QName, Attribute> attributesMap = new HashMap<QName, Attribute>(22);
             attributesMap.put(new QName(ARTIFACT.getLocalName()), ARTIFACT);
             attributesMap.put(new QName(BASEDIR.getLocalName()), BASEDIR);
             attributesMap.put(new QName(EXTRACT.getLocalName()), EXTRACT);
+            attributesMap.put(new QName(FEATURE_PACK_VERSION.getLocalName()), FEATURE_PACK_VERSION);
             attributesMap.put(new QName(GROUP.getLocalName()), GROUP);
             attributesMap.put(new QName(INCLUDE.getLocalName()), INCLUDE);
             attributesMap.put(new QName(MODEL.getLocalName()), MODEL);
@@ -447,6 +449,11 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
                 case OPTIONAL:
                     if(Boolean.parseBoolean(reader.getAttributeValue(i))) {
                         builder.setOptional();
+                    }
+                    break;
+                case FEATURE_PACK_VERSION:
+                    if(Boolean.parseBoolean(reader.getAttributeValue(i))) {
+                        builder.setFeaturePackVersion();
                     }
                     break;
                 default:

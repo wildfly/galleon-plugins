@@ -16,6 +16,7 @@
  */
 package org.wildfly.galleon.plugin;
 
+
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
@@ -44,13 +45,12 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
-import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.stream.Stream;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.transform.Transformer;
@@ -86,6 +86,7 @@ import org.jboss.galleon.runtime.FeaturePackRuntime;
 import org.jboss.galleon.runtime.PackageRuntime;
 import org.jboss.galleon.runtime.ProvisioningRuntime;
 import org.jboss.galleon.universe.FeaturePackLocation.FPID;
+import org.jboss.galleon.universe.FeaturePackLocation.ProducerSpec;
 import org.jboss.galleon.universe.maven.MavenArtifact;
 import org.jboss.galleon.universe.maven.repo.MavenRepoManager;
 import org.jboss.galleon.util.IoUtils;
@@ -115,9 +116,10 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
     private ProvisioningRuntime runtime;
     private MessageWriter log;
-    private PropertyResolver versionResolver;
 
-    private Map<FPID, Properties> fpTasksProps = Collections.emptyMap();
+    private Map<String, String> mergedArtifactVersions = new HashMap<>();
+    private Map<ProducerSpec, Map<String, String>> fpArtifactVersions = new HashMap<>();
+    private Map<ProducerSpec, Map<String, String>> fpTasksProps = Collections.emptyMap();
     private Properties mergedTaskProps = new Properties();
     private PropertyResolver mergedTaskPropsResolver;
 
@@ -136,6 +138,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private ProgressTracker<PackageRuntime> pkgProgressTracker;
 
     private MavenRepoManager maven;
+
+    private Map<Path, PackageRuntime> jbossModules = new LinkedHashMap<>();
 
     @Override
     protected List<PluginOption> initPluginOptions() {
@@ -159,7 +163,6 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         thinServer = runtime.isOptionSet(OPTION_MVN_DIST);
         maven = (MavenRepoManager) runtime.getArtifactResolver(MavenRepoManager.REPOSITORY_ID);
 
-        final Map<String, String> artifactVersions = new HashMap<>();
         for(FeaturePackRuntime fp : runtime.getFeaturePacks()) {
             final Path wfRes = fp.getResource(WfConstants.WILDFLY);
             if(!Files.exists(wfRes)) {
@@ -168,30 +171,15 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
             final Path artifactProps = wfRes.resolve(WfConstants.ARTIFACT_VERSIONS_PROPS);
             if(Files.exists(artifactProps)) {
-                try (Stream<String> lines = Files.lines(artifactProps)) {
-                    final Iterator<String> iterator = lines.iterator();
-                    while (iterator.hasNext()) {
-                        final String line = iterator.next();
-                        final int i = line.indexOf('=');
-                        if (i < 0) {
-                            throw new ProvisioningException("Failed to locate '=' character in " + line);
-                        }
-                        artifactVersions.put(line.substring(0, i), line.substring(i + 1));
-                    }
-                } catch (IOException e) {
-                    throw new ProvisioningException(Errors.readFile(artifactProps), e);
-                }
+                final Map<String, String> versionProps = Utils.readProperties(artifactProps);
+                fpArtifactVersions.put(fp.getFPID().getProducer(), versionProps);
+                mergedArtifactVersions.putAll(versionProps);
             }
 
             final Path tasksPropsPath = wfRes.resolve(WfConstants.WILDFLY_TASKS_PROPS);
             if(Files.exists(tasksPropsPath)) {
-                final Properties fpProps = new Properties();
-                try(InputStream in = Files.newInputStream(tasksPropsPath)) {
-                    fpProps.load(in);
-                } catch (IOException e) {
-                    throw new ProvisioningException(Errors.readFile(tasksPropsPath), e);
-                }
-                fpTasksProps = CollectionUtils.put(fpTasksProps, fp.getFPID(), fpProps);
+                final Map<String, String> fpProps = Utils.readProperties(tasksPropsPath);
+                fpTasksProps = CollectionUtils.put(fpTasksProps, fp.getFPID().getProducer(), fpProps);
                 mergedTaskProps.putAll(fpProps);
             }
 
@@ -210,7 +198,6 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             }
         }
         mergedTaskPropsResolver = new MapPropertyResolver(mergedTaskProps);
-        versionResolver = new MapPropertyResolver(artifactVersions);
 
         pkgProgressTracker = runtime.getLayoutFactory().getProgressTracker(ProvisioningLayoutFactory.TRACK_PACKAGES);
         long pkgsTotal = 0;
@@ -222,6 +209,22 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             processPackages(fp);
         }
         pkgProgressTracker.complete();
+        if (!jbossModules.isEmpty()) {
+            final ProgressTracker<PackageRuntime> modulesTracker = runtime.getLayoutFactory().getProgressTracker("JBMODULES");
+            modulesTracker.starting(jbossModules.size());
+            for (Map.Entry<Path, PackageRuntime> entry : jbossModules.entrySet()) {
+                final PackageRuntime pkg = entry.getValue();
+                modulesTracker.processing(pkg);
+                try {
+                    processModuleTemplate(pkg, entry.getKey());
+                } catch (IOException e) {
+                    throw new ProvisioningException("Failed to process JBoss module XML template for feature-pack "
+                            + pkg.getFeaturePackRuntime().getFPID() + " package " + pkg.getName(), e);
+                }
+                modulesTracker.processed(pkg);
+            }
+            modulesTracker.complete();
+        }
 
         final Path layersConf = runtime.getStagedDir().resolve(WfConstants.MODULES).resolve(WfConstants.LAYERS_CONF);
         if(Files.exists(layersConf)) {
@@ -383,8 +386,12 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         final URL[] cp = new URL[3];
         try {
             cp[0] = configGenJar.toUri().toURL();
-            cp[1] = resolveRequiredArtifact("org.jboss.modules:jboss-modules", MavenArtifact.EXT_JAR, null).toUri().toURL();
-            cp[2] = resolveRequiredArtifact("org.wildfly.core:wildfly-cli", MavenArtifact.EXT_JAR, "client").toUri().toURL();
+            MavenArtifact artifact = Utils.toArtifactCoords(mergedArtifactVersions, "org.jboss.modules:jboss-modules", false);
+            maven.resolve(artifact);
+            cp[1] = artifact.getPath().toUri().toURL();
+            artifact = Utils.toArtifactCoords(mergedArtifactVersions, "org.wildfly.core:wildfly-cli::client", false);
+            maven.resolve(artifact);
+            cp[2] = artifact.getPath().toUri().toURL();
         } catch (IOException e) {
             throw new ProvisioningException("Failed to init classpath for " + runtime.getStagedDir(), e);
         }
@@ -427,20 +434,6 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
     }
 
-    private Path resolveRequiredArtifact(String ga, String ext, String classifier) throws ProvisioningException {
-        String gavStr = versionResolver.resolveProperty(ga);
-        if(gavStr == null) {
-            throw new ProvisioningException("Failed to resolve version of " + ga);
-        }
-        final MavenArtifact artifact = MavenArtifact.fromString(gavStr);
-        artifact.setExtension(MavenArtifact.EXT_JAR);
-        if(classifier != null) {
-            artifact.setClassifier(classifier);
-        }
-        maven.resolve(artifact);
-        return artifact.getPath();
-    }
-
     private void processPackages(final FeaturePackRuntime fp) throws ProvisioningException {
         log.verbose("Processing %s packages", fp.getFPID());
         for(PackageRuntime pkg : fp.getPackages()) {
@@ -452,27 +445,25 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             }
             final Path moduleDir = pmWfDir.resolve(WfConstants.MODULE);
             if(Files.exists(moduleDir)) {
-                processModules(fp.getFPID(), pkg.getName(), moduleDir);
+                processModules(pkg, moduleDir);
             }
             final Path tasksXml = pmWfDir.resolve(WfConstants.TASKS_XML);
-            if(!Files.exists(tasksXml)) {
-                pkgProgressTracker.processed(pkg);
-                continue;
-            }
-            final WildFlyPackageTasks pkgTasks = WildFlyPackageTasks.load(tasksXml);
-            if (pkgTasks.hasTasks()) {
-                log.verbose("Processing %s package %s tasks", fp.getFPID(), pkg.getName());
-                for(WildFlyPackageTask task : pkgTasks.getTasks()) {
-                    if(task.getPhase() == WildFlyPackageTask.Phase.PROCESSING) {
-                        task.execute(this, pkg);
-                    } else {
-                        finalizingTasks = CollectionUtils.add(finalizingTasks, task);
-                        finalizingTasksPkgs = CollectionUtils.add(finalizingTasksPkgs, pkg);
+            if (Files.exists(tasksXml)) {
+                final WildFlyPackageTasks pkgTasks = WildFlyPackageTasks.load(tasksXml);
+                if (pkgTasks.hasTasks()) {
+                    log.verbose("Processing %s package %s tasks", fp.getFPID(), pkg.getName());
+                    for (WildFlyPackageTask task : pkgTasks.getTasks()) {
+                        if (task.getPhase() == WildFlyPackageTask.Phase.PROCESSING) {
+                            task.execute(this, pkg);
+                        } else {
+                            finalizingTasks = CollectionUtils.add(finalizingTasks, task);
+                            finalizingTasksPkgs = CollectionUtils.add(finalizingTasksPkgs, pkg);
+                        }
                     }
                 }
-            }
-            if (pkgTasks.hasMkDirs()) {
-                mkdirs(pkgTasks, this.runtime.getStagedDir());
+                if (pkgTasks.hasMkDirs()) {
+                    mkdirs(pkgTasks, this.runtime.getStagedDir());
+                }
             }
             pkgProgressTracker.processed(pkg);
         }
@@ -497,10 +488,10 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                     transformer.setParameter(param.getKey(), param.getValue());
                 }
             }
-            final Properties taskProps = fpTasksProps.get(fp.getFPID());
+            final Map<String, String> taskProps = fpTasksProps.get(fp.getFPID().getProducer());
             if (taskProps != null) {
-                for (Map.Entry<Object, Object> prop : taskProps.entrySet()) {
-                    transformer.setParameter(prop.getKey().toString(), prop.getValue());
+                for (Map.Entry<String, String> prop : taskProps.entrySet()) {
+                    transformer.setParameter(prop.getKey(), prop.getValue());
                 }
             }
             final DOMSource source = new DOMSource(document);
@@ -546,14 +537,14 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
     }
 
-    private void processModules(FPID fp, String pkgName, Path fpModuleDir) throws ProvisioningException {
+    private void processModules(PackageRuntime pkg, Path fpModuleDir) throws ProvisioningException {
         try {
-            final Path installDir = runtime.getStagedDir();
+            final Path stagedDir = runtime.getStagedDir();
             Files.walkFileTree(fpModuleDir, new SimpleFileVisitor<Path>() {
                 @Override
                 public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs)
                     throws IOException {
-                    final Path targetDir = installDir.resolve(fpModuleDir.relativize(dir));
+                    final Path targetDir = stagedDir.resolve(fpModuleDir.relativize(dir));
                     try {
                         Files.copy(dir, targetDir);
                     } catch (FileAlreadyExistsException e) {
@@ -567,19 +558,29 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
                     throws IOException {
                     if(file.getFileName().toString().equals(WfConstants.MODULE_XML)) {
-                        processModuleTemplate(fpModuleDir, installDir, file);
+                        final PackageRuntime overridenPkg = jbossModules.put(fpModuleDir.relativize(file), pkg);
+                        if(overridenPkg != null) {
+                            if(log.isVerboseEnabled()) {
+                                log.verbose("Feature-pack " + pkg.getFeaturePackRuntime().getFPID() + " package " + pkg.getName() +
+                                        " overrode jboss-module from feature-pack " + overridenPkg.getFeaturePackRuntime().getFPID() +
+                                        " package " + overridenPkg.getName());
+                            }
+                        }
                     } else {
-                        Files.copy(file, installDir.resolve(fpModuleDir.relativize(file)), StandardCopyOption.REPLACE_EXISTING);
+                        Files.copy(file, stagedDir.resolve(fpModuleDir.relativize(file)), StandardCopyOption.REPLACE_EXISTING);
                     }
                     return FileVisitResult.CONTINUE;
                 }
             });
         } catch (IOException e) {
-            throw new ProvisioningException("Failed to process modules from package " + pkgName + " from feature-pack " + fp, e);
+            throw new ProvisioningException("Failed to process modules from package " + pkg.getName() + " from feature-pack " + pkg.getFeaturePackRuntime().getFPID(), e);
         }
     }
 
-    private void processModuleTemplate(Path fpModuleDir, final Path installDir, Path moduleTemplate) throws IOException {
+    private void processModuleTemplate(PackageRuntime pkg, Path moduleXmlRelativePath) throws ProvisioningException, IOException {
+        final Path moduleTemplate = pkg.getResource(WfConstants.PM, WfConstants.WILDFLY, WfConstants.MODULE).resolve(moduleXmlRelativePath);
+        final Path targetPath = runtime.getStagedDir().resolve(moduleXmlRelativePath);
+
         final Builder builder = new Builder(false);
         final Document document;
         try (BufferedReader reader = Files.newBufferedReader(moduleTemplate, StandardCharsets.UTF_8)) {
@@ -587,7 +588,6 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         } catch (ParsingException e) {
             throw new IOException("Failed to parse document", e);
         }
-        final Path targetPath = installDir.resolve(fpModuleDir.relativize(moduleTemplate));
         final Element rootElement = document.getRootElement();
         if (! rootElement.getLocalName().equals("module") &&
                 // module-alias files don't need to be processed
@@ -598,6 +598,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             Files.copy(moduleTemplate, targetPath, StandardCopyOption.REPLACE_EXISTING);
             return;
         }
+        final Map<String, String> versionProps = fpArtifactVersions.get(pkg.getFeaturePackRuntime().getFPID().getProducer());
         // replace version, if any
         final Attribute versionAttribute = rootElement.getAttribute("version");
         if (versionAttribute != null) {
@@ -611,13 +612,9 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 } else {
                     artifactName = exprBody;
                 }
-                final String resolved = versionResolver.resolveProperty(artifactName);
-                if (resolved != null) {
-                    try {
-                        versionAttribute.setValue(toArtifactCoords(resolved, false).getVersion());
-                    } catch (ProvisioningException e) {
-                        throw new IOException("Failed to resolve artifact coordinates for " + resolved, e);
-                    }
+                final MavenArtifact artifact = Utils.toArtifactCoords(versionProps, artifactName, false);
+                if (artifact != null) {
+                    versionAttribute.setValue(artifact.getVersion());
                 }
             }
         }
@@ -639,7 +636,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                         jandex = coordsStr.indexOf("jandex", optionsIndex) >= 0;
                         coordsStr = coordsStr.substring(0, optionsIndex);
                     }
-                    coordsStr = versionResolver.resolveProperty(coordsStr);
+                    coordsStr = versionProps.get(coordsStr);
                 }
 
                 if(coordsStr == null) {
@@ -648,7 +645,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
                 MavenArtifact artifact;
                 try {
-                    artifact = toArtifactCoords(coordsStr, false);
+                    artifact = Utils.toArtifactCoords(versionProps, coordsStr, false);
                 } catch (ProvisioningException e) {
                     throw new IOException("Failed to resolve full coordinates for " + coordsStr, e);
                 }
@@ -666,7 +663,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                     // ignore jandex variable, just resolve coordinates to a string
                     attribute.setValue(coordsStr);
                 } else {
-                    final Path targetDir = installDir.resolve(fpModuleDir.relativize(moduleTemplate.getParent()));
+                    final Path targetDir = targetPath.getParent();
                     final String artifactFileName = moduleArtifact.getFileName().toString();
                     final String finalFileName;
 
@@ -679,8 +676,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                         finalFileName = target.getName();
                     } else {
                         finalFileName = artifactFileName;
-                        final Path targetModulePath = targetDir.resolve(artifactFileName);
-                        Files.copy(moduleArtifact, targetModulePath, StandardCopyOption.REPLACE_EXISTING);
+                        Files.copy(moduleArtifact, targetDir.resolve(artifactFileName), StandardCopyOption.REPLACE_EXISTING);
                     }
                     element.setLocalName("resource-root");
                     attribute.setLocalName("path");
@@ -731,13 +727,15 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
     }
 
-    public void copyArtifact(CopyArtifact copyArtifact) throws ProvisioningException, ArtifactException {
-        final MavenArtifact artifact = toArtifactCoords(copyArtifact.getArtifact(), copyArtifact.isOptional());
+    public void copyArtifact(CopyArtifact copyArtifact, PackageRuntime pkg) throws ProvisioningException, ArtifactException {
+        final MavenArtifact artifact = Utils.toArtifactCoords(
+                copyArtifact.isFeaturePackVersion() ? fpArtifactVersions.get(pkg.getFeaturePackRuntime().getFPID().getProducer())
+                        : mergedArtifactVersions,
+                copyArtifact.getArtifact(), copyArtifact.isOptional());
         if(artifact == null) {
             return;
         }
         try {
-
             log.verbose("Resolving artifact %s ", artifact);
             maven.resolve(artifact);
             final Path jarSrc = artifact.getPath();
@@ -885,46 +883,5 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 }
             }
         }
-    }
-
-    private MavenArtifact toArtifactCoords(String str, boolean optional) throws ProvisioningException {
-        String[] parts = str.split(":");
-        if(parts.length < 2) {
-            throw new IllegalArgumentException("Unexpected artifact coordinates format: " + str);
-        }
-        final MavenArtifact artifact = new MavenArtifact();
-        artifact.setGroupId(parts[0]);
-        artifact.setArtifactId(parts[1]);
-        artifact.setExtension(MavenArtifact.EXT_JAR);
-        if(parts.length > 2) {
-            if(!parts[2].isEmpty()) {
-                artifact.setVersion(parts[2]);
-            }
-            if(parts.length > 3) {
-                artifact.setClassifier(parts[3]);
-                if(parts.length > 4 && !parts[4].isEmpty()) {
-                    artifact.setExtension(parts[4]);
-                    if (parts.length > 5) {
-                        throw new IllegalArgumentException("Unexpected artifact coordinates format: " + str);
-                    }
-                }
-            }
-        }
-
-        if(!artifact.hasVersion()) {
-            final String resolvedStr = versionResolver.resolveProperty(artifact.getGroupId() + ':' + artifact.getArtifactId());
-            if (resolvedStr == null) {
-                if (optional) {
-                    return null;
-                }
-                throw new ProvisioningException("Failed to resolve the version of " + str);
-            }
-            parts = resolvedStr.split(":");
-            if (parts.length < 3) {
-                throw new ProvisioningException("Failed to resolve version for artifact: " + resolvedStr);
-            }
-            artifact.setVersion(parts[2]);
-        }
-        return artifact;
     }
 }

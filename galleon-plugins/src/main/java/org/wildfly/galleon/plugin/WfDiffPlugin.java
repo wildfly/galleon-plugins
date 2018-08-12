@@ -30,11 +30,8 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Stream;
-
 import org.jboss.galleon.Errors;
 import org.jboss.galleon.MessageWriter;
 import org.jboss.galleon.ProvisioningException;
@@ -80,7 +77,6 @@ public class WfDiffPlugin extends ProvisioningPluginWithOptions implements DiffP
     public static final PluginOption PASSWORD = PluginOption.builder("password").setDefaultValue("galleon").build();
     public static final PluginOption SERVER_CONFIG = PluginOption.builder("server-config").setDefaultValue("standalone.xml").build();
 
-    private PropertyResolver versionResolver;
     private MavenRepoManager maven;
 
     @Override
@@ -104,16 +100,22 @@ public class WfDiffPlugin extends ProvisioningPluginWithOptions implements DiffP
             throw new ProvisioningException(Errors.pathDoesNotExist(configGenJar));
         }
 
-        versionResolver = getPropertyResolver(runtime);
         maven = (MavenRepoManager) runtime.getArtifactResolver(MavenRepoManager.REPOSITORY_ID);
+        final Map<String, String> artifactVersions = getArtifactVersions(runtime);
 
 
         final URL[] cp = new URL[4];
         try {
             cp[0] = configGenJar.toUri().toURL();
-            cp[1] = resolveRequiredArtifact("org.jboss.modules:jboss-modules", MavenArtifact.EXT_JAR, null).toUri().toURL();
-            cp[2] = resolveRequiredArtifact("org.wildfly.core:wildfly-cli", MavenArtifact.EXT_JAR, "client").toUri().toURL();
-            cp[3] = resolveRequiredArtifact("org.wildfly.core:wildfly-launcher", MavenArtifact.EXT_JAR, null).toUri().toURL();
+            MavenArtifact artifact = Utils.toArtifactCoords(artifactVersions, "org.jboss.modules:jboss-modules", false);
+            maven.resolve(artifact);
+            cp[1] = artifact.getPath().toUri().toURL();
+            artifact = Utils.toArtifactCoords(artifactVersions, "org.wildfly.core:wildfly-cli::client", false);
+            maven.resolve(artifact);
+            cp[2] = artifact.getPath().toUri().toURL();
+            artifact = Utils.toArtifactCoords(artifactVersions, "org.jboss.core:wildfly-launcher", false);
+            maven.resolve(artifact);
+            cp[3] = artifact.getPath().toUri().toURL();
         } catch (IOException e) {
             throw new ProvisioningException("Failed to init classpath for " + runtime.getStagedDir(), e);
         }
@@ -157,20 +159,6 @@ public class WfDiffPlugin extends ProvisioningPluginWithOptions implements DiffP
                 diff.diff(getFilter(runtime)));
     }
 
-    private Path resolveRequiredArtifact(String ga, String ext, String classifier) throws ProvisioningException {
-        String gavStr = versionResolver.resolveProperty(ga);
-        if(gavStr == null) {
-            throw new ProvisioningException("Failed to resolve version of " + ga);
-        }
-        final MavenArtifact artifact = MavenArtifact.fromString(gavStr);
-        artifact.setExtension(MavenArtifact.EXT_JAR);
-        if(classifier != null) {
-            artifact.setClassifier(classifier);
-        }
-        maven.resolve(artifact);
-        return artifact.getPath();
-    }
-
     private PathFilter getFilter(ProvisioningRuntime runtime) {
         //if ("diff-to-feature-pack".equals(runtime.getOperation())) {
         //    return FILTER_FP;
@@ -178,39 +166,19 @@ public class WfDiffPlugin extends ProvisioningPluginWithOptions implements DiffP
         return FILTER;
     }
 
-    private PropertyResolver getPropertyResolver(ProvisioningRuntime runtime) throws ProvisioningException {
+    private Map<String, String> getArtifactVersions(ProvisioningRuntime runtime) throws ProvisioningException {
         final Map<String, String> artifactVersions = new HashMap<>();
         for(FeaturePackRuntime fp : runtime.getFeaturePacks()) {
             final Path wfRes = fp.getResource(WfConstants.WILDFLY);
             if(!Files.exists(wfRes)) {
                 continue;
             }
-
             final Path artifactProps = wfRes.resolve(WfConstants.ARTIFACT_VERSIONS_PROPS);
-            if(Files.exists(artifactProps)) {
-                try (Stream<String> lines = Files.lines(artifactProps)) {
-                    final Iterator<String> iterator = lines.iterator();
-                    while (iterator.hasNext()) {
-                        final String line = iterator.next();
-                        final int i = line.indexOf('=');
-                        if (i < 0) {
-                            throw new ProvisioningException("Failed to locate '=' character in " + line);
-                        }
-                        artifactVersions.put(line.substring(0, i), line.substring(i + 1));
-                    }
-                } catch (IOException e) {
-                    throw new ProvisioningException(Errors.readFile(artifactProps), e);
-                }
+            if(!Files.exists(artifactProps)) {
+                continue;
             }
+            Utils.readProperties(artifactProps, artifactVersions);
         }
-        return new MapPropertyResolver(artifactVersions);
-    }
-
-    private String resolveRequiredGav(PropertyResolver versionResolver, String artifactGa) throws ProvisioningException {
-        String gavStr = versionResolver.resolveProperty(artifactGa);
-        if(gavStr == null) {
-            throw new ProvisioningException("Failed to resolve version of " + artifactGa);
-        }
-        return gavStr;
+        return artifactVersions;
     }
 }

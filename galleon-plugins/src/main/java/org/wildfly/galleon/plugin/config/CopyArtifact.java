@@ -41,6 +41,7 @@ public class CopyArtifact implements WildFlyPackageTask {
     private boolean extract;
     private List<FileFilter> filters = Collections.emptyList();
     private boolean optional;
+    private boolean featurePackVersion;
 
     public CopyArtifact() {
     }
@@ -94,8 +95,21 @@ public class CopyArtifact implements WildFlyPackageTask {
         return true; //default include
     }
 
+    public void setFeaturePackVersion() {
+        featurePackVersion = true;
+    }
+
+    public boolean isFeaturePackVersion() {
+        return featurePackVersion;
+    }
+
     @Override
     public void execute(WfInstallPlugin plugin, PackageRuntime pkg) throws ProvisioningException {
-        plugin.copyArtifact(this);
+        try {
+            plugin.copyArtifact(this, pkg);
+        } catch (ProvisioningException e) {
+            throw new ProvisioningException("Failed to execute an artifact copying task of feature-pack " + pkg.getFeaturePackRuntime().getFPID() +
+                    " package " + pkg.getName(), e);
+        }
     }
 }
