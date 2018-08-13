@@ -636,6 +636,7 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
     }
 
     private void findModules(Path modulesDir, Map<String, Path> moduleXmlByPkgName) throws IOException {
+        //final Path layersDir = modulesDir.getParent();
         Files.walkFileTree(modulesDir, new FileVisitor<Path>() {
             @Override
             public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
@@ -643,7 +644,6 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
                 if(!Files.exists(moduleXml)) {
                     return FileVisitResult.CONTINUE;
                 }
-
                 String packageName;
                 if (moduleXml.getParent().getFileName().toString().equals("main")) {
                     packageName = modulesDir.relativize(moduleXml.getParent().getParent()).toString();
