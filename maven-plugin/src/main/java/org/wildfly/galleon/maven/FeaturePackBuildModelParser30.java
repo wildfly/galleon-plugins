@@ -61,6 +61,7 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
         DEPENDENCIES("dependencies"),
         DEPENDENCY("dependency"),
         GROUP("group"),
+        INCLUDE_PLUGIN("include-plugin"),
         NAME("name"),
         PACKAGE("package"),
         PACKAGES("packages"),
@@ -74,7 +75,7 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
         private static final Map<QName, Element> elements;
 
         static {
-            Map<QName, Element> elementsMap = new HashMap<>(12);
+            Map<QName, Element> elementsMap = new HashMap<>(13);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.BUILD.getLocalName()), Element.BUILD);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.CONFIG.getLocalName()), Element.CONFIG);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.DEFAULT_CONFIGS.getLocalName()), Element.DEFAULT_CONFIGS);
@@ -82,6 +83,7 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
             elementsMap.put(new QName(NAMESPACE_3_0, Element.DEPENDENCIES.getLocalName()), Element.DEPENDENCIES);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.DEPENDENCY.getLocalName()), Element.DEPENDENCY);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.GROUP.getLocalName()), Element.GROUP);
+            elementsMap.put(new QName(NAMESPACE_3_0, Element.INCLUDE_PLUGIN.getLocalName()), Element.INCLUDE_PLUGIN);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.NAME.getLocalName()), Element.NAME);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.PACKAGE.getLocalName()), Element.PACKAGE);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.PACKAGES.getLocalName()), Element.PACKAGES);
@@ -220,6 +222,9 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
                             break;
                         case TRANSITIVE:
                             parseTransitive(reader, builder);
+                            break;
+                        case INCLUDE_PLUGIN:
+                            builder.setIncludePlugin(parseIncludePlugin(reader));
                             break;
                         default:
                             throw ParsingUtils.unexpectedContent(reader);
@@ -406,6 +411,11 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
         }
         ParsingUtils.parseNoContent(reader);
         return name;
+    }
+
+    private boolean parseIncludePlugin(final XMLStreamReader reader) throws XMLStreamException {
+        ParsingUtils.parseNoAttributes(reader);
+        return Boolean.parseBoolean(reader.getElementText());
     }
 
     private void parsePackageSchemas(XMLStreamReader reader, WildFlyFeaturePackBuild.Builder builder) throws XMLStreamException {

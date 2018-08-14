@@ -44,6 +44,7 @@ public class WildFlyFeaturePackBuild {
         private Set<String> schemaGroups = Collections.emptySet();
         private Set<String> defaultPackages = Collections.emptySet();
         private List<ConfigModel> configs = Collections.emptyList();
+        private boolean includePlugin = true;
 
         private Builder() {
         }
@@ -73,6 +74,11 @@ public class WildFlyFeaturePackBuild {
             return this;
         }
 
+        public Builder setIncludePlugin(boolean includePlugin) {
+            this.includePlugin = includePlugin;
+            return this;
+        }
+
         public WildFlyFeaturePackBuild build() {
             return new WildFlyFeaturePackBuild(this);
         }
@@ -91,6 +97,7 @@ public class WildFlyFeaturePackBuild {
     private final Set<String> schemaGroups;
     private final Set<String> defaultPackages;
     private final List<ConfigModel> configs;
+    private final boolean includePlugin;
 
     private WildFlyFeaturePackBuild(Builder builder) {
         this.producer = builder.producer;
@@ -98,6 +105,7 @@ public class WildFlyFeaturePackBuild {
         this.schemaGroups = CollectionUtils.unmodifiable(builder.schemaGroups);
         this.defaultPackages = CollectionUtils.unmodifiable(builder.defaultPackages);
         this.configs = CollectionUtils.unmodifiable(builder.configs);
+        this.includePlugin = builder.includePlugin;
     }
 
     public FeaturePackLocation getProducer() {
@@ -130,5 +138,9 @@ public class WildFlyFeaturePackBuild {
 
     public List<ConfigModel> getConfigs() {
         return configs;
+    }
+
+    public boolean isIncludePlugin() {
+        return includePlugin;
     }
 }
