@@ -323,13 +323,14 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         copyDirIfExists(targetResources.resolve(Constants.FEATURES), fpDir.resolve(Constants.FEATURES));
         copyDirIfExists(targetResources.resolve(Constants.FEATURE_GROUPS), fpDir.resolve(Constants.FEATURE_GROUPS));
 
-        final Artifact mvnPluginsArtifact = project.getPluginArtifactMap().get("org.wildfly.galleon-plugins:wildfly-galleon-maven-plugin");
-        addWildFlyPlugin(fpDir, mvnPluginsArtifact);
-
-        // collect feature-pack resources
         final Path resourcesWildFly = fpDir.resolve(Constants.RESOURCES).resolve(WfConstants.WILDFLY);
         mkdirs(resourcesWildFly);
-        addConfigGenerator(resourcesWildFly, mvnPluginsArtifact);
+        if (wfFpConfig.isIncludePlugin()) {
+            final Artifact mvnPluginsArtifact = project.getPluginArtifactMap()
+                    .get("org.wildfly.galleon-plugins:wildfly-galleon-maven-plugin");
+            addWildFlyPlugin(fpDir, mvnPluginsArtifact);
+            addConfigGenerator(resourcesWildFly, mvnPluginsArtifact);
+        }
 
         // properties
         try(OutputStream out = Files.newOutputStream(resourcesWildFly.resolve(WfConstants.WILDFLY_TASKS_PROPS))) {
