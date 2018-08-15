@@ -120,7 +120,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private Map<String, String> mergedArtifactVersions = new HashMap<>();
     private Map<ProducerSpec, Map<String, String>> fpArtifactVersions = new HashMap<>();
     private Map<ProducerSpec, Map<String, String>> fpTasksProps = Collections.emptyMap();
-    private Properties mergedTaskProps = new Properties();
+    private Map<String, String> mergedTaskProps = new HashMap<>();
     private PropertyResolver mergedTaskPropsResolver;
 
     private boolean thinServer;
@@ -488,7 +488,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                     transformer.setParameter(param.getKey(), param.getValue());
                 }
             }
-            final Map<String, String> taskProps = fpTasksProps.get(pkg.getFeaturePackRuntime().getFPID().getProducer());
+            final Map<String, String> taskProps = xslt.isFeaturePackProperties() ? fpTasksProps.get(pkg.getFeaturePackRuntime().getFPID().getProducer()) : mergedTaskProps;
             if (taskProps != null) {
                 for (Map.Entry<String, String> prop : taskProps.entrySet()) {
                     transformer.setParameter(prop.getKey(), prop.getValue());
