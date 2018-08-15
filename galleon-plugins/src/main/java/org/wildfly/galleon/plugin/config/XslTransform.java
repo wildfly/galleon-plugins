@@ -22,7 +22,6 @@ import java.util.Map;
 import org.jboss.galleon.ProvisioningException;
 import org.jboss.galleon.runtime.PackageRuntime;
 import org.jboss.galleon.util.CollectionUtils;
-import org.wildfly.galleon.plugin.WfConstants;
 import org.wildfly.galleon.plugin.WfInstallPlugin;
 import org.wildfly.galleon.plugin.WildFlyPackageTask;
 
@@ -88,6 +87,10 @@ public class XslTransform implements WildFlyPackageTask {
 
     @Override
     public void execute(WfInstallPlugin plugin, PackageRuntime pkg) throws ProvisioningException {
-        plugin.xslTransform(pkg.getFeaturePackRuntime(), this, pkg.getResource(WfConstants.PM, WfConstants.WILDFLY));
+        try {
+            plugin.xslTransform(pkg, this);
+        } catch(ProvisioningException e) {
+            throw new ProvisioningException("Feature-pack " + pkg.getFeaturePackRuntime().getFPID() + " package " + pkg.getName() + " XSLT task failed", e);
+        }
     }
 }

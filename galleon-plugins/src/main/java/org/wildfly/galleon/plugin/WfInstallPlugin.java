@@ -469,7 +469,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
     }
 
-    public void xslTransform(FeaturePackRuntime fp, XslTransform xslt, Path pmWfDir) throws ProvisioningException {
+    public void xslTransform(PackageRuntime pkg, XslTransform xslt) throws ProvisioningException {
 
         final Path src = runtime.getStagedDir().resolve(xslt.getSrc());
         if (!Files.exists(src)) {
@@ -488,7 +488,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                     transformer.setParameter(param.getKey(), param.getValue());
                 }
             }
-            final Map<String, String> taskProps = fpTasksProps.get(fp.getFPID().getProducer());
+            final Map<String, String> taskProps = fpTasksProps.get(pkg.getFeaturePackRuntime().getFPID().getProducer());
             if (taskProps != null) {
                 for (Map.Entry<String, String> prop : taskProps.entrySet()) {
                     transformer.setParameter(prop.getKey(), prop.getValue());
