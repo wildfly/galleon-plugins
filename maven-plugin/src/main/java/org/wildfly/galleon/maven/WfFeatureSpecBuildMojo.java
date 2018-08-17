@@ -123,14 +123,14 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
      * List of WildFly extensions for the embedded domain.
      * Used in the domain.xml.
      */
-    @Parameter(alias = "domain-extensions", required = true)
+    @Parameter(alias = "domain-extensions")
     private List<String> domainExtensions;
 
     /**
      * List of WildFly extensions for the embedded host.
      * Used in the host.xml.
      */
-    @Parameter(alias = "host-extensions", required = true)
+    @Parameter(alias = "host-extensions")
     private List<String> hostExtensions;
 
     /**
