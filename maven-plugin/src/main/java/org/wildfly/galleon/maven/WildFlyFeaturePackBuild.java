@@ -28,6 +28,7 @@ import org.jboss.galleon.config.ConfigModel;
 import org.jboss.galleon.spec.CapabilitySpec;
 import org.jboss.galleon.universe.FeaturePackLocation;
 import org.jboss.galleon.util.CollectionUtils;
+import org.wildfly.galleon.maven.build.tasks.ResourcesTask;
 
 /**
  * Representation of the feature pack build config
@@ -45,6 +46,8 @@ public class WildFlyFeaturePackBuild {
         private Set<String> defaultPackages = Collections.emptySet();
         private List<ConfigModel> configs = Collections.emptyList();
         private boolean includePlugin = true;
+        private List<String> plugins = Collections.emptyList();
+        private List<ResourcesTask> resourcesTasks = Collections.emptyList();
 
         private Builder() {
         }
@@ -79,6 +82,16 @@ public class WildFlyFeaturePackBuild {
             return this;
         }
 
+        public Builder addPlugin(String coords) {
+            this.plugins = CollectionUtils.add(plugins, coords);
+            return this;
+        }
+
+        public Builder addResourcesTask(ResourcesTask task) {
+            this.resourcesTasks = CollectionUtils.add(resourcesTasks, task);
+            return this;
+        }
+
         public WildFlyFeaturePackBuild build() {
             return new WildFlyFeaturePackBuild(this);
         }
@@ -98,6 +111,8 @@ public class WildFlyFeaturePackBuild {
     private final Set<String> defaultPackages;
     private final List<ConfigModel> configs;
     private final boolean includePlugin;
+    private final List<String> plugins;
+    private final List<ResourcesTask> resourcesTasks;
 
     private WildFlyFeaturePackBuild(Builder builder) {
         this.producer = builder.producer;
@@ -106,6 +121,8 @@ public class WildFlyFeaturePackBuild {
         this.defaultPackages = CollectionUtils.unmodifiable(builder.defaultPackages);
         this.configs = CollectionUtils.unmodifiable(builder.configs);
         this.includePlugin = builder.includePlugin;
+        this.plugins = CollectionUtils.unmodifiable(builder.plugins);
+        this.resourcesTasks = CollectionUtils.unmodifiable(builder.resourcesTasks);
     }
 
     public FeaturePackLocation getProducer() {
@@ -142,5 +159,21 @@ public class WildFlyFeaturePackBuild {
 
     public boolean isIncludePlugin() {
         return includePlugin;
+    }
+
+    public boolean hasPlugins() {
+        return !plugins.isEmpty();
+    }
+
+    public List<String> getPlugins() {
+        return plugins;
+    }
+
+    public boolean hasResourcesTasks() {
+        return !resourcesTasks.isEmpty();
+    }
+
+    public List<ResourcesTask> getResourcesTasks() {
+        return resourcesTasks;
     }
 }

@@ -48,7 +48,6 @@ import javax.xml.stream.XMLStreamException;
 
 import nu.xom.ParsingException;
 
-import org.apache.maven.artifact.Artifact;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
@@ -89,6 +88,7 @@ import org.jboss.galleon.xml.PackageXmlParser;
 import org.jboss.galleon.xml.PackageXmlWriter;
 import org.wildfly.galleon.plugin.WfConstants;
 import org.wildfly.galleon.maven.ModuleParseResult.ModuleDependency;
+import org.wildfly.galleon.maven.build.tasks.ResourcesTask;
 
 /**
  * This Maven mojo creates a WildFly style feature-pack archive from the provided resources according to the
@@ -323,13 +323,16 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         copyDirIfExists(targetResources.resolve(Constants.FEATURES), fpDir.resolve(Constants.FEATURES));
         copyDirIfExists(targetResources.resolve(Constants.FEATURE_GROUPS), fpDir.resolve(Constants.FEATURE_GROUPS));
 
-        final Path resourcesWildFly = fpDir.resolve(Constants.RESOURCES).resolve(WfConstants.WILDFLY);
+        final Path fpResourcesDir = fpDir.resolve(Constants.RESOURCES);
+        final Path resourcesWildFly = fpResourcesDir.resolve(WfConstants.WILDFLY);
         mkdirs(resourcesWildFly);
-        if (wfFpConfig.isIncludePlugin()) {
-            final Artifact mvnPluginsArtifact = project.getPluginArtifactMap()
-                    .get("org.wildfly.galleon-plugins:wildfly-galleon-maven-plugin");
-            addWildFlyPlugin(fpDir, mvnPluginsArtifact);
-            addConfigGenerator(resourcesWildFly, mvnPluginsArtifact);
+        if(wfFpConfig.hasPlugins()) {
+            addPlugins(fpDir, wfFpConfig.getPlugins());
+        }
+        if(wfFpConfig.hasResourcesTasks()) {
+            for(ResourcesTask task : wfFpConfig.getResourcesTasks()) {
+                task.execute(this, fpResourcesDir);
+            }
         }
 
         // properties
@@ -384,7 +387,7 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         }
     }
 
-    private static PackageSpec addPackage(final Path fpPackagesDir, final FeaturePackDescription.Builder fpBuilder,
+    private PackageSpec addPackage(final Path fpPackagesDir, final FeaturePackDescription.Builder fpBuilder,
             final PackageSpec.Builder pkgBuilder) throws MojoExecutionException {
         final PackageSpec pkg = pkgBuilder.build();
         fpBuilder.addPackage(pkg);
@@ -450,43 +453,43 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         }
     }
 
-    private void addWildFlyPlugin(final Path fpDir, Artifact mvnPluginsArtifact)
-            throws MojoExecutionException {
+    private void addPlugins(final Path fpDir, List<String> artifacts) throws MojoExecutionException {
         final Path pluginsDir = fpDir.resolve(Constants.PLUGINS);
         mkdirs(pluginsDir);
-        Path wfPlugInPath;
-        try {
-            wfPlugInPath = resolveArtifact(ArtifactCoords.newInstance(mvnPluginsArtifact.getGroupId(), WfConstants.WF_GALLEON_PLUGINS, mvnPluginsArtifact.getVersion(), "jar"));
-        } catch (ProvisioningException e) {
-            throw new MojoExecutionException("Failed to build feature-pack", e);
-        }
-        try {
-            IoUtils.copy(wfPlugInPath, pluginsDir.resolve(WfConstants.WF_GALLEON_PLUGINS + WfConstants.DOT_JAR));
-        } catch (IOException e) {
-            throw new MojoExecutionException(Errors.copyFile(wfPlugInPath, pluginsDir.resolve(WfConstants.WF_GALLEON_PLUGINS + WfConstants.DOT_JAR)));
-        }
-    }
-
-    private void addConfigGenerator(final Path resourcesDir, Artifact mvnPluginsArtifact) throws MojoExecutionException {
-        mkdirs(resourcesDir);
-        Path wfPlugInPath;
-        try {
-            wfPlugInPath = resolveArtifact(ArtifactCoords.newInstance(mvnPluginsArtifact.getGroupId(), WfConstants.WF_CONFIG_GEN, mvnPluginsArtifact.getVersion(), "jar"));
-        } catch (ProvisioningException e) {
-            throw new MojoExecutionException("Failed to build feature-pack", e);
-        }
-        try {
-            IoUtils.copy(wfPlugInPath, resourcesDir.resolve(WfConstants.WF_CONFIG_GEN + WfConstants.DOT_JAR));
-        } catch (IOException e) {
-            throw new MojoExecutionException(Errors.copyFile(wfPlugInPath, resourcesDir.resolve(wfPlugInPath.getFileName())));
+        for(String artifact : artifacts) {
+            ArtifactCoords coords = ArtifactCoordsUtil.fromJBossModules(artifact, "jar");
+            if(coords.getVersion() == null) {
+                coords = ArtifactCoordsUtil.fromJBossModules(resolveVersion(artifact), "jar");
+            }
+            final Path wfPlugInPath;
+            try {
+                wfPlugInPath = resolveArtifact(ArtifactCoords.newInstance(coords.getGroupId(),
+                        coords.getArtifactId(), coords.getVersion(), coords.getExtension()));
+            } catch (ProvisioningException e) {
+                throw new MojoExecutionException("Failed to build feature-pack", e);
+            }
+            try {
+                IoUtils.copy(wfPlugInPath, pluginsDir.resolve(coords.getArtifactId() + '.' + coords.getExtension()));
+            } catch (IOException e) {
+                throw new MojoExecutionException(Errors.copyFile(wfPlugInPath,
+                        pluginsDir.resolve(coords.getArtifactId() + '.' + coords.getExtension())));
+            }
         }
     }
 
-    private static void mkdirs(final Path resourcesWildFly) throws MojoExecutionException {
+    public String resolveVersion(final String coordsWoVersion) throws MojoExecutionException {
+        final String resolved = artifactVersions.getVersion(coordsWoVersion);
+        if(resolved == null) {
+            throw new MojoExecutionException("The project is missing dependency on " + coordsWoVersion);
+        }
+        return resolved;
+    }
+
+    private static void mkdirs(final Path dir) throws MojoExecutionException {
         try {
-            Files.createDirectories(resourcesWildFly);
+            Files.createDirectories(dir);
         } catch (IOException e) {
-            throw new MojoExecutionException(Errors.mkdirs(resourcesWildFly), e);
+            throw new MojoExecutionException(Errors.mkdirs(dir), e);
         }
     }
 
@@ -778,7 +781,7 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         return path;
     }
 
-    private static void writeXml(PackageSpec pkgSpec, Path dir) throws MojoExecutionException {
+    private void writeXml(PackageSpec pkgSpec, Path dir) throws MojoExecutionException {
         try {
             mkdirs(dir);
             PackageXmlWriter.getInstance().write(pkgSpec, dir.resolve(Constants.PACKAGE_XML));
@@ -787,7 +790,7 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         }
     }
 
-    private Path resolveArtifact(ArtifactCoords coords) throws ProvisioningException {
+    public Path resolveArtifact(ArtifactCoords coords) throws ProvisioningException {
         final ArtifactResult result;
         try {
             result = repoSystem.resolveArtifact(repoSession, getArtifactRequest(coords));
