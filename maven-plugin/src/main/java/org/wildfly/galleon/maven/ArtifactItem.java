@@ -69,13 +69,6 @@ public class ArtifactItem
     private String classifier;
 
     /**
-     * Extension of artifact
-     *
-     * @parameter
-     */
-    private String extension;
-
-    /**
      * Artifact Item
      */
     private Artifact artifact;
@@ -201,13 +194,8 @@ public class ArtifactItem
         this.artifact = artifact;
     }
 
-    public void setExtension(String extension) {
-        this.extension = filterEmptyString(extension);
-    }
-
     @Override
     public String getExtension() {
-        return extension != null ? extension : "jar";
+        return getType();
     }
-
 }
