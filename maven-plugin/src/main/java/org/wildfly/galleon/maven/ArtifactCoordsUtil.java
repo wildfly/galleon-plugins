@@ -16,7 +16,6 @@
  */
 package org.wildfly.galleon.maven;
 
-import java.util.Arrays;
 
 import org.jboss.galleon.ArtifactCoords;
 
@@ -62,9 +61,5 @@ public class ArtifactCoordsUtil {
             }
         }
         return new ArtifactCoords(groupId, artifactId, version, classifier, extension);
-    }
-
-    public static void main(String[] args) throws Exception {
-        System.out.println(Arrays.asList("group:artifact:version".split(":")));
     }
 }

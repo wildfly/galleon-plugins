@@ -29,6 +29,8 @@ import org.jboss.galleon.xml.ProvisioningXmlParser10;
 import org.jboss.galleon.xml.XmlNameProvider;
 import org.jboss.staxmapper.XMLElementReader;
 import org.jboss.staxmapper.XMLExtendedStreamReader;
+import org.wildfly.galleon.maven.build.tasks.CopyResourcesTask;
+
 import javax.xml.namespace.QName;
 import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
@@ -56,17 +58,20 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
 
         BUILD("build"),
         CONFIG("config"),
+        COPY("copy"),
         DEFAULT_CONFIGS("default-configs"),
         DEFAULT_PACKAGES("default-packages"),
         DEPENDENCIES("dependencies"),
         DEPENDENCY("dependency"),
         GROUP("group"),
-        INCLUDE_PLUGIN("include-plugin"),
         NAME("name"),
         PACKAGE("package"),
         PACKAGES("packages"),
         PACKAGE_SCHEMAS("package-schemas"),
+        PLUGIN("plugin"),
+        PLUGINS("plugins"),
         PRODUCER("producer"),
+        RESOURCES("resources"),
         TRANSITIVE("transitive"),
 
         // default unknown element
@@ -75,20 +80,23 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
         private static final Map<QName, Element> elements;
 
         static {
-            Map<QName, Element> elementsMap = new HashMap<>(13);
+            Map<QName, Element> elementsMap = new HashMap<>(17);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.BUILD.getLocalName()), Element.BUILD);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.CONFIG.getLocalName()), Element.CONFIG);
+            elementsMap.put(new QName(NAMESPACE_3_0, Element.COPY.getLocalName()), Element.COPY);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.DEFAULT_CONFIGS.getLocalName()), Element.DEFAULT_CONFIGS);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.DEFAULT_PACKAGES.getLocalName()), Element.DEFAULT_PACKAGES);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.DEPENDENCIES.getLocalName()), Element.DEPENDENCIES);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.DEPENDENCY.getLocalName()), Element.DEPENDENCY);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.GROUP.getLocalName()), Element.GROUP);
-            elementsMap.put(new QName(NAMESPACE_3_0, Element.INCLUDE_PLUGIN.getLocalName()), Element.INCLUDE_PLUGIN);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.NAME.getLocalName()), Element.NAME);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.PACKAGE.getLocalName()), Element.PACKAGE);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.PACKAGES.getLocalName()), Element.PACKAGES);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.PACKAGE_SCHEMAS.getLocalName()), Element.PACKAGE_SCHEMAS);
+            elementsMap.put(new QName(NAMESPACE_3_0, Element.PLUGIN.getLocalName()), Element.PLUGIN);
+            elementsMap.put(new QName(NAMESPACE_3_0, Element.PLUGINS.getLocalName()), Element.PLUGINS);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.PRODUCER.getLocalName()), Element.PRODUCER);
+            elementsMap.put(new QName(NAMESPACE_3_0, Element.RESOURCES.getLocalName()), Element.RESOURCES);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.TRANSITIVE.getLocalName()), Element.TRANSITIVE);
             elements = elementsMap;
         }
@@ -122,10 +130,12 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
 
     enum Attribute implements XmlNameProvider {
 
+        ARTIFACT("artifact"),
         ARTIFACT_ID("artifact-id"),
         GROUP_ID("group-id"),
         NAME("name"),
         PRODUCER("producer"),
+        TO("to"),
         VERSION("version"),
 
         // default unknown attribute
@@ -134,11 +144,13 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
         private static final Map<QName, Attribute> attributes;
 
         static {
-            Map<QName, Attribute> attributesMap = new HashMap<>(5);
+            Map<QName, Attribute> attributesMap = new HashMap<>(7);
+            attributesMap.put(new QName(ARTIFACT.getLocalName()), ARTIFACT);
             attributesMap.put(new QName(ARTIFACT_ID.getLocalName()), ARTIFACT_ID);
             attributesMap.put(new QName(GROUP_ID.getLocalName()), GROUP_ID);
             attributesMap.put(new QName(NAME.getLocalName()), NAME);
             attributesMap.put(new QName(PRODUCER.getLocalName()), PRODUCER);
+            attributesMap.put(new QName(TO.getLocalName()), TO);
             attributesMap.put(new QName(VERSION.getLocalName()), VERSION);
             attributes = attributesMap;
         }
@@ -223,8 +235,11 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
                         case TRANSITIVE:
                             parseTransitive(reader, builder);
                             break;
-                        case INCLUDE_PLUGIN:
-                            builder.setIncludePlugin(parseIncludePlugin(reader));
+                        case PLUGINS:
+                            parsePlugins(reader, builder);
+                            break;
+                        case RESOURCES:
+                            parseResources(reader, builder);
                             break;
                         default:
                             throw ParsingUtils.unexpectedContent(reader);
@@ -413,11 +428,6 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
         return name;
     }
 
-    private boolean parseIncludePlugin(final XMLStreamReader reader) throws XMLStreamException {
-        ParsingUtils.parseNoAttributes(reader);
-        return Boolean.parseBoolean(reader.getElementText());
-    }
-
     private void parsePackageSchemas(XMLStreamReader reader, WildFlyFeaturePackBuild.Builder builder) throws XMLStreamException {
         ParsingUtils.parseNoAttributes(reader);
         while (reader.hasNext()) {
@@ -442,5 +452,100 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
             }
         }
         throw ParsingUtils.endOfDocument(reader.getLocation());
+    }
+
+    private static void parsePlugins(XMLExtendedStreamReader reader, WildFlyFeaturePackBuild.Builder builder) throws XMLStreamException {
+        ParsingUtils.parseNoAttributes(reader);
+        while (reader.hasNext()) {
+            switch (reader.nextTag()) {
+                case XMLStreamConstants.END_ELEMENT: {
+                    return;
+                }
+                case XMLStreamConstants.START_ELEMENT: {
+                    final Element element = Element.of(reader.getName());
+                    switch (element) {
+                        case PLUGIN:
+                            builder.addPlugin(parsePlugin(reader));
+                            break;
+                        default:
+                            throw ParsingUtils.unexpectedContent(reader);
+                    }
+                    break;
+                }
+                default: {
+                    throw ParsingUtils.unexpectedContent(reader);
+                }
+            }
+        }
+        throw ParsingUtils.endOfDocument(reader.getLocation());
+    }
+
+    private static String parsePlugin(XMLExtendedStreamReader reader) throws XMLStreamException {
+        String artifact = null;
+        final int count = reader.getAttributeCount();
+        for (int i = 0; i < count; i++) {
+            final Attribute attribute = Attribute.of(reader.getAttributeName(i));
+            switch (attribute) {
+                case ARTIFACT:
+                    artifact = reader.getAttributeValue(i);
+                    break;
+                default:
+                    throw ParsingUtils.unexpectedContent(reader);
+            }
+        }
+        ParsingUtils.parseNoContent(reader);
+        if(artifact == null) {
+            throw new XMLStreamException(ParsingUtils.missingAttributes(reader.getLocation(), Collections.singleton(Attribute.ARTIFACT)));
+        }
+        return artifact;
+    }
+
+    private void parseResources(final XMLExtendedStreamReader reader, final WildFlyFeaturePackBuild.Builder builder) throws XMLStreamException {
+        while (reader.hasNext()) {
+            switch (reader.nextTag()) {
+                case XMLStreamConstants.END_ELEMENT: {
+                    return;
+                }
+                case XMLStreamConstants.START_ELEMENT: {
+                    final Element element = Element.of(reader.getName());
+                    switch (element) {
+                        case COPY:
+                            builder.addResourcesTask(parseCopy(reader));
+                            break;
+                        default:
+                            throw ParsingUtils.unexpectedContent(reader);
+                    }
+                    break;
+                }
+                default: {
+                    throw ParsingUtils.unexpectedContent(reader);
+                }
+            }
+        }
+        throw ParsingUtils.endOfDocument(reader.getLocation());
+    }
+
+    private CopyResourcesTask parseCopy(XMLStreamReader reader) throws XMLStreamException {
+        final CopyResourcesTask copy = new CopyResourcesTask();
+        final int count = reader.getAttributeCount();
+        for (int i = 0; i < count; i++) {
+            final Attribute attribute = Attribute.of(reader.getAttributeName(i));
+            switch (attribute) {
+                case ARTIFACT:
+                    copy.setArtifact(reader.getAttributeValue(i));
+                    break;
+                case TO:
+                    copy.setTo(reader.getAttributeValue(i));
+                    break;
+                default:
+                    throw ParsingUtils.unexpectedContent(reader);
+            }
+        }
+        final String error = copy.getValidationErrors();
+        if(error != null) {
+            throw new XMLStreamException(ParsingUtils.error(error, reader.getLocation()));
+        }
+        ParsingUtils.parseNoContent(reader);
+        return copy;
     }
 }
