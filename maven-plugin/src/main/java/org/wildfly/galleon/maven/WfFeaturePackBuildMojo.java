@@ -566,21 +566,13 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
                 }
                 depGav = ArtifactCoords.newGav(gavStr);
             }
+            final Path depZip = resolveArtifact(depGav.toArtifactCoords());
+            final FeaturePackLocation depFpl = FeaturePackDescriber.readSpec(depZip).getFPID().getLocation();
 
             final FeaturePackDependencySpec depSpec = depEntry.getValue();
             final FeaturePackConfig depConfig = depSpec.getTarget();
 
-            FeaturePackLocation depFpl = depConfig.getLocation();
-            String channel = depFpl.getChannelName();
-            if(channel == null || channel.isEmpty()) {
-                final String v = depGav.getVersion();
-                int i = v.indexOf('.');
-                channel = i < 0 ? v : v.substring(0, i);
-            }
-            depFpl = new FeaturePackLocation(depFpl.getUniverse(), depFpl.getProducerName(), channel, null, depGav.getVersion());
-
             fpBuilder.addFeaturePackDep(depSpec.getName(), FeaturePackConfig.builder(depFpl).init(depConfig).build());
-            final Path depZip = resolveArtifact(depGav.toArtifactCoords());
             fpDependencies.put(depSpec.getName(), FeaturePackDescriber.describeFeaturePackZip(depZip));
         }
     }
