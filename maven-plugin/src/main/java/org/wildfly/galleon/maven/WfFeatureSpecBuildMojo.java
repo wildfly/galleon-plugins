@@ -240,7 +240,6 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
         if(classifier != null && !classifier.isEmpty()) {
             item.setClassifier(classifier);
         }
-        item.setExtension("jar");
         artifact = findArtifact(item);
         final File f = artifact == null ? null : artifact.getFile();
         if(f == null) {
