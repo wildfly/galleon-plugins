@@ -203,12 +203,9 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
         }
 
         final URL[] specGenCp = new URL[3];
-        Artifact artifact = project.getPluginArtifactMap().get("org.wildfly.galleon-plugins:wildfly-galleon-maven-plugin");
-        specGenCp[0] = resolveArtifact(artifact.getGroupId(), "wildfly-feature-spec-gen", artifact.getVersion(), null, "jar").toURI().toURL();
-        artifact = buildArtifacts.get("org.jboss.modules:jboss-modules");
-        specGenCp[1] = resolveArtifact(artifact.getGroupId(), artifact.getArtifactId(), artifact.getVersion(), null, "jar").toURI().toURL();
-        artifact = buildArtifacts.get("org.wildfly.core:wildfly-cli");
-        specGenCp[2] = resolveArtifact(artifact.getGroupId(), artifact.getArtifactId(), artifact.getVersion(), "client", "jar").toURI().toURL();
+        specGenCp[0] = resolveArtifact(buildArtifacts, "org.wildfly.galleon-plugins", "wildfly-feature-spec-gen", null).toURI().toURL();
+        specGenCp[1] = resolveArtifact(buildArtifacts, "org.jboss.modules", "jboss-modules", null).toURI().toURL();
+        specGenCp[2] = resolveArtifact(buildArtifacts, "org.wildfly.core", "wildfly-cli", "client").toURI().toURL();
 
         final String originalMavenRepoLocal = System.getProperty(MAVEN_REPO_LOCAL);
         System.setProperty(MAVEN_REPO_LOCAL, session.getSettings().getLocalRepository());
@@ -226,18 +223,30 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
         }
     }
 
-    private File resolveArtifact(String groupId, String artifactId, String version, String classifier, String extension) throws MojoExecutionException {
+    private File resolveArtifact(Map<String, Artifact> buildArtifacts, String groupId, String artifactId, String classifier) throws MojoExecutionException {
+        Artifact artifact = buildArtifacts.get(groupId + ':' + artifactId);
+        if(artifact == null) {
+            throw new MojoExecutionException("Failed to locate " + groupId + ':' + artifactId + " among the project build artifacts");
+        }
+        if (artifact.getFile() != null &&
+                (classifier == null && artifact.getClassifier() == null
+                || classifier != null && classifier.equals(artifact.getClassifier()))) {
+            return artifact.getFile();
+        }
         final ArtifactItem item = new ArtifactItem();
-        item.setArtifactId(artifactId);
-        item.setGroupId(groupId);
-        item.setVersion(version);
-        if(classifier != null) {
+        item.setArtifactId(artifact.getArtifactId());
+        item.setGroupId(artifact.getGroupId());
+        item.setVersion(artifact.getVersion());
+        if(classifier != null && !classifier.isEmpty()) {
             item.setClassifier(classifier);
         }
-        if(extension != null) {
-            item.setExtension(extension);
+        item.setExtension("jar");
+        artifact = findArtifact(item);
+        final File f = artifact == null ? null : artifact.getFile();
+        if(f == null) {
+            throw new MojoExecutionException("Failed to resolve artifact " + item);
         }
-        return findArtifact(item).getFile();
+        return f;
     }
 
     private void addBasicConfigs(final Path wildfly) throws IOException {
@@ -453,10 +462,7 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
             buildingRequest.setRemoteRepositories(project.getRemoteArtifactRepositories());
             debug("Resolving artifact %s:%s:%s", artifact.getGroupId(), artifact.getArtifactId(), artifact.getVersion());
             final ArtifactResult result = artifactResolver.resolveArtifact(buildingRequest, artifact);
-            if (result != null) {
-                return result.getArtifact();
-            }
-            return null;
+            return result == null ? null : result.getArtifact();
         } catch (ArtifactResolverException e) {
             throw new MojoExecutionException("Couldn't resolve artifact: " + e.getMessage(), e);
         }
