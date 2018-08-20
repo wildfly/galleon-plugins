@@ -66,6 +66,7 @@ import org.eclipse.aether.resolution.ArtifactRequest;
 import org.eclipse.aether.resolution.ArtifactResolutionException;
 import org.eclipse.aether.resolution.ArtifactResult;
 import org.jboss.galleon.ArtifactCoords;
+import org.jboss.galleon.ArtifactCoords.Gav;
 import org.jboss.galleon.Constants;
 import org.jboss.galleon.Errors;
 import org.jboss.galleon.ProvisioningDescriptionException;
@@ -224,13 +225,8 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         final Path fpDir = workDir.resolve(project.getGroupId()).resolve(fpArtifactId).resolve(project.getVersion());
         final Path fpPackagesDir = fpDir.resolve(Constants.PACKAGES);
 
-
         // feature-pack build config
-        try {
-            wfFpConfig = Util.loadFeaturePackBuildConfig(getFPConfigFile());
-        } catch (ProvisioningException e) {
-            throw new MojoExecutionException("Failed to load feature-pack config file", e);
-        }
+        wfFpConfig = Util.loadFeaturePackBuildConfig(configDir, configFile);
 
         FeaturePackLocation fpl = wfFpConfig.getProducer();
         String channel = fpl.getChannelName();
@@ -271,7 +267,6 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
                 throw new MojoExecutionException("Failed to process content", e);
             }
         }
-
 
         if(wfFpConfig.hasSchemaGroups()) {
             addDocsSchemas(fpPackagesDir, fpBuilder);
@@ -343,6 +338,9 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         }
 
         // artifact versions
+        for(Gav gav : wfFpConfig.getDependencies().keySet()) {
+            artifactVersions.remove(gav.getGroupId(), gav.getArtifactId());
+        }
         try {
             this.artifactVersions.store(resourcesWildFly.resolve(WfConstants.ARTIFACT_VERSIONS_PROPS));
         } catch (IOException e) {
@@ -763,14 +761,6 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
             properties.putAll(taskProps);
         }
         return properties;
-    }
-
-    private Path getFPConfigFile() throws ProvisioningException {
-        final Path path = Paths.get(configDir.getAbsolutePath(), configFile);
-        if(!Files.exists(path)) {
-            throw new ProvisioningException(Errors.pathDoesNotExist(path));
-        }
-        return path;
     }
 
     private void writeXml(PackageSpec pkgSpec, Path dir) throws MojoExecutionException {

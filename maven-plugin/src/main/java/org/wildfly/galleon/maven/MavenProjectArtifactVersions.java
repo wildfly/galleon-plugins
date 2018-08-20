@@ -60,6 +60,10 @@ class MavenProjectArtifactVersions {
         return versions.get(gac);
     }
 
+    void remove(String groupId, String artifactId) {
+        versions.remove(groupId + ':' + artifactId);
+    }
+
     void store(Path target) throws IOException {
         try(BufferedWriter writer = Files.newBufferedWriter(target, StandardOpenOption.CREATE)) {
             for(Map.Entry<String, String> entry : versions.entrySet()) {
