@@ -22,6 +22,7 @@ import org.jboss.galleon.ArtifactCoords.Gav;
 import org.jboss.galleon.config.ConfigModel;
 import org.jboss.galleon.config.FeaturePackConfig;
 import org.jboss.galleon.universe.FeaturePackLocation;
+import org.jboss.galleon.universe.galleon1.LegacyGalleon1Universe;
 import org.jboss.galleon.util.ParsingUtils;
 import org.jboss.galleon.xml.ConfigXml;
 import org.jboss.galleon.xml.FeaturePackPackagesConfigParser10;
@@ -305,12 +306,11 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
     }
 
     private static void parseDependency(XMLExtendedStreamReader reader, final WildFlyFeaturePackBuild.Builder builder, boolean transitive) throws XMLStreamException {
-        FeaturePackLocation fpl = null;
         String groupId = null;
         String artifactId = null;
         String version = null;
         final int count = reader.getAttributeCount();
-        final Set<Attribute> required = EnumSet.of(Attribute.GROUP_ID, Attribute.ARTIFACT_ID, Attribute.PRODUCER);
+        final Set<Attribute> required = EnumSet.of(Attribute.GROUP_ID, Attribute.ARTIFACT_ID);
         for (int i = 0; i < count; i++) {
             final Attribute attribute = Attribute.of(reader.getAttributeName(i));
             required.remove(attribute);
@@ -321,20 +321,18 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
                 case ARTIFACT_ID:
                     artifactId = reader.getAttributeValue(i);
                     break;
-                case PRODUCER:
-                    fpl = FeaturePackLocation.fromString(reader.getAttributeValue(i));
-                    break;
                 case VERSION:
                     version = reader.getAttributeValue(i);
                     break;
                 default:
-                    throw ParsingUtils.unexpectedContent(reader);
+                    throw ParsingUtils.unexpectedAttribute(reader, i);
             }
         }
         if (!required.isEmpty()) {
             throw ParsingUtils.missingAttributes(reader.getLocation(), required);
         }
         final Gav gav = ArtifactCoords.newGav(groupId, artifactId, version);
+        final FeaturePackLocation fpl = LegacyGalleon1Universe.toFpl(gav);
         String depName = null;
         final FeaturePackConfig.Builder depBuilder = transitive ? FeaturePackConfig.transitiveBuilder(fpl) : FeaturePackConfig.builder(fpl);
         while (reader.hasNext()) {
