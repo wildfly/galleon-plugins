@@ -34,6 +34,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
 import org.apache.maven.RepositoryUtils;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.execution.MavenSession;
@@ -58,8 +59,17 @@ import org.codehaus.plexus.archiver.manager.ArchiverManager;
 import org.codehaus.plexus.archiver.manager.NoSuchArchiverException;
 import org.codehaus.plexus.components.io.fileselectors.IncludeExcludeFileSelector;
 import org.codehaus.plexus.util.StringUtils;
+import org.jboss.galleon.ArtifactCoords.Gav;
+import org.jboss.galleon.ArtifactCoords;
 import org.jboss.galleon.ProvisioningException;
+import org.jboss.galleon.config.FeaturePackConfig;
+import org.jboss.galleon.config.ProvisioningConfig;
+import org.jboss.galleon.layout.FeaturePackLayout;
+import org.jboss.galleon.layout.ProvisioningLayout;
+import org.jboss.galleon.layout.ProvisioningLayoutFactory;
+import org.jboss.galleon.universe.FeaturePackLocation;
 import org.jboss.galleon.util.IoUtils;
+import org.wildfly.galleon.plugin.Utils;
 import org.wildfly.galleon.plugin.WfConstants;
 import org.eclipse.aether.RepositorySystem;
 import org.eclipse.aether.artifact.DefaultArtifact;
@@ -101,10 +111,16 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
     private File outputDirectory;
 
     /**
-     * List of feature-pack artifacts that the new feature-pack will depend on.
+     * The feature-pack build configuration file directory
      */
-    @Parameter(alias = "feature-packs", required = false)
-    private List<ArtifactItem> featurePacks;
+    @Parameter(alias = "config-dir", defaultValue = "${basedir}", property = "wildfly.feature.pack.configDir")
+    private File configDir;
+
+    /**
+     * The feature-pack build configuration file.
+     */
+    @Parameter(alias = "config-file", defaultValue = "wildfly-feature-pack-build.xml", property = "wildfly.feature.pack.configFile")
+    private String configFile;
 
     /**
      * List of external artifacts to be added to the embedded server.
@@ -186,9 +202,13 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
         Files.createFile(wildflyDir.resolve("bin").resolve("jboss-cli-logging.properties"));
         copyJbossModule(wildflyDir);
 
-        final List<Artifact> featurePackArtifacts = new ArrayList<>();
-        final Set<String> inheritedFeatures = getInheritedFeatures(modulesDir, featurePackArtifacts);
-        final Map<String, Artifact> buildArtifacts = collectBuildArtifacts(modulesDir, featurePackArtifacts);
+        Map<String, Artifact> buildArtifacts = new HashMap<>();
+        for (Artifact artifact : project.getArtifacts()) {
+            registerArtifact(buildArtifacts, artifact);
+        }
+
+        final Set<String> inheritedFeatures = getInheritedFeatures(modulesDir, buildArtifacts);
+        collectExternalArtifacts(modulesDir, buildArtifacts);
 
         List<Artifact> hardcodedArtifacts = new ArrayList<>(); // this one includes also the hardcoded artifact versions into module.xml
         ModuleXmlVersionResolver.filterAndConvertModules(modulesDir, wildflyDir.resolve(MODULES), buildArtifacts, hardcodedArtifacts, getLog());
@@ -300,17 +320,10 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
         Files.write(wildfly.resolve(WfConstants.DOMAIN).resolve(WfConstants.CONFIGURATION).resolve("host.xml"), lines);
     }
 
-    private Map<String, Artifact> collectBuildArtifacts(Path tmpModules, List<Artifact> featurePackArtifacts)
+    private void collectExternalArtifacts(Path tmpModules, Map<String, Artifact> artifacts)
             throws MojoExecutionException, IOException {
-        Map<String, Artifact> artifacts = new HashMap<>();
-        for (Artifact artifact : project.getArtifacts()) {
-            registerArtifact(artifacts, artifact);
-        }
-        for (Artifact featurePackArtifact : featurePackArtifacts) {
-            prepareArtifacts(artifacts, featurePackArtifact);
-        }
         if (externalArtifacts == null || externalArtifacts.isEmpty()) {
-            return artifacts;
+            return;
         }
         for (ExternalArtifact fp : externalArtifacts) {
             IncludeExcludeFileSelector selector = new IncludeExcludeFileSelector();
@@ -343,7 +356,6 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
                 getLog().warn(ex);
             }
         }
-        return artifacts;
     }
 
     private void registerArtifact(Map<String, Artifact> artifacts , Artifact artifact) {
@@ -352,59 +364,96 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
         artifacts.putIfAbsent(key, artifact);
     }
 
-    private Set<String> getInheritedFeatures(Path tmpModules, List<Artifact> featurePackArtifacts)
+    private Set<String> getInheritedFeatures(Path tmpModules, Map<String, Artifact> artifacts)
             throws MojoExecutionException, IOException {
-        if(featurePacks == null || featurePacks.isEmpty()) {
+        final WildFlyFeaturePackBuild buildConfig = Util.loadFeaturePackBuildConfig(configDir, configFile);
+        final Map<Gav, FeaturePackDependencySpec> fpDeps = buildConfig.getDependencies();
+        if(fpDeps.isEmpty()) {
             return Collections.emptySet();
         }
+
+        final MavenProjectArtifactVersions artifactVersions = MavenProjectArtifactVersions.getInstance(project);
+
         final Set<String> inheritedFeatures = new HashSet<>(500);
-        IncludeExcludeFileSelector selector = new IncludeExcludeFileSelector();
-        selector.setIncludes(new String[] { "**/**/module/modules/**/*", "features/**" });
-        IncludeExcludeFileSelector[] selectors = new IncludeExcludeFileSelector[] { selector };
-        for (ArtifactItem fp : featurePacks) {
-            final Artifact fpArtifact = findArtifact(fp);
-            if (fpArtifact == null) {
-                getLog().warn("No artifact was found for " + fp);
-                continue;
-            }
-            featurePackArtifacts.add(fpArtifact);
-            File archive = fpArtifact.getFile();
-            final Path tmpArchive = Files.createTempDirectory(fp.getGroupId() + '_' + fp.getArtifactId() + '_' + fp.getVersion());
-            try {
-                UnArchiver unArchiver;
-                try {
-                    unArchiver = archiverManager.getUnArchiver(fpArtifact.getType());
-                    debug("Found unArchiver by type: %s", unArchiver);
-                } catch (NoSuchArchiverException e) {
-                    unArchiver = archiverManager.getUnArchiver(archive);
-                    debug("Found unArchiver by extension: %s", unArchiver);
-                }
-                unArchiver.setFileSelectors(selectors);
-                unArchiver.setSourceFile(archive);
-                unArchiver.setDestDirectory(tmpArchive.toFile());
-                unArchiver.extract();
-
-                Path fpDir = tmpArchive.resolve("features");
-                if(Files.exists(fpDir)) {
-                    try (Stream<Path> children = Files.list(fpDir)) {
-                        final List<String> features = children.map(Path::getFileName).map(Path::toString).collect(Collectors.toList());
-                        for (String feature : features) {
-                            inheritedFeatures.add(feature);
-                        }
+        try(ProvisioningLayoutFactory layoutFactory = ProvisioningLayoutFactory.getInstance()) {
+            final ProvisioningConfig.Builder configBuilder = ProvisioningConfig.builder();
+            for (Map.Entry<Gav, FeaturePackDependencySpec> entry : fpDeps.entrySet()) {
+                Gav depGav = entry.getKey();
+                if (depGav.getVersion() == null) {
+                    String gavStr = artifactVersions.getVersion(depGav.toString());
+                    if (gavStr == null) {
+                        throw new MojoExecutionException("Failed resolve artifact version for " + depGav);
                     }
+                    depGav = ArtifactCoords.newGav(gavStr);
+                }
+                final ArtifactItem artifact = new ArtifactItem();
+                artifact.setGroupId(depGav.getGroupId());
+                artifact.setArtifactId(depGav.getArtifactId());
+                artifact.setVersion(depGav.getVersion());
+                artifact.setType("zip");
+                final Artifact resolved = findArtifact(artifact);
+                if(resolved == null) {
+                    throw new MojoExecutionException("Failed to resolve feature-pack artifact " + artifact);
                 }
 
-                fpDir = tmpArchive.resolve("packages");
-                if(Files.exists(fpDir)) {
-                    setModules(fpDir, tmpModules.resolve(MODULES));
+                final File f = resolved == null ? null : resolved.getFile();
+                if(f == null) {
+                    throw new MojoExecutionException("Failed to resolve feature-pack artifact " + artifact);
                 }
-            } catch (NoSuchArchiverException ex) {
-                getLog().warn(ex);
-            } finally {
-                IoUtils.recursiveDelete(tmpArchive);
+                final Path p = f.toPath();
+                final FeaturePackLocation fpl = layoutFactory.addLocal(p, false);
+                final FeaturePackConfig depConfig = entry.getValue().getTarget();
+                configBuilder.addFeaturePackDep(depConfig.isTransitive() ? FeaturePackConfig.transitiveBuilder(fpl).init(depConfig).build() : FeaturePackConfig.builder(fpl).init(depConfig).build());
             }
+            try(ProvisioningLayout<FeaturePackLayout> configLayout = layoutFactory.newConfigLayout(configBuilder.build())) {
+                final Path modulesDir = tmpModules.resolve(MODULES);
+                for(FeaturePackLayout fp : configLayout.getOrderedFeaturePacks()) {
+                    addFeatureSpecs(artifactVersions, fp, inheritedFeatures, modulesDir, artifacts);
+                }
+            }
+        } catch (ProvisioningException e) {
+            throw new MojoExecutionException("Failed to initialize provisioning layout for the feature-pack dependencies", e);
         }
         return inheritedFeatures;
+    }
+
+    private void addFeatureSpecs(MavenProjectArtifactVersions artifactVersions, FeaturePackLayout fp, Set<String> featureSpecs, Path modulesDir, Map<String, Artifact> artifacts) throws MojoExecutionException, IOException {
+
+        final Path fpDir = fp.getDir();
+        Path p = fpDir.resolve("features");
+        if(Files.exists(p)) {
+            try (Stream<Path> children = Files.list(p)) {
+                final List<String> features = children.map(Path::getFileName).map(Path::toString).collect(Collectors.toList());
+                for (String feature : features) {
+                    featureSpecs.add(feature);
+                }
+            }
+        }
+
+        p = fpDir.resolve("packages");
+        if(Files.exists(p)) {
+            setModules(p, modulesDir);
+            p = fpDir.resolve("resources/wildfly/artifact-versions.properties");
+            if(Files.exists(p)) {
+                final Map<String, String> props;
+                try {
+                    props = Utils.readProperties(p);
+                } catch (ProvisioningException e) {
+                    throw new MojoExecutionException("Failed to read artifact versions file " + p + " from " + fp.getFPID(), e);
+                }
+                for(String v : props.values()) {
+                    final ArtifactCoords coords = ArtifactCoordsUtil.fromJBossModules(v, "jar");
+                    ArtifactItem item = new ArtifactItem();
+                    item.setGroupId(coords.getGroupId());
+                    item.setArtifactId(coords.getArtifactId());
+                    item.setVersion(coords.getVersion());
+                    item.setClassifier(coords.getClassifier());
+                    item.setType(coords.getExtension());
+                    final Artifact resolvedItem = findArtifact(item);
+                    registerArtifact(artifacts, resolvedItem);
+                }
+            }
+        }
     }
 
     private void copyJbossModule(Path wildfly) throws IOException, MojoExecutionException {

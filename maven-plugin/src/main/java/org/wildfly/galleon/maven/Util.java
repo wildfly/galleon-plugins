@@ -16,15 +16,17 @@
  */
 package org.wildfly.galleon.maven;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+
 import javax.xml.stream.XMLStreamException;
 
-import org.jboss.galleon.ArtifactCoords;
+import org.apache.maven.plugin.MojoExecutionException;
 import org.jboss.galleon.Errors;
-import org.jboss.galleon.ProvisioningException;
 
 /**
  *
@@ -32,24 +34,21 @@ import org.jboss.galleon.ProvisioningException;
  */
 class Util {
 
-    interface ArtifactProcessor {
-        void process(ArtifactCoords coords) throws IOException;
+    static WildFlyFeaturePackBuild loadFeaturePackBuildConfig(File configDir, String configFile) throws MojoExecutionException {
+        final Path path = Paths.get(configDir.getAbsolutePath(), configFile);
+        if(!Files.exists(path)) {
+            throw new MojoExecutionException(Errors.pathDoesNotExist(path));
+        }
+        return loadFeaturePackBuildConfig(path);
     }
 
-    static WildFlyFeaturePackBuild loadFeaturePackBuildConfig(Path configFile) throws ProvisioningException {
+    static WildFlyFeaturePackBuild loadFeaturePackBuildConfig(Path configFile) throws MojoExecutionException {
         try (InputStream configStream = Files.newInputStream(configFile)) {
             return new FeaturePackBuildModelParser().parse(configStream);
         } catch (XMLStreamException e) {
-            throw new ProvisioningException(Errors.parseXml(configFile), e);
+            throw new MojoExecutionException(Errors.parseXml(configFile), e);
         } catch (IOException e) {
-            throw new ProvisioningException(Errors.openFile(configFile), e);
+            throw new MojoExecutionException(Errors.openFile(configFile), e);
         }
     }
-
-    static void processModuleArtifacts(final ModuleParseResult parsedModule, ArtifactProcessor ap) throws IOException {
-        for(ModuleParseResult.ArtifactName artName : parsedModule.artifacts) {
-            ap.process(ArtifactCoordsUtil.fromJBossModules(artName.getArtifactCoords(), "jar"));
-        }
-    }
-
 }
