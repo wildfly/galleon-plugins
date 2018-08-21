@@ -48,6 +48,9 @@ public class WildFlyFeaturePackBuild {
         private boolean includePlugin = true;
         private List<String> plugins = Collections.emptyList();
         private List<ResourcesTask> resourcesTasks = Collections.emptyList();
+        private List<String> standaloneExtensions = Collections.emptyList();
+        private List<String> domainExtensions = Collections.emptyList();
+        private List<String> hostExtensions = Collections.emptyList();
 
         private Builder() {
         }
@@ -92,6 +95,21 @@ public class WildFlyFeaturePackBuild {
             return this;
         }
 
+        public Builder addStandaloneExtension(String extension) {
+            standaloneExtensions = CollectionUtils.add(standaloneExtensions, extension);
+            return this;
+        }
+
+        public Builder addDomainExtension(String extension) {
+            domainExtensions = CollectionUtils.add(domainExtensions, extension);
+            return this;
+        }
+
+        public Builder addHostExtension(String extension) {
+            hostExtensions = CollectionUtils.add(hostExtensions, extension);
+            return this;
+        }
+
         public WildFlyFeaturePackBuild build() {
             return new WildFlyFeaturePackBuild(this);
         }
@@ -113,6 +131,9 @@ public class WildFlyFeaturePackBuild {
     private final boolean includePlugin;
     private final List<String> plugins;
     private final List<ResourcesTask> resourcesTasks;
+    private final List<String> standaloneExtensions;
+    private final List<String> domainExtensions;
+    private final List<String> hostExtensions;
 
     private WildFlyFeaturePackBuild(Builder builder) {
         this.producer = builder.producer;
@@ -123,6 +144,9 @@ public class WildFlyFeaturePackBuild {
         this.includePlugin = builder.includePlugin;
         this.plugins = CollectionUtils.unmodifiable(builder.plugins);
         this.resourcesTasks = CollectionUtils.unmodifiable(builder.resourcesTasks);
+        this.standaloneExtensions = CollectionUtils.unmodifiable(builder.standaloneExtensions);
+        this.domainExtensions = CollectionUtils.unmodifiable(builder.domainExtensions);
+        this.hostExtensions = CollectionUtils.unmodifiable(builder.hostExtensions);
     }
 
     public FeaturePackLocation getProducer() {
@@ -175,5 +199,29 @@ public class WildFlyFeaturePackBuild {
 
     public List<ResourcesTask> getResourcesTasks() {
         return resourcesTasks;
+    }
+
+    public boolean hasStandaloneExtensions() {
+        return !standaloneExtensions.isEmpty();
+    }
+
+    public List<String> getStandaloneExtensions() {
+        return standaloneExtensions;
+    }
+
+    public boolean hasDomainExtensions() {
+        return !domainExtensions.isEmpty();
+    }
+
+    public List<String> getDomainExtensions() {
+        return domainExtensions;
+    }
+
+    public boolean hasHostExtensions() {
+        return !hostExtensions.isEmpty();
+    }
+
+    public List<String> getHostExtensions() {
+        return hostExtensions;
     }
 }

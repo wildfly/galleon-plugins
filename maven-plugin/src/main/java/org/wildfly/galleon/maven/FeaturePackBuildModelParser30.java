@@ -64,7 +64,12 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
         DEFAULT_PACKAGES("default-packages"),
         DEPENDENCIES("dependencies"),
         DEPENDENCY("dependency"),
+        DOMAIN("domain"),
+        EXTENSION("extension"),
+        EXTENSIONS("extensions"),
+        GENERATE_FEATURE_SPECS("generate-feature-specs"),
         GROUP("group"),
+        HOST("host"),
         NAME("name"),
         PACKAGE("package"),
         PACKAGES("packages"),
@@ -73,6 +78,7 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
         PLUGINS("plugins"),
         PRODUCER("producer"),
         RESOURCES("resources"),
+        STANDALONE("standalone"),
         TRANSITIVE("transitive"),
 
         // default unknown element
@@ -81,7 +87,7 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
         private static final Map<QName, Element> elements;
 
         static {
-            Map<QName, Element> elementsMap = new HashMap<>(17);
+            Map<QName, Element> elementsMap = new HashMap<>(23);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.BUILD.getLocalName()), Element.BUILD);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.CONFIG.getLocalName()), Element.CONFIG);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.COPY.getLocalName()), Element.COPY);
@@ -89,7 +95,12 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
             elementsMap.put(new QName(NAMESPACE_3_0, Element.DEFAULT_PACKAGES.getLocalName()), Element.DEFAULT_PACKAGES);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.DEPENDENCIES.getLocalName()), Element.DEPENDENCIES);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.DEPENDENCY.getLocalName()), Element.DEPENDENCY);
+            elementsMap.put(new QName(NAMESPACE_3_0, Element.DOMAIN.getLocalName()), Element.DOMAIN);
+            elementsMap.put(new QName(NAMESPACE_3_0, Element.EXTENSION.getLocalName()), Element.EXTENSION);
+            elementsMap.put(new QName(NAMESPACE_3_0, Element.EXTENSIONS.getLocalName()), Element.EXTENSIONS);
+            elementsMap.put(new QName(NAMESPACE_3_0, Element.GENERATE_FEATURE_SPECS.getLocalName()), Element.GENERATE_FEATURE_SPECS);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.GROUP.getLocalName()), Element.GROUP);
+            elementsMap.put(new QName(NAMESPACE_3_0, Element.HOST.getLocalName()), Element.HOST);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.NAME.getLocalName()), Element.NAME);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.PACKAGE.getLocalName()), Element.PACKAGE);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.PACKAGES.getLocalName()), Element.PACKAGES);
@@ -98,6 +109,7 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
             elementsMap.put(new QName(NAMESPACE_3_0, Element.PLUGINS.getLocalName()), Element.PLUGINS);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.PRODUCER.getLocalName()), Element.PRODUCER);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.RESOURCES.getLocalName()), Element.RESOURCES);
+            elementsMap.put(new QName(NAMESPACE_3_0, Element.STANDALONE.getLocalName()), Element.STANDALONE);
             elementsMap.put(new QName(NAMESPACE_3_0, Element.TRANSITIVE.getLocalName()), Element.TRANSITIVE);
             elements = elementsMap;
         }
@@ -242,6 +254,9 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
                         case RESOURCES:
                             parseResources(reader, builder);
                             break;
+                        case GENERATE_FEATURE_SPECS:
+                            parseGenerateFeatureSpecs(reader, builder);
+                            break;
                         default:
                             throw ParsingUtils.unexpectedContent(reader);
                     }
@@ -255,7 +270,7 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
         throw ParsingUtils.endOfDocument(reader.getLocation());
     }
 
-    private void parseDefaultPackages(final XMLStreamReader reader, final WildFlyFeaturePackBuild.Builder builder) throws XMLStreamException {
+    private static void parseDefaultPackages(final XMLStreamReader reader, final WildFlyFeaturePackBuild.Builder builder) throws XMLStreamException {
         while (reader.hasNext()) {
             switch (reader.nextTag()) {
                 case XMLStreamConstants.END_ELEMENT: {
@@ -280,7 +295,7 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
         throw ParsingUtils.endOfDocument(reader.getLocation());
     }
 
-    private void parseDependencies(final XMLExtendedStreamReader reader, final WildFlyFeaturePackBuild.Builder builder) throws XMLStreamException {
+    private static void parseDependencies(final XMLExtendedStreamReader reader, final WildFlyFeaturePackBuild.Builder builder) throws XMLStreamException {
         while (reader.hasNext()) {
             switch (reader.nextTag()) {
                 case XMLStreamConstants.END_ELEMENT: {
@@ -404,7 +419,7 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
         throw ParsingUtils.endOfDocument(reader.getLocation());
     }
 
-    private String parseName(final XMLStreamReader reader) throws XMLStreamException {
+    private static String parseName(final XMLStreamReader reader) throws XMLStreamException {
         final int count = reader.getAttributeCount();
         String name = null;
         final Set<Attribute> required = EnumSet.of(Attribute.NAME);
@@ -426,7 +441,7 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
         return name;
     }
 
-    private void parsePackageSchemas(XMLStreamReader reader, WildFlyFeaturePackBuild.Builder builder) throws XMLStreamException {
+    private static void parsePackageSchemas(XMLStreamReader reader, WildFlyFeaturePackBuild.Builder builder) throws XMLStreamException {
         ParsingUtils.parseNoAttributes(reader);
         while (reader.hasNext()) {
             switch (reader.nextTag()) {
@@ -498,7 +513,7 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
         return artifact;
     }
 
-    private void parseResources(final XMLExtendedStreamReader reader, final WildFlyFeaturePackBuild.Builder builder) throws XMLStreamException {
+    private static void parseResources(final XMLExtendedStreamReader reader, final WildFlyFeaturePackBuild.Builder builder) throws XMLStreamException {
         while (reader.hasNext()) {
             switch (reader.nextTag()) {
                 case XMLStreamConstants.END_ELEMENT: {
@@ -523,7 +538,7 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
         throw ParsingUtils.endOfDocument(reader.getLocation());
     }
 
-    private CopyResourcesTask parseCopy(XMLStreamReader reader) throws XMLStreamException {
+    private static CopyResourcesTask parseCopy(XMLStreamReader reader) throws XMLStreamException {
         final CopyResourcesTask copy = new CopyResourcesTask();
         final int count = reader.getAttributeCount();
         for (int i = 0; i < count; i++) {
@@ -545,5 +560,99 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
         }
         ParsingUtils.parseNoContent(reader);
         return copy;
+    }
+
+    private static void parseGenerateFeatureSpecs(final XMLExtendedStreamReader reader, final WildFlyFeaturePackBuild.Builder builder) throws XMLStreamException {
+        while (reader.hasNext()) {
+            switch (reader.nextTag()) {
+                case XMLStreamConstants.END_ELEMENT: {
+                    return;
+                }
+                case XMLStreamConstants.START_ELEMENT: {
+                    final Element element = Element.of(reader.getName());
+                    switch (element) {
+                        case EXTENSIONS:
+                            parseExtensions(reader, builder);
+                            break;
+                        default:
+                            throw ParsingUtils.unexpectedContent(reader);
+                    }
+                    break;
+                }
+                default: {
+                    throw ParsingUtils.unexpectedContent(reader);
+                }
+            }
+        }
+        throw ParsingUtils.endOfDocument(reader.getLocation());
+    }
+
+    private static void parseExtensions(final XMLExtendedStreamReader reader, final WildFlyFeaturePackBuild.Builder builder) throws XMLStreamException {
+        while (reader.hasNext()) {
+            switch (reader.nextTag()) {
+                case XMLStreamConstants.END_ELEMENT: {
+                    return;
+                }
+                case XMLStreamConstants.START_ELEMENT: {
+                    final Element element = Element.of(reader.getName());
+                    switch (element) {
+                        case STANDALONE:
+                            parseExtensions(reader, builder, Element.STANDALONE);
+                            break;
+                        case DOMAIN:
+                            parseExtensions(reader, builder, Element.DOMAIN);
+                            break;
+                        case HOST:
+                            parseExtensions(reader, builder, Element.HOST);
+                            break;
+                        default:
+                            throw ParsingUtils.unexpectedContent(reader);
+                    }
+                    break;
+                }
+                default: {
+                    throw ParsingUtils.unexpectedContent(reader);
+                }
+            }
+        }
+        throw ParsingUtils.endOfDocument(reader.getLocation());
+    }
+
+    private static void parseExtensions(XMLExtendedStreamReader reader, WildFlyFeaturePackBuild.Builder builder, Element e) throws XMLStreamException {
+        ParsingUtils.parseNoAttributes(reader);
+        while (reader.hasNext()) {
+            switch (reader.nextTag()) {
+                case XMLStreamConstants.END_ELEMENT: {
+                    return;
+                }
+                case XMLStreamConstants.START_ELEMENT: {
+                    final Element element = Element.of(reader.getName());
+                    switch (element) {
+                        case EXTENSION:
+                            switch(e) {
+                                case STANDALONE:
+                                    builder.addStandaloneExtension(reader.getElementText().trim());
+                                    break;
+                                case DOMAIN:
+                                    builder.addDomainExtension(reader.getElementText().trim());
+                                    break;
+                                case HOST:
+                                    builder.addHostExtension(reader.getElementText().trim());
+                                    break;
+                                default:
+                                    throw new XMLStreamException("Unexpected extension target " + e, reader.getLocation());
+                            }
+                            break;
+                        default:
+                            throw ParsingUtils.unexpectedContent(reader);
+                    }
+                    break;
+                }
+                default: {
+                    throw ParsingUtils.unexpectedContent(reader);
+                }
+            }
+        }
+        throw ParsingUtils.endOfDocument(reader.getLocation());
     }
 }

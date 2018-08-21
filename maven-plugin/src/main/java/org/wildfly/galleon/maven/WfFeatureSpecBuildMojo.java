@@ -16,6 +16,7 @@
  */
 package org.wildfly.galleon.maven;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.net.URL;
@@ -60,6 +61,7 @@ import org.codehaus.plexus.archiver.manager.NoSuchArchiverException;
 import org.codehaus.plexus.components.io.fileselectors.IncludeExcludeFileSelector;
 import org.codehaus.plexus.util.StringUtils;
 import org.jboss.galleon.ArtifactCoords.Gav;
+import org.jboss.galleon.ProvisioningDescriptionException;
 import org.jboss.galleon.ArtifactCoords;
 import org.jboss.galleon.ProvisioningException;
 import org.jboss.galleon.config.FeaturePackConfig;
@@ -129,27 +131,6 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
     private List<ExternalArtifact> externalArtifacts;
 
     /**
-     * List of WildFly extensions for the embedded standalone.
-     * Used in the standalone.xml
-     */
-    @Parameter(alias = "standalone-extensions", required = true)
-    private List<String> standaloneExtensions;
-
-    /**
-     * List of WildFly extensions for the embedded domain.
-     * Used in the domain.xml.
-     */
-    @Parameter(alias = "domain-extensions")
-    private List<String> domainExtensions;
-
-    /**
-     * List of WildFly extensions for the embedded host.
-     * Used in the host.xml.
-     */
-    @Parameter(alias = "host-extensions")
-    private List<String> hostExtensions;
-
-    /**
      * Whether to launch the embedded server to read feature descriptions in a separate process
      */
     @Parameter(alias = "fork-embedded", required = false)
@@ -177,6 +158,11 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
 
     @Component
     private ArtifactResolver artifactResolver;
+
+    private Set<String> inheritedFeatureSpecs = Collections.emptySet();
+    private Set<String> standaloneExtensions = Collections.emptySet();
+    private Set<String> domainExtensions = Collections.emptySet();
+    private Set<String> hostExtensions = Collections.emptySet();
 
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
@@ -212,8 +198,6 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
 
     private int doExecute(Path wildflyDir, Path modulesDir) throws MojoExecutionException, MojoFailureException, MavenFilteringException, IOException {
 
-        Files.createDirectories(wildflyDir.resolve(WfConstants.STANDALONE).resolve(WfConstants.CONFIGURATION));
-        Files.createDirectories(wildflyDir.resolve(WfConstants.DOMAIN).resolve(WfConstants.CONFIGURATION));
         Files.createDirectories(wildflyDir.resolve("bin"));
         Files.createFile(wildflyDir.resolve("bin").resolve("jboss-cli-logging.properties"));
         copyJbossModule(wildflyDir);
@@ -223,7 +207,17 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
             registerArtifact(buildArtifacts, artifact);
         }
 
-        final Set<String> inheritedFeatures = getInheritedFeatures(modulesDir, buildArtifacts);
+        final WildFlyFeaturePackBuild buildConfig = Util.loadFeaturePackBuildConfig(configDir, configFile);
+        if(buildConfig.hasStandaloneExtensions()) {
+            Files.createDirectories(wildflyDir.resolve(WfConstants.STANDALONE).resolve(WfConstants.CONFIGURATION));
+            standaloneExtensions = new HashSet<>(buildConfig.getStandaloneExtensions());
+        }
+        if(buildConfig.hasDomainExtensions() || buildConfig.hasHostExtensions()) {
+            Files.createDirectories(wildflyDir.resolve(WfConstants.DOMAIN).resolve(WfConstants.CONFIGURATION));
+            domainExtensions = new HashSet<>(buildConfig.getDomainExtensions());
+            hostExtensions = new HashSet<>(buildConfig.getHostExtensions());
+        }
+        processFeaturePackDeps(modulesDir, buildArtifacts, buildConfig);
         collectExternalArtifacts(modulesDir, buildArtifacts);
 
         List<Artifact> hardcodedArtifacts = new ArrayList<>(); // this one includes also the hardcoded artifact versions into module.xml
@@ -247,7 +241,7 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
         System.setProperty(MAVEN_REPO_LOCAL, session.getSettings().getLocalRepository());
         debug("Generating feature specs using local maven repo %s", System.getProperty(MAVEN_REPO_LOCAL));
         try {
-            return FeatureSpecGeneratorInvoker.generateSpecs(wildflyDir, inheritedFeatures, outputDirectory.toPath(), specGenCp, forkEmbedded, getLog());
+            return FeatureSpecGeneratorInvoker.generateSpecs(wildflyDir, inheritedFeatureSpecs, outputDirectory.toPath(), specGenCp, forkEmbedded, getLog());
         } catch (ProvisioningException e) {
             throw new MojoExecutionException("Feature spec generator failed", e);
         } finally {
@@ -285,55 +279,61 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
     }
 
     private void addBasicConfigs(final Path wildfly) throws IOException {
-        final List<String> lines = new ArrayList<>(standaloneExtensions.size() + 5);
-        lines.add("<?xml version='1.0' encoding='UTF-8'?>");
-        lines.add("<server xmlns=\"urn:jboss:domain:6.0\">");
-        lines.add("<extensions>");
-        for (String extension : standaloneExtensions) {
-            lines.add(String.format("<extension module=\"%s\"/>", extension));
+        final List<String> lines = new ArrayList<>();
+        if(!standaloneExtensions.isEmpty()) {
+            lines.add("<?xml version='1.0' encoding='UTF-8'?>");
+            lines.add("<server xmlns=\"urn:jboss:domain:6.0\">");
+            lines.add("<extensions>");
+            for (String extension : standaloneExtensions) {
+                lines.add(String.format("<extension module=\"%s\"/>", extension));
+            }
+            lines.add("</extensions>");
+            lines.add("</server>");
+            Files.write(wildfly.resolve(WfConstants.STANDALONE).resolve(WfConstants.CONFIGURATION).resolve("standalone.xml"), lines);
         }
-        lines.add("</extensions>");
-        lines.add("</server>");
-        Files.write(wildfly.resolve(WfConstants.STANDALONE).resolve(WfConstants.CONFIGURATION).resolve("standalone.xml"), lines);
 
-        lines.clear();
-        lines.add("<?xml version='1.0' encoding='UTF-8'?>");
-        lines.add("<domain xmlns=\"urn:jboss:domain:6.0\">");
-        lines.add("<extensions>");
-        for (String extension : domainExtensions) {
-            lines.add(String.format("<extension module=\"%s\"/>", extension));
+        if (!domainExtensions.isEmpty()) {
+            lines.clear();
+            lines.add("<?xml version='1.0' encoding='UTF-8'?>");
+            lines.add("<domain xmlns=\"urn:jboss:domain:6.0\">");
+            lines.add("<extensions>");
+            for (String extension : domainExtensions) {
+                lines.add(String.format("<extension module=\"%s\"/>", extension));
+            }
+            lines.add("</extensions>");
+            lines.add("</domain>");
+            Files.write(wildfly.resolve(WfConstants.DOMAIN).resolve(WfConstants.CONFIGURATION).resolve("domain.xml"), lines);
         }
-        lines.add("</extensions>");
-        lines.add("</domain>");
-        Files.write(wildfly.resolve(WfConstants.DOMAIN).resolve(WfConstants.CONFIGURATION).resolve("domain.xml"), lines);
 
-        lines.clear();
-        lines.add("<?xml version='1.0' encoding='UTF-8'?>");
-        lines.add("<host xmlns=\"urn:jboss:domain:6.0\" name=\"master\">");
-        lines.add("<extensions>");
-        for (String extension : hostExtensions) {
-            lines.add(String.format("<extension module=\"%s\"/>", extension));
+        if(!hostExtensions.isEmpty()) {
+            lines.clear();
+            lines.add("<?xml version='1.0' encoding='UTF-8'?>");
+            lines.add("<host xmlns=\"urn:jboss:domain:6.0\" name=\"master\">");
+            lines.add("<extensions>");
+            for (String extension : hostExtensions) {
+                lines.add(String.format("<extension module=\"%s\"/>", extension));
+            }
+            lines.add("</extensions>");
+            lines.add("<management>");
+            lines.add("<management-interfaces>");
+            lines.add("<http-interface security-realm=\"ManagementRealm\">");
+            lines.add("<http-upgrade enabled=\"true\"/>");
+            lines.add("<socket interface=\"management\" port=\"${jboss.management.http.port:9990}\"/>");
+            lines.add("</http-interface>");
+            lines.add("</management-interfaces>");
+
+            lines.add("</management>");
+            lines.add("<domain-controller>");
+            lines.add("<local />");
+            lines.add("</domain-controller>");
+            lines.add("<interfaces>");
+            lines.add("<interface name=\"management\">");
+            lines.add("<inet-address value=\"127.0.0.1\"/>");
+            lines.add("</interface>");
+            lines.add("</interfaces>");
+            lines.add("</host>");
+            Files.write(wildfly.resolve(WfConstants.DOMAIN).resolve(WfConstants.CONFIGURATION).resolve("host.xml"), lines);
         }
-        lines.add("</extensions>");
-        lines.add("<management>");
-        lines.add("<management-interfaces>");
-        lines.add("<http-interface security-realm=\"ManagementRealm\">");
-        lines.add("<http-upgrade enabled=\"true\"/>");
-        lines.add("<socket interface=\"management\" port=\"${jboss.management.http.port:9990}\"/>");
-        lines.add("</http-interface>");
-        lines.add("</management-interfaces>");
-
-        lines.add("</management>");
-        lines.add("<domain-controller>");
-        lines.add("<local />");
-        lines.add("</domain-controller>");
-        lines.add("<interfaces>");
-        lines.add("<interface name=\"management\">");
-        lines.add("<inet-address value=\"127.0.0.1\"/>");
-        lines.add("</interface>");
-        lines.add("</interfaces>");
-        lines.add("</host>");
-        Files.write(wildfly.resolve(WfConstants.DOMAIN).resolve(WfConstants.CONFIGURATION).resolve("host.xml"), lines);
     }
 
     private void collectExternalArtifacts(Path tmpModules, Map<String, Artifact> artifacts)
@@ -380,17 +380,15 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
         artifacts.putIfAbsent(key, artifact);
     }
 
-    private Set<String> getInheritedFeatures(Path tmpModules, Map<String, Artifact> artifacts)
+    private void processFeaturePackDeps(Path tmpModules, Map<String, Artifact> artifacts, WildFlyFeaturePackBuild buildConfig)
             throws MojoExecutionException, IOException {
-        final WildFlyFeaturePackBuild buildConfig = Util.loadFeaturePackBuildConfig(configDir, configFile);
         final Map<Gav, FeaturePackDependencySpec> fpDeps = buildConfig.getDependencies();
         if(fpDeps.isEmpty()) {
-            return Collections.emptySet();
+            return;
         }
 
         final MavenProjectArtifactVersions artifactVersions = MavenProjectArtifactVersions.getInstance(project);
 
-        final Set<String> inheritedFeatures = new HashSet<>(500);
         try(ProvisioningLayoutFactory layoutFactory = ProvisioningLayoutFactory.getInstance()) {
             final ProvisioningConfig.Builder configBuilder = ProvisioningConfig.builder();
             for (Map.Entry<Gav, FeaturePackDependencySpec> entry : fpDeps.entrySet()) {
@@ -411,12 +409,10 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
                 if(resolved == null) {
                     throw new MojoExecutionException("Failed to resolve feature-pack artifact " + artifact);
                 }
-
-                final File f = resolved == null ? null : resolved.getFile();
-                if(f == null) {
+                final Path p = resolved == null ? null : resolved.getFile().toPath();
+                if(p == null) {
                     throw new MojoExecutionException("Failed to resolve feature-pack artifact " + artifact);
                 }
-                final Path p = f.toPath();
                 final FeaturePackLocation fpl = layoutFactory.addLocal(p, false);
                 final FeaturePackConfig depConfig = entry.getValue().getTarget();
                 configBuilder.addFeaturePackDep(depConfig.isTransitive() ? FeaturePackConfig.transitiveBuilder(fpl).init(depConfig).build() : FeaturePackConfig.builder(fpl).init(depConfig).build());
@@ -424,24 +420,26 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
             try(ProvisioningLayout<FeaturePackLayout> configLayout = layoutFactory.newConfigLayout(configBuilder.build())) {
                 final Path modulesDir = tmpModules.resolve(MODULES);
                 for(FeaturePackLayout fp : configLayout.getOrderedFeaturePacks()) {
-                    addFeatureSpecs(artifactVersions, fp, inheritedFeatures, modulesDir, artifacts);
+                    processFeaturePackDep(artifactVersions, fp, modulesDir, artifacts);
                 }
             }
         } catch (ProvisioningException e) {
             throw new MojoExecutionException("Failed to initialize provisioning layout for the feature-pack dependencies", e);
         }
-        return inheritedFeatures;
     }
 
-    private void addFeatureSpecs(MavenProjectArtifactVersions artifactVersions, FeaturePackLayout fp, Set<String> featureSpecs, Path modulesDir, Map<String, Artifact> artifacts) throws MojoExecutionException, IOException {
+    private void processFeaturePackDep(MavenProjectArtifactVersions artifactVersions, FeaturePackLayout fp, Path modulesDir, Map<String, Artifact> artifacts) throws MojoExecutionException, IOException {
 
         final Path fpDir = fp.getDir();
         Path p = fpDir.resolve("features");
         if(Files.exists(p)) {
+            if(inheritedFeatureSpecs.isEmpty()) {
+                inheritedFeatureSpecs = new HashSet<>(500);
+            }
             try (Stream<Path> children = Files.list(p)) {
                 final List<String> features = children.map(Path::getFileName).map(Path::toString).collect(Collectors.toList());
                 for (String feature : features) {
-                    featureSpecs.add(feature);
+                    inheritedFeatureSpecs.add(feature);
                 }
             }
         }
@@ -467,6 +465,55 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
                     item.setType(coords.getExtension());
                     final Artifact resolvedItem = findArtifact(item);
                     registerArtifact(artifacts, resolvedItem);
+                }
+            }
+        }
+
+        if (!standaloneExtensions.isEmpty()) {
+            try {
+                p = fp.getResource(WfConstants.WILDFLY, WfConstants.EXTENSIONS_STANDALONE);
+            } catch (ProvisioningDescriptionException e) {
+                throw new MojoExecutionException("Failed to resolve extensions", e);
+            }
+            if (Files.exists(p)) {
+                try (BufferedReader reader = Files.newBufferedReader(p)) {
+                    String line = reader.readLine();
+                    while (line != null) {
+                        standaloneExtensions.add(line);
+                        line = reader.readLine();
+                    }
+                }
+            }
+        }
+
+        if(!domainExtensions.isEmpty() || !hostExtensions.isEmpty()) {
+            try {
+                p = fp.getResource(WfConstants.WILDFLY, WfConstants.EXTENSIONS_DOMAIN);
+            } catch (ProvisioningDescriptionException e) {
+                throw new MojoExecutionException("Failed to resolve extensions", e);
+            }
+            if (Files.exists(p)) {
+                try (BufferedReader reader = Files.newBufferedReader(p)) {
+                    String line = reader.readLine();
+                    while (line != null) {
+                        domainExtensions.add(line);
+                        line = reader.readLine();
+                    }
+                }
+            }
+
+            try {
+                p = fp.getResource(WfConstants.WILDFLY, WfConstants.EXTENSIONS_HOST);
+            } catch (ProvisioningDescriptionException e) {
+                throw new MojoExecutionException("Failed to resolve extensions", e);
+            }
+            if (Files.exists(p)) {
+                try (BufferedReader reader = Files.newBufferedReader(p)) {
+                    String line = reader.readLine();
+                    while (line != null) {
+                        hostExtensions.add(line);
+                        line = reader.readLine();
+                    }
                 }
             }
         }
