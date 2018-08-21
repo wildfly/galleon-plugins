@@ -342,9 +342,19 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
             artifactVersions.remove(gav.getGroupId(), gav.getArtifactId());
         }
         try {
-            this.artifactVersions.store(resourcesWildFly.resolve(WfConstants.ARTIFACT_VERSIONS_PROPS));
+            artifactVersions.store(resourcesWildFly.resolve(WfConstants.ARTIFACT_VERSIONS_PROPS));
         } catch (IOException e) {
             throw new MojoExecutionException("Failed to store artifact versions", e);
+        }
+
+        if(wfFpConfig.hasStandaloneExtensions()) {
+            persistExtensions(resourcesWildFly, WfConstants.EXTENSIONS_STANDALONE, wfFpConfig.getStandaloneExtensions());
+        }
+        if(wfFpConfig.hasDomainExtensions()) {
+            persistExtensions(resourcesWildFly, WfConstants.EXTENSIONS_DOMAIN, wfFpConfig.getDomainExtensions());
+        }
+        if(wfFpConfig.hasHostExtensions()) {
+            persistExtensions(resourcesWildFly, WfConstants.EXTENSIONS_HOST, wfFpConfig.getHostExtensions());
         }
 
         // scripts
@@ -382,6 +392,14 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
             }
         } catch (IOException e) {
             throw new MojoExecutionException("Failed to create a feature-pack archives from the layout", e);
+        }
+    }
+
+    private void persistExtensions(final Path resourcesWildFly, String name, List<String> extensions) throws MojoExecutionException {
+        try {
+            Files.write(resourcesWildFly.resolve(name), extensions);
+        } catch (IOException e) {
+            throw new MojoExecutionException("Failed to persist " + name, e);
         }
     }
 

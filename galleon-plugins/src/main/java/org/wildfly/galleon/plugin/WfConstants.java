@@ -37,6 +37,9 @@ public interface WfConstants {
     String DOCS_SCHEMA = "docs.schema";
     String DOT_JAR = ".jar";
     String DOMAIN = "domain";
+    String EXTENSIONS_DOMAIN = "extensions-domain";
+    String EXTENSIONS_HOST = "extensions-host";
+    String EXTENSIONS_STANDALONE = "extensions-standalone";
     String HOST = "host";
     String LAYOUT = "layout";
     String LAYERS = "layers";

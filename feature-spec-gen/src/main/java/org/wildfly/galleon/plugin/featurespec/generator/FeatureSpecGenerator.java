@@ -170,35 +170,48 @@ public class FeatureSpecGenerator implements ForkedEmbeddedUtil.ForkCallback {
     private void doGenerate(String installationHome) throws ProvisioningException {
 
         final ModelNode standaloneFeatures;
-        final ModelNode domainRoots;
+        ModelNode domainRoots = null;
         if(fork) {
             ForkedEmbeddedUtil.fork(this, getStoredSystemProps(), installation, getStandaloneSpecsFile().toString(), getDomainSpecsFile().toString());
             standaloneFeatures = readSpecsFile(getStandaloneSpecsFile());
-            domainRoots = readSpecsFile(getDomainSpecsFile());
+            if(Files.exists(Paths.get(installation).resolve(WfConstants.DOMAIN).resolve(WfConstants.CONFIGURATION))) {
+                domainRoots = readSpecsFile(getDomainSpecsFile());
+            }
         } else {
-            standaloneFeatures = readFeatureSpecs(createStandaloneServer(installation));
-            domainRoots = readFeatureSpecs(createEmbeddedHc(installation));
+            final Path home = Paths.get(installation);
+            if(Files.exists(home.resolve(WfConstants.STANDALONE).resolve(WfConstants.CONFIGURATION))) {
+                standaloneFeatures = readFeatureSpecs(createStandaloneServer(installation));
+            } else {
+                throw new ProvisioningException("The installation does not include standalone configuration");
+            }
+            if(Files.exists(home.resolve(WfConstants.DOMAIN).resolve(WfConstants.CONFIGURATION))) {
+                domainRoots = readFeatureSpecs(createEmbeddedHc(installation));
+            }
         }
 
         final FeatureSpecNode rootNode = new FeatureSpecNode(this, FeatureSpecNode.STANDALONE_MODEL, standaloneFeatures.require(ClientConstants.NAME).asString(), standaloneFeatures);
 
-        rootNode.setDomainDescr(WfConstants.DOMAIN, new ModelNode());
-        rootNode.generateDomain = false;
-        for(Property child : domainRoots.get("children").asPropertyList()) {
-            final String specName = child.getName();
-            if(specName.equals(WfConstants.HOST)) {
-                rootNode.setHostDescr(specName, child.getValue());
-            } else if(specName.equals(WfConstants.PROFILE)) {
-                rootNode.setProfileDescr(specName, child.getValue());
-            } else {
-                rootNode.domainDescr.get("children").add(specName, child.getValue());
+        if (domainRoots != null) {
+            rootNode.setDomainDescr(WfConstants.DOMAIN, new ModelNode());
+            rootNode.generateDomain = false;
+            for (Property child : domainRoots.get("children").asPropertyList()) {
+                final String specName = child.getName();
+                if (specName.equals(WfConstants.HOST)) {
+                    rootNode.setHostDescr(specName, child.getValue());
+                } else if (specName.equals(WfConstants.PROFILE)) {
+                    rootNode.setProfileDescr(specName, child.getValue());
+                } else {
+                    rootNode.domainDescr.get("children").add(specName, child.getValue());
+                }
             }
         }
 
         rootNode.processChildren(FeatureSpecNode.STANDALONE_MODEL);
-        rootNode.processChildren(FeatureSpecNode.PROFILE_MODEL);
-        rootNode.processChildren(FeatureSpecNode.DOMAIN_MODEL);
-        rootNode.processChildren(FeatureSpecNode.HOST_MODEL);
+        if(domainRoots != null) {
+            rootNode.processChildren(FeatureSpecNode.PROFILE_MODEL);
+            rootNode.processChildren(FeatureSpecNode.DOMAIN_MODEL);
+            rootNode.processChildren(FeatureSpecNode.HOST_MODEL);
+        }
 
         rootNode.buildSpecs();
     }
@@ -212,8 +225,10 @@ public class FeatureSpecGenerator implements ForkedEmbeddedUtil.ForkCallback {
         }
         ModelNode result = readFeatureSpecs(createStandaloneServer(args[0]));
         writeSpecsFile(Paths.get(args[1]), result);
-        result = readFeatureSpecs(createEmbeddedHc(args[0]));
-        writeSpecsFile(Paths.get(args[2]), result);
+        if(Files.exists(Paths.get(args[0]).resolve(WfConstants.DOMAIN).resolve(WfConstants.CONFIGURATION))) {
+            result = readFeatureSpecs(createEmbeddedHc(args[0]));
+            writeSpecsFile(Paths.get(args[2]), result);
+        }
     }
 
     @Override
