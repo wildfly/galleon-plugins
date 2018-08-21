@@ -155,6 +155,20 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
     @Parameter(alias = "fork-embedded", required = false)
     private boolean forkEmbedded;
 
+    /**
+     * A directory from which the embedded WildFly instance will be started that is used for exporting the meta-model.
+     * Intended mainly for debugging.
+     */
+    @Parameter(alias = "wildfly-home", property = "wfgp.wildflyHome", defaultValue = "${project.build.directory}/wildfly", required = true)
+    private Path wildflyHome;
+
+    /**
+     * A directory where the module templates from the dependent feature packs are gathered before they are transformed
+     * and copied under their default destination {@link #wildflyHome}/modules. Intended mainly for debugging.
+     */
+    @Parameter(alias = "module-templates", property = "wfgp.moduleTemplatesDir", defaultValue = "${project.build.directory}/module-templates", required = true)
+    private Path moduleTemplatesDir;
+
     @Component
     private ArchiverManager archiverManager;
 
@@ -168,30 +182,32 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
     public void execute() throws MojoExecutionException, MojoFailureException {
 
         final long startTime = System.currentTimeMillis();
-        Path modulesDir = null;
-        Path wildflyDir = null;
         int specsTotal = -1;
         try {
-            modulesDir = Files.createTempDirectory(MODULES);
-            wildflyDir = Files.createTempDirectory("wf-specs-dist");
-            specsTotal = doExecute(wildflyDir, modulesDir);
+            IoUtils.recursiveDelete(moduleTemplatesDir);
+            Files.createDirectories(moduleTemplatesDir);
+            IoUtils.recursiveDelete(wildflyHome);
+            Files.createDirectories(wildflyHome);
+            specsTotal = doExecute(wildflyHome, moduleTemplatesDir);
         } catch (RuntimeException | Error | MojoExecutionException | MojoFailureException e) {
             throw e;
         } catch (IOException | MavenFilteringException ex) {
             throw new MojoExecutionException(ex.getMessage(), ex);
         } finally {
-            if(modulesDir != null) {
-                IoUtils.recursiveDelete(modulesDir);
-            }
-            if(wildflyDir != null) {
-                IoUtils.recursiveDelete(wildflyDir);
-            }
             if(getLog().isDebugEnabled() && specsTotal >= 0) {
                 final long totalTime = System.currentTimeMillis() - startTime;
                 final long secs = totalTime / 1000;
                 debug("Generated " + specsTotal + " feature specs in " + secs + "." + (totalTime - secs * 1000) + " secs");
             }
         }
+    }
+
+    public void setWildflyHome(String wildflyHome) {
+        this.wildflyHome = Paths.get(wildflyHome);
+    }
+
+    public void setModuleTemplatesDir(String moduleTemplatesDir) {
+        this.moduleTemplatesDir = Paths.get(moduleTemplatesDir);
     }
 
     private int doExecute(Path wildflyDir, Path modulesDir) throws MojoExecutionException, MojoFailureException, MavenFilteringException, IOException {
