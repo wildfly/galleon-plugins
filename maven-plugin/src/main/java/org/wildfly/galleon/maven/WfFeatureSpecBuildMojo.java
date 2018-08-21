@@ -61,6 +61,7 @@ import org.codehaus.plexus.archiver.manager.NoSuchArchiverException;
 import org.codehaus.plexus.components.io.fileselectors.IncludeExcludeFileSelector;
 import org.codehaus.plexus.util.StringUtils;
 import org.jboss.galleon.ArtifactCoords.Gav;
+import org.jboss.galleon.Constants;
 import org.jboss.galleon.ProvisioningDescriptionException;
 import org.jboss.galleon.ArtifactCoords;
 import org.jboss.galleon.ProvisioningException;
@@ -69,7 +70,11 @@ import org.jboss.galleon.config.ProvisioningConfig;
 import org.jboss.galleon.layout.FeaturePackLayout;
 import org.jboss.galleon.layout.ProvisioningLayout;
 import org.jboss.galleon.layout.ProvisioningLayoutFactory;
+import org.jboss.galleon.maven.plugin.util.MavenArtifactRepositoryManager;
 import org.jboss.galleon.universe.FeaturePackLocation;
+import org.jboss.galleon.universe.UniverseFactoryLoader;
+import org.jboss.galleon.universe.UniverseResolver;
+import org.jboss.galleon.util.CollectionUtils;
 import org.jboss.galleon.util.IoUtils;
 import org.wildfly.galleon.plugin.Utils;
 import org.wildfly.galleon.plugin.WfConstants;
@@ -81,6 +86,7 @@ import org.eclipse.aether.collection.CollectResult;
 import org.eclipse.aether.collection.DependencyCollectionException;
 import org.eclipse.aether.graph.Dependency;
 import org.eclipse.aether.graph.DependencyNode;
+import org.eclipse.aether.repository.RemoteRepository;
 import org.eclipse.aether.resolution.ArtifactRequest;
 import org.eclipse.aether.resolution.ArtifactResolutionException;
 
@@ -105,6 +111,9 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
 
     @Parameter(defaultValue = "${session}", readonly = true, required = true)
     protected MavenSession session;
+
+    @Parameter( defaultValue = "${project.remoteProjectRepositories}", readonly = true, required = true )
+    private List<RemoteRepository> repositories;
 
     /**
      * The directory where the generated specifications are written.
@@ -163,6 +172,7 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
     private Set<String> standaloneExtensions = Collections.emptySet();
     private Set<String> domainExtensions = Collections.emptySet();
     private Set<String> hostExtensions = Collections.emptySet();
+    private List<Path> layersConfs = Collections.emptyList();
 
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
@@ -227,6 +237,25 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
             ModuleXmlVersionResolver.filterAndConvertModules(modulesTemplates, wildflyDir.resolve(MODULES), buildArtifacts, hardcodedArtifacts, getLog());
         }
         addBasicConfigs(wildflyDir);
+
+        // layers.conf
+        Path fpLayersConf = Paths.get(project.getBuild().getDirectory()).resolve("resources").resolve(Constants.PACKAGES).resolve(WfConstants.LAYERS_CONF);
+        if(Files.exists(fpLayersConf)) {
+            fpLayersConf = fpLayersConf.resolve(WfConstants.CONTENT).resolve(WfConstants.MODULES).resolve(WfConstants.LAYERS_CONF);
+            if(!Files.exists(fpLayersConf)) {
+                throw new MojoExecutionException(
+                        "Package " + WfConstants.LAYERS_CONF + " is expected to contain "
+                                + WfConstants.MODULES + "/" + WfConstants.LAYERS_CONF + " but it does not");
+            }
+            layersConfs = CollectionUtils.add(layersConfs, fpLayersConf);
+        }
+        if(!layersConfs.isEmpty()) {
+            try {
+                Utils.mergeLayersConfs(layersConfs, wildflyDir);
+            } catch (ProvisioningException e) {
+                throw new MojoExecutionException("Failed to install layers.conf", e);
+            }
+        }
 
         for(Artifact art : hardcodedArtifacts) {
             findArtifact(art);
@@ -389,7 +418,9 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
 
         final MavenProjectArtifactVersions artifactVersions = MavenProjectArtifactVersions.getInstance(project);
 
-        try(ProvisioningLayoutFactory layoutFactory = ProvisioningLayoutFactory.getInstance()) {
+        final MavenArtifactRepositoryManager mvnRepo = new MavenArtifactRepositoryManager(repoSystem, session.getRepositorySession(), repositories);
+        final UniverseFactoryLoader ufl = UniverseFactoryLoader.getInstance().addArtifactResolver(mvnRepo);
+        try(ProvisioningLayoutFactory layoutFactory = ProvisioningLayoutFactory.getInstance(UniverseResolver.builder(ufl).build())) {
             final ProvisioningConfig.Builder configBuilder = ProvisioningConfig.builder();
             for (Map.Entry<Gav, FeaturePackDependencySpec> entry : fpDeps.entrySet()) {
                 Gav depGav = entry.getKey();
@@ -422,6 +453,7 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
                 for(FeaturePackLayout fp : configLayout.getOrderedFeaturePacks()) {
                     processFeaturePackDep(artifactVersions, fp, modulesDir, artifacts);
                 }
+                layersConfs = Utils.collectLayersConf(configLayout);
             }
         } catch (ProvisioningException e) {
             throw new MojoExecutionException("Failed to initialize provisioning layout for the feature-pack dependencies", e);
