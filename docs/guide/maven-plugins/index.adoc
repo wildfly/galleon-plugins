@@ -1,6 +1,6 @@
 ## Maven plugin
 
-This chapter is dedicated to the Maven plugin that can be used to build and install WildFly-based feature-packs. Maven
+This chapter is dedicated to the Maven plugin that can be used to build WildFly-based feature-packs. Maven
 coordinates of the Maven plugin artifact are
 
 include::provision-dist/index.adoc[]
@@ -15,3 +15,5 @@ include::provision-dist/index.adoc[]
 ----
 
 include::goals/index.adoc[]
+
+include::wildfly-feature-pack-build-xml/index.adoc[]
