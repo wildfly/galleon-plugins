@@ -21,17 +21,10 @@ import com.google.common.base.Charsets;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
-import java.nio.file.FileAlreadyExistsException;
-import java.nio.file.FileVisitOption;
-import java.nio.file.FileVisitResult;
-import java.nio.file.FileVisitor;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardOpenOption;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -60,93 +53,23 @@ import org.jboss.galleon.ArtifactCoords;
  */
 public class ModuleXmlVersionResolver {
 
-    private static final String MODULES = "modules";
+    private static XMLOutputFactory XML_OUTPUT_FACTORY;
+    private static XMLInputFactory XML_INPUT_FACTORY;
 
-    public static void filterAndConvertModules(Path fpDirectory, Path targetModuleDir, Map<String, Artifact> artifacts, List<Artifact> hardcodedArtifacts, Log log) throws IOException {
-        Files.walkFileTree(fpDirectory, new FileVisitor<Path>() {
-            @Override
-            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
-                if (isModules(dir)) {
-                    debug(log, "Copying %s to %s", dir, targetModuleDir);
-                    convertModules(dir, targetModuleDir, artifacts, hardcodedArtifacts, log);
-                    return FileVisitResult.SKIP_SUBTREE;
-                }
-                return FileVisitResult.CONTINUE;
-            }
-
-            @Override
-            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-                return FileVisitResult.CONTINUE;
-            }
-
-            @Override
-            public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
-                return FileVisitResult.CONTINUE;
-            }
-
-            @Override
-            public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
-                return FileVisitResult.CONTINUE;
-            }
-
-            private void debug(Log log, String format, Object... args) {
-                if (log.isDebugEnabled()) {
-                    log.debug(String.format(format, args));
-                }
-            }
-        });
+    private static XMLOutputFactory getXmlOutputFactory() {
+        return XML_OUTPUT_FACTORY == null ? XML_OUTPUT_FACTORY = XMLOutputFactory.newInstance() : XML_OUTPUT_FACTORY;
     }
 
-    public static void convertModules(Path source, Path target, Map<String, Artifact> artifacts, List<Artifact> hardcodedArtifacts, Log log) throws IOException {
-        if (Files.isDirectory(source)) {
-            Files.createDirectories(target);
-        } else {
-            Files.createDirectories(target.getParent());
-        }
-        Files.walkFileTree(source, EnumSet.of(FileVisitOption.FOLLOW_LINKS), Integer.MAX_VALUE,
-                new SimpleFileVisitor<Path>() {
-            @Override
-            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs)
-                    throws IOException {
-                final Path targetDir = target.resolve(source.relativize(dir));
-                try {
-                    Files.copy(dir, targetDir);
-                } catch (FileAlreadyExistsException e) {
-                    if (!Files.isDirectory(targetDir)) {
-                        throw e;
-                    }
-                }
-                return FileVisitResult.CONTINUE;
-            }
-
-            @Override
-            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
-                    throws IOException {
-                try {
-                    if ("module.xml".equals(file.getFileName().toString())) {
-                        convertModule(file, target.resolve(source.relativize(file)), artifacts, hardcodedArtifacts, log);
-                    } else {
-                        Files.copy(file, target.resolve(source.relativize(file)));
-                    }
-                } catch (XMLStreamException ex) {
-                    log.error("Error reading " + file, ex);
-                }
-                return FileVisitResult.CONTINUE;
-            }
-        });
-    }
-
-    private static boolean isModules(Path dir) {
-        return MODULES.equals(dir.getFileName().toString());
+    private static XMLInputFactory getXmlInputFactory() {
+        return XML_INPUT_FACTORY == null ? XML_INPUT_FACTORY = XMLInputFactory.newInstance() : XML_INPUT_FACTORY;
     }
 
     public static void convertModule(final Path file, Path target, Map<String, Artifact> artifacts, List<Artifact> hardcodedArtifacts, Log log) throws IOException, XMLStreamException {
-        XMLOutputFactory outputFactory = XMLOutputFactory.newInstance();
-        XMLInputFactory inputFactory = XMLInputFactory.newInstance();
         Files.deleteIfExists(target);
+        Files.createDirectories(target.getParent());
         try (Reader is = Files.newBufferedReader(file, Charsets.UTF_8);
                 Writer out = Files.newBufferedWriter(target, Charsets.UTF_8, StandardOpenOption.CREATE_NEW)) {
-            convert(inputFactory.createXMLEventReader(is), outputFactory.createXMLEventWriter(out), artifacts, hardcodedArtifacts, log);
+            convert(getXmlInputFactory().createXMLEventReader(is), getXmlOutputFactory().createXMLEventWriter(out), artifacts, hardcodedArtifacts, log);
         }
     }
 
