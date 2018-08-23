@@ -38,7 +38,7 @@ class MavenProjectArtifactVersions {
         return new MavenProjectArtifactVersions(project);
     }
 
-    private final Map<String, String> versions = new TreeMap<String, String>();
+    private final Map<String, String> versions = new TreeMap<>();
 
     private MavenProjectArtifactVersions(MavenProject project) {
         for (Artifact artifact : project.getArtifacts()) {
@@ -46,13 +46,12 @@ class MavenProjectArtifactVersions {
                     append(artifact.getArtifactId());
             final String classifier = artifact.getClassifier();
             final StringBuilder version = new StringBuilder(buf);
+            version.append(':').append(artifact.getVersion()).append(':');
             if(classifier != null && !classifier.isEmpty()) {
                 buf.append("::").append(classifier);
-                version.append(':').append(artifact.getVersion()).append(':').append(classifier);
-            } else {
-                version.append(':').append(artifact.getVersion());
+                version.append(classifier);
             }
-            versions.put(buf.toString(), version.toString());
+            versions.put(buf.toString(), version.append(':').append(artifact.getType()).toString());
         }
     }
 

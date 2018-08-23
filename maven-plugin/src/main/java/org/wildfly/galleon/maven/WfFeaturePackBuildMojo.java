@@ -574,15 +574,18 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
 
         fpDependencies = new LinkedHashMap<>(wfFpConfig.getDependencies().size());
         for (Map.Entry<ArtifactCoords.Gav, FeaturePackDependencySpec> depEntry : wfFpConfig.getDependencies().entrySet()) {
-            ArtifactCoords.Gav depGav = depEntry.getKey();
-            if (depGav.getVersion() == null) {
-                String gavStr = artifactVersions.getVersion(depGav.toString());
-                if (gavStr == null) {
-                    throw new MojoExecutionException("Failed resolve artifact version for " + depGav);
+            ArtifactCoords depCoords = depEntry.getKey().toArtifactCoords();
+            if (depCoords.getVersion() == null) {
+                final String coordsStr = artifactVersions.getVersion(depCoords.getGroupId() + ':' + depCoords.getArtifactId());
+                if (coordsStr == null) {
+                    throw new MojoExecutionException("Failed resolve artifact version for " + depCoords);
                 }
-                depGav = ArtifactCoords.newGav(gavStr);
+                depCoords = ArtifactCoordsUtil.fromJBossModules(coordsStr, "zip");
+                if(depCoords.getExtension().equals("pom")) {
+                    depCoords = new ArtifactCoords(depCoords.getGroupId(), depCoords.getArtifactId(), depCoords.getVersion(), depCoords.getClassifier(), "zip");
+                }
             }
-            final Path depZip = resolveArtifact(depGav.toArtifactCoords());
+            final Path depZip = resolveArtifact(depCoords);
             final FeaturePackLocation depFpl = FeaturePackDescriber.readSpec(depZip).getFPID().getLocation();
 
             final FeaturePackDependencySpec depSpec = depEntry.getValue();
