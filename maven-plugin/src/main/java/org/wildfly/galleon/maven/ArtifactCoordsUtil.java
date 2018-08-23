@@ -25,21 +25,6 @@ import org.jboss.galleon.ArtifactCoords;
  */
 public class ArtifactCoordsUtil {
 
-    public static String toJBossModules(ArtifactCoords coords, boolean includeVersion) {
-        final StringBuilder buf = new StringBuilder();
-        buf.append(coords.getGroupId()).append(':').append(coords.getArtifactId());
-        if(coords.getClassifier() != null && !coords.getClassifier().isEmpty()) {
-            buf.append(':');
-            if(includeVersion && coords.getVersion() != null) {
-                buf.append(coords.getVersion());
-            }
-            buf.append(':').append(coords.getClassifier());
-        } else if(includeVersion && coords.getVersion() != null) {
-            buf.append(':').append(coords.getVersion());
-        }
-        return buf.toString();
-    }
-
     public static ArtifactCoords fromJBossModules(String str, String extension) {
         final String[] parts = str.split(":");
         if(parts.length < 2) {
@@ -53,10 +38,17 @@ public class ArtifactCoordsUtil {
             if(!parts[2].isEmpty()) {
                 version = parts[2];
             }
-            if(parts.length > 3 && !parts[3].isEmpty()) {
-                classifier = parts[3];
+            if(parts.length > 3) {
+                if(!parts[3].isEmpty()) {
+                    classifier = parts[3];
+                }
                 if(parts.length > 4) {
-                    throw new IllegalArgumentException("Unexpected artifact coordinates format: " + str);
+                    if(!parts[4].isEmpty()) {
+                        extension = parts[4];
+                    }
+                    if (parts.length > 5) {
+                        throw new IllegalArgumentException("Unexpected artifact coordinates format: " + str);
+                    }
                 }
             }
         }

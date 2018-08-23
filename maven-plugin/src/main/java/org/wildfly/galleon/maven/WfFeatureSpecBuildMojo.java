@@ -423,19 +423,19 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
         try(ProvisioningLayoutFactory layoutFactory = ProvisioningLayoutFactory.getInstance(UniverseResolver.builder(ufl).build())) {
             final ProvisioningConfig.Builder configBuilder = ProvisioningConfig.builder();
             for (Map.Entry<Gav, FeaturePackDependencySpec> entry : fpDeps.entrySet()) {
-                Gav depGav = entry.getKey();
-                if (depGav.getVersion() == null) {
-                    String gavStr = artifactVersions.getVersion(depGav.toString());
-                    if (gavStr == null) {
-                        throw new MojoExecutionException("Failed resolve artifact version for " + depGav);
+                ArtifactCoords depCoords = entry.getKey().toArtifactCoords();
+                if (depCoords.getVersion() == null) {
+                    final String coordsStr = artifactVersions.getVersion(depCoords.getGroupId() + ':' + depCoords.getArtifactId());
+                    if (coordsStr == null) {
+                        throw new MojoExecutionException("Failed resolve artifact version for " + depCoords);
                     }
-                    depGav = ArtifactCoords.newGav(gavStr);
+                    depCoords = ArtifactCoordsUtil.fromJBossModules(coordsStr, "zip");
                 }
                 final ArtifactItem artifact = new ArtifactItem();
-                artifact.setGroupId(depGav.getGroupId());
-                artifact.setArtifactId(depGav.getArtifactId());
-                artifact.setVersion(depGav.getVersion());
-                artifact.setType("zip");
+                artifact.setGroupId(depCoords.getGroupId());
+                artifact.setArtifactId(depCoords.getArtifactId());
+                artifact.setVersion(depCoords.getVersion());
+                artifact.setType(depCoords.getExtension());
                 final Artifact resolved = findArtifact(artifact);
                 if(resolved == null) {
                     throw new MojoExecutionException("Failed to resolve feature-pack artifact " + artifact);
@@ -495,8 +495,12 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
                     item.setVersion(coords.getVersion());
                     item.setClassifier(coords.getClassifier());
                     item.setType(coords.getExtension());
-                    final Artifact resolvedItem = findArtifact(item);
-                    registerArtifact(artifacts, resolvedItem);
+                    try {
+                        final Artifact resolvedItem = findArtifact(item);
+                        registerArtifact(artifacts, resolvedItem);
+                    } catch (MojoExecutionException e) {
+                        throw new MojoExecutionException("Failed to resolve artifact " + coords + " as a dependency of " + fp.getFPID() + " (persisted as " + v + ")", e);
+                    }
                 }
             }
         }

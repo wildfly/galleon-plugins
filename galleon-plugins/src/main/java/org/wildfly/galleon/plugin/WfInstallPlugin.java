@@ -642,7 +642,6 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 if(coordsStr == null) {
                     continue;
                 }
-
                 MavenArtifact artifact;
                 try {
                     artifact = Utils.toArtifactCoords(versionProps, coordsStr, false);
@@ -661,7 +660,17 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
                 if (thinServer) {
                     // ignore jandex variable, just resolve coordinates to a string
-                    attribute.setValue(coordsStr);
+                    final StringBuilder buf = new StringBuilder();
+                    buf.append(artifact.getGroupId());
+                    buf.append(':');
+                    buf.append(artifact.getArtifactId());
+                    buf.append(':');
+                    buf.append(artifact.getVersion());
+                    if(!artifact.getClassifier().isEmpty()) {
+                        buf.append(':');
+                        buf.append(artifact.getClassifier());
+                    }
+                    attribute.setValue(buf.toString());
                 } else {
                     final Path targetDir = targetPath.getParent();
                     final String artifactFileName = moduleArtifact.getFileName().toString();
