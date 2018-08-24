@@ -760,7 +760,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             Files.createDirectories(jarTarget.getParent());
             log.verbose("Copying artifact %s to %s", jarSrc, jarTarget);
             if (copyArtifact.isExtract()) {
-                extractArtifact(jarSrc, jarTarget, copyArtifact);
+                Utils.extractArtifact(jarSrc, jarTarget, copyArtifact);
             } else {
                 IoUtils.copy(jarSrc, jarTarget);
             }
@@ -832,50 +832,6 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 Files.delete(path);
             } catch (IOException e) {
                 throw new ProvisioningException(Errors.deletePath(path), e);
-            }
-        }
-    }
-
-    private void extractArtifact(Path artifact, Path target, CopyArtifact copy) throws IOException {
-        if(!Files.exists(target)) {
-            Files.createDirectories(target);
-        }
-        try (FileSystem zipFS = FileSystems.newFileSystem(artifact, null)) {
-            for(Path zipRoot : zipFS.getRootDirectories()) {
-                Files.walkFileTree(zipRoot, EnumSet.of(FileVisitOption.FOLLOW_LINKS), Integer.MAX_VALUE,
-                        new SimpleFileVisitor<Path>() {
-                            @Override
-                            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs)
-                                throws IOException {
-                                String entry = dir.toString().substring(1);
-                                if(entry.isEmpty()) {
-                                    return FileVisitResult.CONTINUE;
-                                }
-                                if(!entry.endsWith("/")) {
-                                    entry += '/';
-                                }
-                                if(!copy.includeFile(entry)) {
-                                    return FileVisitResult.SKIP_SUBTREE;
-                                }
-                                final Path targetDir = target.resolve(zipRoot.relativize(dir).toString());
-                                try {
-                                    Files.copy(dir, targetDir);
-                                } catch (FileAlreadyExistsException e) {
-                                     if (!Files.isDirectory(targetDir))
-                                         throw e;
-                                }
-                                return FileVisitResult.CONTINUE;
-                            }
-                            @Override
-                            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
-                                throws IOException {
-                                if(copy.includeFile(file.toString().substring(1))) {
-                                    final Path targetPath = target.resolve(zipRoot.relativize(file).toString());
-                                    Files.copy(file, targetPath);
-                                }
-                                return FileVisitResult.CONTINUE;
-                            }
-                        });
             }
         }
     }

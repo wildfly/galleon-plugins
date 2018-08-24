@@ -20,9 +20,17 @@ package org.wildfly.galleon.plugin;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.FileSystem;
+import java.nio.file.FileSystems;
+import java.nio.file.FileVisitOption;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -39,6 +47,7 @@ import org.jboss.galleon.util.CollectionUtils;
 import org.jboss.galleon.util.IoUtils;
 import org.jboss.galleon.util.LayoutUtils;
 import org.jboss.galleon.util.StringUtils;
+import org.wildfly.galleon.plugin.config.CopyArtifact;
 
 /**
  *
@@ -169,6 +178,50 @@ public class Utils {
         }
         catch (IOException e) {
             throw new ProvisioningException("Failed to persist generated layers.conf", e);
+        }
+    }
+
+    public static void extractArtifact(Path artifact, Path target, CopyArtifact copy) throws IOException {
+        if(!Files.exists(target)) {
+            Files.createDirectories(target);
+        }
+        try (FileSystem zipFS = FileSystems.newFileSystem(artifact, null)) {
+            for(Path zipRoot : zipFS.getRootDirectories()) {
+                Files.walkFileTree(zipRoot, EnumSet.of(FileVisitOption.FOLLOW_LINKS), Integer.MAX_VALUE,
+                        new SimpleFileVisitor<Path>() {
+                            @Override
+                            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs)
+                                throws IOException {
+                                String entry = dir.toString().substring(1);
+                                if(entry.isEmpty()) {
+                                    return FileVisitResult.CONTINUE;
+                                }
+                                if(!entry.endsWith("/")) {
+                                    entry += '/';
+                                }
+                                if(!copy.includeFile(entry)) {
+                                    return FileVisitResult.SKIP_SUBTREE;
+                                }
+                                final Path targetDir = target.resolve(zipRoot.relativize(dir).toString());
+                                try {
+                                    Files.copy(dir, targetDir);
+                                } catch (FileAlreadyExistsException e) {
+                                     if (!Files.isDirectory(targetDir))
+                                         throw e;
+                                }
+                                return FileVisitResult.CONTINUE;
+                            }
+                            @Override
+                            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
+                                throws IOException {
+                                if(copy.includeFile(file.toString().substring(1))) {
+                                    final Path targetPath = target.resolve(zipRoot.relativize(file).toString());
+                                    Files.copy(file, targetPath);
+                                }
+                                return FileVisitResult.CONTINUE;
+                            }
+                        });
+            }
         }
     }
 }
