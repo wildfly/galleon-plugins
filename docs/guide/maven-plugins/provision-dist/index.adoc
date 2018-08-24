@@ -1,2 +1,2 @@
-NOTE: Provisioning of distributions is done using the Maven plugin that belongs to Galleon itself. Please, refer to
+IMPORTANT: Maven plugin installing feature-packs and provisioning distributions is a part of Galleon project itself. Please, refer to
 Galleon documentation for more information.

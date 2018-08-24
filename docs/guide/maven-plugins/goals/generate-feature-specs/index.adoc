@@ -8,7 +8,7 @@ include::../../../../../maven-plugin/target/generated-sources/plugin/generate-fe
 
 <plugin>
   <groupId>org.wildfly.galleon-plugins</groupId>
-  <artifactId>wildfly-galleon-maven-plugins</artifactId>
+  <artifactId>wildfly-galleon-maven-plugin</artifactId>
   <executions>
     <execution>
       <id>feature-spec-build</id>
@@ -17,56 +17,7 @@ include::../../../../../maven-plugin/target/generated-sources/plugin/generate-fe
       </goals>
       <phase>prepare-package</phase>
       <configuration>
-        <output-dir>${basedir}/target/resources/features</output-dir> #<1>
-        <feature-packs> # <2>
-          <feature-pack>
-            <groupId>org.wildfly.core</groupId>
-            <artifactId>wildfly-core-galleon-pack</artifactId>
-            <version>${version.org.wildfly.core}</version>
-            <type>zip</type>
-            <extension>zip</extension>
-          </feature-pack>
-          <feature-pack>
-            <groupId>org.wildfly</groupId>
-            <artifactId>wildfly-servlet-galleon-pack</artifactId>
-            <version>${project.version}</version>
-            <type>zip</type>
-            <extension>zip</extension>
-          </feature-pack>
-        </feature-packs>
-        <external-artifacts> #<3>
-          <external-artifact>
-            <artifactItem>
-              <groupId>org.apache.activemq</groupId>
-              <artifactId>artemis-native</artifactId>
-              <version>${version.org.apache.activemq.artemis}</version>
-            </artifactItem>
-            <includes>lib/**</includes>
-            <excludes>*.*</excludes>
-            <toLocation>system/layers/base/org/apache/activemq/artemis/journal/main</toLocation>
-          </external-artifact>
-        </external-artifacts>
-        <standalone-extensions> #<4>
-          <extension>org.wildfly.extension.discovery</extension>
-          <extension>org.jboss.as.clustering.infinispan</extension>
-          <extension>org.jboss.as.clustering.jgroups</extension>
-          <!-- skipped content -->
-          <extension>org.wildfly.extension.undertow</extension>
-          <extension>org.wildfly.iiop-openjdk</extension>
-        </standalone-extensions>
-        <domain-extensions> #<5>
-          <extension>org.wildfly.extension.discovery</extension>
-          <extension>org.jboss.as.clustering.infinispan</extension>
-         <!-- skipped content -->
-          <extension>org.wildfly.extension.undertow</extension>
-          <extension>org.wildfly.iiop-openjdk</extension>
-        </domain-extensions>
-        <host-extensions> #<6>
-          <extension>org.jboss.as.jmx</extension>
-          <extension>org.wildfly.extension.core-management</extension>
-          <extension>org.wildfly.extension.discovery</extension>
-          <extension>org.wildfly.extension.elytron</extension>
-        </host-extensions>
+        <output-dir>${basedir}/target/resources/features</output-dir> <--1-->
       </configuration>
     </execution>
   </executions>
@@ -74,30 +25,21 @@ include::../../../../../maven-plugin/target/generated-sources/plugin/generate-fe
 
 ----
 
-<1> outputDirectory: The directory where the generated specifications are written.
-<2> feature-packs: List of feature-pack artifacts that the new feature-pack will depend on.
-<3> outputDirectory: List of external artifacts to be added to the embedded server.
-<4> standalone-extensions: List of WildFly extensions for the embedded standalone.
-<5> domain-extensions: List of WildFly extensions for the embedded domain.
-<6> host-extensions: List of WildFly extensions for the embedded host.
+<1> output-Dir: The directory where the generated specifications are written.
 
-#### How does it work ?
+#### How it works
 
 This section explains the basic mechanism of feature spec generation in WildFly.
 
-Since the whole mechanism relies on the WildFly metamodel we create a mininal configuration file with all the extensions
-we want to be able to configure in the feature pack. Then we generate the feature specs via a Wildfly
-OperationStepHandler specifically designed for this.
+Since the whole mechanism relies on the WildFly metamodel, we create a mininal configuration file with all the extensions we want to be able to configure in the feature-pack. Then we boot the embedded server and execute `read-feature-description(recursive)` management operation on the root resource. The operation returns the description of Galleon feature spec for every resource in the model that may appear in server configurations.
 
 Each resource registration in the WildFly model is considered to be a feature as long as it is not a `proxy`, a
 `runtime only` or an `alias`. The registration address is used to define the feature-id of the feature and all
-attributes that can be used in the addHandler will become parameters. Capabilities are used to define the links between
-feature specs thus defining how the operations will be grouped, ordered and executed.
+attributes that can be used in the `add` operation handler will become parameters.
 
-Complex attributes cannot be used as simple parameters of a feature and are converted to feature specs too so they can
-be configured in an easier way through a `writeAttribute` or `addList` instead of an `add` operation.
+Capabilities are used to define the links between feature specs thus defining how the operations will be grouped, ordered and executed.
 
-Then all the feature specs for *standalone* server, *domain* server and *host* controller are processed and 'merged'
-into a single feature spec if no incompatibility exists between those three modes. We remove also all the feature specs
-that have already been defined in the feature packs that we are depending on (for example core feature specs that would
-have been produced in every Wildfly server are removed).
+Complex attributes are represented as usual feature parameters and also as separate feature specs. Which means complex attribute values can be configured using Galleon features. Dependending on the actual parameter type, features that represent complex attribute values will be added to the configuration using `write-attribute` or `list-add` operations instead of `add`.
+
+Certain feature specs for *standalone* server, *domain* and *host* controller are processed and merged
+into a single feature spec (if no incompatibility exists between those three models) to have a single feature spec re-usable in the three configuration models.
