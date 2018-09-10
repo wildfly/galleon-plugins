@@ -16,6 +16,7 @@
  */
 package org.wildfly.galleon.plugin.featurespec.generator;
 
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStream;
@@ -28,15 +29,20 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
+
+import javax.xml.stream.XMLStreamException;
+
 import org.jboss.as.controller.client.helpers.ClientConstants;
 import org.jboss.as.controller.client.helpers.Operations;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.Property;
 import org.jboss.galleon.Errors;
 import org.jboss.galleon.ProvisioningException;
+import org.jboss.galleon.spec.FeatureSpec;
+import org.jboss.galleon.util.CollectionUtils;
 import org.jboss.galleon.util.IoUtils;
 import org.jboss.galleon.util.StringUtils;
+import org.jboss.galleon.xml.FeatureSpecXmlParser;
 import org.wildfly.core.embedded.EmbeddedManagedProcess;
 import org.wildfly.core.embedded.EmbeddedProcessFactory;
 import org.wildfly.core.embedded.EmbeddedProcessStartException;
@@ -58,7 +64,8 @@ public class FeatureSpecGenerator implements ForkedEmbeddedUtil.ForkCallback {
     Path outputDir;
     private boolean fork;
     private boolean debug;
-    private Set<String> inheritedSpecs;
+    private Map<String, Path> inheritedSpecs;
+    private Map<String, FeatureSpec> parsedInheritedSpecs = Collections.emptyMap();
 
     private Path systemProps;
     private Path standaloneSpecsFile;
@@ -116,7 +123,7 @@ public class FeatureSpecGenerator implements ForkedEmbeddedUtil.ForkCallback {
     }
 
     boolean isInherited(String name) {
-        return inheritedSpecs.contains(name);
+        return inheritedSpecs.containsKey(name);
     }
 
     void increaseSpecCount() {
@@ -129,7 +136,7 @@ public class FeatureSpecGenerator implements ForkedEmbeddedUtil.ForkCallback {
     public FeatureSpecGenerator() {
     }
 
-    public FeatureSpecGenerator(String installation, Path outputDir, Set<String> inheritedSpecs, boolean fork, boolean debug) {
+    public FeatureSpecGenerator(String installation, Path outputDir, Map<String, Path> inheritedSpecs, boolean fork, boolean debug) {
         this.installation = installation;
         this.outputDir = outputDir;
         this.fork = fork;
@@ -168,7 +175,6 @@ public class FeatureSpecGenerator implements ForkedEmbeddedUtil.ForkCallback {
     }
 
     private void doGenerate(String installationHome) throws ProvisioningException {
-
         final ModelNode standaloneFeatures;
         ModelNode domainRoots = null;
         if(fork) {
@@ -265,6 +271,24 @@ public class FeatureSpecGenerator implements ForkedEmbeddedUtil.ForkCallback {
             }
         }
         return domainSpecsFile;
+    }
+
+    protected FeatureSpec getInheritedSpec(String name) throws ProvisioningException {
+        FeatureSpec spec = parsedInheritedSpecs.get(name);
+        if(spec != null) {
+            return spec;
+        }
+        final Path path = inheritedSpecs.get(name);
+        if(path == null) {
+            return null;
+        }
+        try(BufferedReader reader = Files.newBufferedReader(path)) {
+            spec = FeatureSpecXmlParser.getInstance().parse(reader);
+        } catch (IOException | XMLStreamException e) {
+            throw new ProvisioningException("Failed to parse " + name + " spec " + path, e);
+        }
+        parsedInheritedSpecs = CollectionUtils.put(parsedInheritedSpecs, name, spec);
+        return spec;
     }
 
     private static EmbeddedManagedProcess createStandaloneServer(String jbossHome) {
