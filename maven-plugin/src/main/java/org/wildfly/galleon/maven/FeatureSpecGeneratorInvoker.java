@@ -21,8 +21,7 @@ import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Path;
-import java.util.Set;
-
+import java.util.Map;
 import org.apache.maven.plugin.logging.Log;
 import org.jboss.galleon.ProvisioningException;
 
@@ -33,7 +32,7 @@ import org.jboss.galleon.ProvisioningException;
  */
 public class FeatureSpecGeneratorInvoker {
 
-    public static int generateSpecs(Path wildfly, Set<String> inheritedFeatures, Path outputDir, URL[] cpUrls, boolean fork, Log log) throws ProvisioningException {
+    public static int generateSpecs(Path wildfly, Map<String, Path> inheritedFeatures, Path outputDir, URL[] cpUrls, boolean fork, Log log) throws ProvisioningException {
         final ClassLoader originalCl = Thread.currentThread().getContextClassLoader();
         try (URLClassLoader newCl = new URLClassLoader(cpUrls, originalCl)) {
             if(log.isDebugEnabled()) {
@@ -44,7 +43,7 @@ public class FeatureSpecGeneratorInvoker {
             final Class<?> cliTest = newCl.loadClass("org.wildfly.galleon.plugin.featurespec.generator.FeatureSpecGenerator");
             final Method specGenMethod = cliTest.getMethod("generateSpecs");
             return (int) specGenMethod.invoke(
-                    cliTest.getConstructor(String.class, Path.class, Set.class, boolean.class, boolean.class)
+                    cliTest.getConstructor(String.class, Path.class, Map.class, boolean.class, boolean.class)
                     .newInstance(wildfly.toString(), outputDir, inheritedFeatures, fork, log.isDebugEnabled()));
         } catch(InvocationTargetException e) {
             final Throwable cause = e.getCause();

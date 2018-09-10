@@ -74,7 +74,6 @@ class FeatureSpecNode {
                                 specName.regionMatches(CORE_SERVICE_MANAGEMENT.length(), ".ldap-connection", 0, ".ldap-connection".length())) ||
 
                 specName.equals(EXTENSION);
-                //specName.startsWith("socket-binding-group.");
     }
 
     private static boolean sameRequiredCapabilities(ModelNode standaloneDescr, ModelNode domainDescr, String optionalPrefix, boolean failIfDifferent) throws ProvisioningException {
@@ -363,7 +362,7 @@ class FeatureSpecNode {
         return value;
     }
 
-    private void persistSpec(String name, ModelNode descr) throws ProvisioningException {
+    private void persistSpec(String name, ModelNode descr, int model) throws ProvisioningException {
         final FeatureSpec.Builder builder = FeatureSpec.builder(name);
         final FeatureAnnotation annotation = getAnnotation(descr);
         if(annotation != null) {
@@ -384,8 +383,52 @@ class FeatureSpecNode {
                 builder.providesCapability(capability.asString());
             }
         }
+        final List<ModelNode> paramsDescr = descr.require("params").asList();
+        if (descr.hasDefined("refs")) {
+            for (ModelNode ref : descr.get("refs").asList()) {
+                final boolean isInclude = ref.hasDefined("include") && ref.get("include").asBoolean();
+                final String featureRefName = ref.get("feature").asString();
+                final FeatureReferenceSpec.Builder refBuilder = FeatureReferenceSpec.builder(featureRefName).setInclude(isInclude);
+                final boolean paramMapping = ref.hasDefined("mappings");
+
+                final FeatureSpecNode targetSpec = gen.getSpec(featureRefName);
+                final FeatureSpec inheritedSpec = targetSpec.isGenerate(model) ? null : gen.getInheritedSpec(featureRefName);
+                if(inheritedSpec != null) {
+                    for(FeatureParameterSpec refParam : inheritedSpec.getIdParams()) {
+                        boolean present = false;
+                        for (ModelNode param : paramsDescr) {
+                            if(param.get("name").asString().equals(refParam.getName())) {
+                                present = true;
+                                break;
+                            }
+                        }
+                        if(!present) {
+                            gen.debug("Adding ID parameter %s to %s to satisfy reference %s parameter mapping ", refParam.getName(), name, featureRefName);
+                            if(refParam.hasDefaultValue()) {
+                                builder.addParam(refParam);
+                            } else {
+                                builder.addParam(FeatureParameterSpec.create(refParam.getName(), true, false, Constants.GLN_UNDEFINED));
+                            }
+                            if(paramMapping) {
+                                refBuilder.mapParam(refParam.getName(), refParam.getName());
+                            }
+                        }
+                    }
+                }
+
+                if (paramMapping) {
+                    for (Property mapping : ref.require("mappings").asPropertyList()) {
+                        refBuilder.mapParam(mapping.getName(), mapping.getValue().asString());
+                    }
+                }
+                if (ref.hasDefined("nillable") && ref.get("nillable").asBoolean()) {
+                    refBuilder.setNillable(true);
+                }
+                builder.addFeatureRef(refBuilder.build());
+            }
+        }
         if (descr.hasDefined("params")) {
-            for (ModelNode param : descr.require("params").asList()) {
+            for (ModelNode param : paramsDescr) {
                 final FeatureParameterSpec.Builder featureParamSpecBuilder = FeatureParameterSpec.builder(param.get("name").asString());
                 if (param.hasDefined("feature-id") && param.get("feature-id").asBoolean()) {
                     featureParamSpecBuilder.setFeatureId();
@@ -398,22 +441,6 @@ class FeatureSpecNode {
                     featureParamSpecBuilder.setType(param.get("type").asString());
                 }
                 builder.addParam(featureParamSpecBuilder.build());
-            }
-        }
-        if (descr.hasDefined("refs")) {
-            for (ModelNode ref : descr.get("refs").asList()) {
-                boolean isInclude = ref.hasDefined("include") && ref.get("include").asBoolean();
-                String featureRefName = ref.get("feature").asString();
-                final FeatureReferenceSpec.Builder refBuilder = FeatureReferenceSpec.builder(featureRefName).setInclude(isInclude);
-                if (ref.hasDefined("mappings")) {
-                    for (Property mapping : ref.require("mappings").asPropertyList()) {
-                        refBuilder.mapParam(mapping.getName(), mapping.getValue().asString());
-                    }
-                }
-                if (ref.hasDefined("nillable") && ref.get("nillable").asBoolean()) {
-                    refBuilder.setNillable(true);
-                }
-                builder.addFeatureRef(refBuilder.build());
             }
         }
         if (descr.hasDefined("packages")) {
@@ -728,6 +755,21 @@ class FeatureSpecNode {
         }
     }
 
+    boolean isGenerate(int model) {
+        switch(model) {
+            case STANDALONE_MODEL:
+                return generateStandalone;
+            case PROFILE_MODEL:
+                return generateProfile;
+            case DOMAIN_MODEL:
+                return generateDomain;
+            case HOST_MODEL:
+                return generateHost;
+            default:
+                throw new IllegalStateException("Unexpected node type " + model);
+        }
+    }
+
     int getModel(String name) {
         if(name.equals(standaloneName)) {
             return STANDALONE_MODEL;
@@ -979,16 +1021,16 @@ class FeatureSpecNode {
     private void buildSpec(int level) throws ProvisioningException {
 
         if(standaloneDescr != null && generateStandalone) {
-            persistSpec(standaloneName, standaloneDescr);
+            persistSpec(standaloneName, standaloneDescr, STANDALONE_MODEL);
         }
         if(profileDescr != null && generateProfile) {
-            persistSpec(profileName, profileDescr);
+            persistSpec(profileName, profileDescr, PROFILE_MODEL);
         }
         if(domainDescr != null && generateDomain) {
-            persistSpec(domainName, domainDescr);
+            persistSpec(domainName, domainDescr, DOMAIN_MODEL);
         }
         if(hostDescr != null && generateHost) {
-            persistSpec(hostName, hostDescr);
+            persistSpec(hostName, hostDescr, HOST_MODEL);
         }
     }
 }

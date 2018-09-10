@@ -21,6 +21,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
+import java.nio.file.DirectoryStream;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.FileVisitOption;
 import java.nio.file.FileVisitResult;
@@ -39,9 +40,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-
 import javax.xml.stream.XMLStreamException;
 
 import org.apache.maven.artifact.Artifact;
@@ -170,13 +168,15 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
     private Map<String, Artifact> mergedArtifacts = new HashMap<>();
     private Map<Path, Map<String, Artifact>> moduleTemplates = new HashMap<>();
 
-    private Set<String> inheritedFeatureSpecs = Collections.emptySet();
+    private Map<String, Path> inheritedFeatureSpecs = Collections.emptyMap();
     private Set<String> standaloneExtensions = Collections.emptySet();
     private Set<String> domainExtensions = Collections.emptySet();
     private Set<String> hostExtensions = Collections.emptySet();
     private List<Path> layersConfs = Collections.emptyList();
 
     private WildFlyPackageTasksParser tasksParser;
+    private ProvisioningLayoutFactory layoutFactory;
+    private ProvisioningLayout<FeaturePackLayout> configLayout;
 
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
@@ -194,6 +194,12 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
         } catch (IOException | MavenFilteringException ex) {
             throw new MojoExecutionException(ex.getMessage(), ex);
         } finally {
+            if(configLayout != null) {
+                configLayout.close();
+            }
+            if(layoutFactory != null) {
+                layoutFactory.close();
+            }
             if(getLog().isDebugEnabled() && specsTotal >= 0) {
                 final long totalTime = System.currentTimeMillis() - startTime;
                 final long secs = totalTime / 1000;
@@ -442,29 +448,27 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
         mergedArtifacts.put(key, artifact);
     }
 
-    private void processFeaturePackDeps(WildFlyFeaturePackBuild buildConfig)
-            throws MojoExecutionException, IOException {
-        final Map<Gav, FeaturePackDependencySpec> fpDeps = buildConfig.getDependencies();
-        if(fpDeps.isEmpty()) {
-            return;
-        }
-
-        final MavenProjectArtifactVersions artifactVersions = MavenProjectArtifactVersions.getInstance(project);
+    private void initConfigLayout(WildFlyFeaturePackBuild buildConfig, MavenProjectArtifactVersions artifactVersions) throws MojoExecutionException {
 
         final MavenArtifactRepositoryManager mvnRepo = new MavenArtifactRepositoryManager(repoSystem, session.getRepositorySession(), repositories);
         final UniverseFactoryLoader ufl = UniverseFactoryLoader.getInstance().addArtifactResolver(mvnRepo);
-        try(ProvisioningLayoutFactory layoutFactory = ProvisioningLayoutFactory.getInstance(UniverseResolver.builder(ufl).build())) {
+
+        try {
+            this.layoutFactory = ProvisioningLayoutFactory.getInstance(UniverseResolver.builder(ufl).build());
             final ProvisioningConfig.Builder configBuilder = ProvisioningConfig.builder();
-            for (Map.Entry<Gav, FeaturePackDependencySpec> entry : fpDeps.entrySet()) {
+            if(buildConfig.getDependencies().isEmpty()) {
+            }
+            for (Map.Entry<Gav, FeaturePackDependencySpec> entry : buildConfig.getDependencies().entrySet()) {
                 ArtifactCoords depCoords = entry.getKey().toArtifactCoords();
                 String ext = "zip";
                 if (depCoords.getVersion() == null) {
-                    final String coordsStr = artifactVersions.getVersion(depCoords.getGroupId() + ':' + depCoords.getArtifactId());
+                    final String coordsStr = artifactVersions
+                            .getVersion(depCoords.getGroupId() + ':' + depCoords.getArtifactId());
                     if (coordsStr == null) {
                         throw new MojoExecutionException("Failed resolve artifact version for " + depCoords);
                     }
                     depCoords = ArtifactCoordsUtil.fromJBossModules(coordsStr, ext);
-                    if(!depCoords.getExtension().equals("pom")) {
+                    if (!depCoords.getExtension().equals("pom")) {
                         ext = depCoords.getExtension();
                     }
                 }
@@ -474,25 +478,43 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
                 artifact.setVersion(depCoords.getVersion());
                 artifact.setType(ext);
                 final Artifact resolved = findArtifact(artifact);
-                if(resolved == null) {
+                if (resolved == null) {
                     throw new MojoExecutionException("Failed to resolve feature-pack artifact " + artifact);
                 }
                 final Path p = resolved == null ? null : resolved.getFile().toPath();
-                if(p == null) {
+                if (p == null) {
                     throw new MojoExecutionException("Failed to resolve feature-pack artifact " + artifact);
                 }
                 final FeaturePackLocation fpl = layoutFactory.addLocal(p, false);
                 final FeaturePackConfig depConfig = entry.getValue().getTarget();
-                configBuilder.addFeaturePackDep(depConfig.isTransitive() ? FeaturePackConfig.transitiveBuilder(fpl).init(depConfig).build() : FeaturePackConfig.builder(fpl).init(depConfig).build());
+                configBuilder.addFeaturePackDep(
+                        depConfig.isTransitive() ? FeaturePackConfig.transitiveBuilder(fpl).init(depConfig).build()
+                                : FeaturePackConfig.builder(fpl).init(depConfig).build());
             }
-            try(ProvisioningLayout<FeaturePackLayout> configLayout = layoutFactory.newConfigLayout(configBuilder.build())) {
-                for(FeaturePackLayout fp : configLayout.getOrderedFeaturePacks()) {
-                    processFeaturePackDep(artifactVersions, fp);
-                }
-                layersConfs = Utils.collectLayersConf(configLayout);
-            }
+            configLayout = layoutFactory.newConfigLayout(configBuilder.build());
         } catch (ProvisioningException e) {
             throw new MojoExecutionException("Failed to initialize provisioning layout for the feature-pack dependencies", e);
+        }
+    }
+
+    private void processFeaturePackDeps(WildFlyFeaturePackBuild buildConfig)
+            throws MojoExecutionException, IOException {
+        final Map<Gav, FeaturePackDependencySpec> fpDeps = buildConfig.getDependencies();
+        if(fpDeps.isEmpty()) {
+            return;
+        }
+
+        final MavenProjectArtifactVersions artifactVersions = MavenProjectArtifactVersions.getInstance(project);
+        initConfigLayout(buildConfig, artifactVersions);
+
+        for(FeaturePackLayout fp : configLayout.getOrderedFeaturePacks()) {
+            processFeaturePackDep(artifactVersions, fp);
+        }
+
+        try {
+            layersConfs = Utils.collectLayersConf(configLayout);
+        } catch (ProvisioningException e1) {
+            throw new MojoExecutionException("Failed to collect layyers.conf files from feature-pack dependencies", e1);
         }
     }
 
@@ -502,12 +524,16 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
         Path p = fpDir.resolve("features");
         if(Files.exists(p)) {
             if(inheritedFeatureSpecs.isEmpty()) {
-                inheritedFeatureSpecs = new HashSet<>(500);
+                inheritedFeatureSpecs = new HashMap<>(500);
             }
-            try (Stream<Path> children = Files.list(p)) {
-                final List<String> features = children.map(Path::getFileName).map(Path::toString).collect(Collectors.toList());
-                for (String feature : features) {
-                    inheritedFeatureSpecs.add(feature);
+            try(DirectoryStream<Path> stream = Files.newDirectoryStream(p)) {
+                for(Path path : stream) {
+                    final String specName = path.getFileName().toString();
+                    path = path.resolve(Constants.SPEC_XML);
+                    if(!Files.exists(path)) {
+                        continue;
+                    }
+                    inheritedFeatureSpecs.put(specName, path);
                 }
             }
         }
