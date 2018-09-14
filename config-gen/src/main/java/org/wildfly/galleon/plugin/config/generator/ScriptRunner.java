@@ -21,6 +21,7 @@ import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.StringWriter;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -55,7 +56,7 @@ public class ScriptRunner {
             cliProcess = processBuilder.start();
 
             final StringWriter errorWriter = new StringWriter();
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(cliProcess.getInputStream()));
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(cliProcess.getInputStream(), StandardCharsets.UTF_8));
                     BufferedWriter writer = new BufferedWriter(errorWriter)) {
                 String line = reader.readLine();
                 boolean flush = false;

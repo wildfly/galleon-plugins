@@ -456,8 +456,6 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
         try {
             this.layoutFactory = ProvisioningLayoutFactory.getInstance(UniverseResolver.builder(ufl).build());
             final ProvisioningConfig.Builder configBuilder = ProvisioningConfig.builder();
-            if(buildConfig.getDependencies().isEmpty()) {
-            }
             for (Map.Entry<Gav, FeaturePackDependencySpec> entry : buildConfig.getDependencies().entrySet()) {
                 ArtifactCoords depCoords = entry.getKey().toArtifactCoords();
                 String ext = "zip";
@@ -481,9 +479,9 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
                 if (resolved == null) {
                     throw new MojoExecutionException("Failed to resolve feature-pack artifact " + artifact);
                 }
-                final Path p = resolved == null ? null : resolved.getFile().toPath();
+                final Path p = resolved.getFile().toPath();
                 if (p == null) {
-                    throw new MojoExecutionException("Failed to resolve feature-pack artifact " + artifact);
+                    throw new MojoExecutionException("Failed to resolve feature-pack artifact path " + artifact);
                 }
                 final FeaturePackLocation fpl = layoutFactory.addLocal(p, false);
                 final FeaturePackConfig depConfig = entry.getValue().getTarget();
