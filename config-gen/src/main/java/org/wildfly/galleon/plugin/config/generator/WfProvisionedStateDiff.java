@@ -96,7 +96,7 @@ public class WfProvisionedStateDiff {
 
     private ConfigModel diffConfig(ProvisionedConfig config) throws ProvisioningException {
 
-        final Map<String, List<ProvisionedFeature>> arrangedBySpec = fsMapper.arrangeBySpecName(config);
+        fsMapper.arrangeBySpecName(config);
         return ConfigModel.builder().build();
     }
 }
