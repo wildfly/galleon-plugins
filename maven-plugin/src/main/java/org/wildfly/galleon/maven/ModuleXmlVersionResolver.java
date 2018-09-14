@@ -45,7 +45,8 @@ import org.apache.maven.artifact.Artifact;
 import org.apache.maven.artifact.DefaultArtifact;
 import org.apache.maven.artifact.handler.DefaultArtifactHandler;
 import org.apache.maven.plugin.logging.Log;
-import org.jboss.galleon.ArtifactCoords;
+import org.wildfly.galleon.plugin.ArtifactCoords;
+
 
 /**
  *

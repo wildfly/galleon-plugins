@@ -64,7 +64,6 @@ import nu.xom.Elements;
 import nu.xom.ParsingException;
 import nu.xom.Serializer;
 
-import org.jboss.galleon.ArtifactException;
 import org.jboss.galleon.Errors;
 import org.jboss.galleon.MessageWriter;
 import org.jboss.galleon.ProvisioningDescriptionException;
@@ -692,7 +691,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
     }
 
-    public void copyArtifact(CopyArtifact copyArtifact, PackageRuntime pkg) throws ProvisioningException, ArtifactException {
+    public void copyArtifact(CopyArtifact copyArtifact, PackageRuntime pkg) throws ProvisioningException {
         final MavenArtifact artifact = Utils.toArtifactCoords(
                 copyArtifact.isFeaturePackVersion() ? fpArtifactVersions.get(pkg.getFeaturePackRuntime().getFPID().getProducer())
                         : mergedArtifactVersions,
