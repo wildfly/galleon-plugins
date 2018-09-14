@@ -297,6 +297,9 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
             addPackage(fpPackagesDir, fpBuilder, entry.getValue());
         }
 
+        copyIfExists(targetResources, fpDir, Constants.LAYERS);
+        copyIfExists(targetResources, fpDir, Constants.CONFIGS);
+
         if(wfFpConfig.hasConfigs()) {
             for(ConfigModel config : wfFpConfig.getConfigs()) {
                 try {
@@ -392,6 +395,17 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
             }
         } catch (IOException e) {
             throw new MojoExecutionException("Failed to create a feature-pack archives from the layout", e);
+        }
+    }
+
+    private void copyIfExists(final Path resources, final Path fpDir, String resourceName) throws MojoExecutionException {
+        final Path res = resources.resolve(resourceName);
+        if(Files.exists(res)) {
+            try {
+                IoUtils.copy(res, fpDir.resolve(resourceName));
+            } catch (IOException e) {
+                throw new MojoExecutionException("Failed to copy " + resourceName + " to the feature-pack", e);
+            }
         }
     }
 
