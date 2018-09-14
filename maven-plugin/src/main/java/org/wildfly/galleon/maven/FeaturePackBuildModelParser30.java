@@ -16,9 +16,7 @@
  */
 package org.wildfly.galleon.maven;
 
-import org.jboss.galleon.ArtifactCoords;
 import org.jboss.galleon.ProvisioningDescriptionException;
-import org.jboss.galleon.ArtifactCoords.Gav;
 import org.jboss.galleon.config.ConfigModel;
 import org.jboss.galleon.config.FeaturePackConfig;
 import org.jboss.galleon.universe.FeaturePackLocation;
@@ -31,6 +29,7 @@ import org.jboss.galleon.xml.XmlNameProvider;
 import org.jboss.staxmapper.XMLElementReader;
 import org.jboss.staxmapper.XMLExtendedStreamReader;
 import org.wildfly.galleon.maven.build.tasks.CopyResourcesTask;
+import org.wildfly.galleon.plugin.ArtifactCoords;
 
 import javax.xml.namespace.QName;
 import javax.xml.stream.XMLStreamConstants;
@@ -346,14 +345,13 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
         if (!required.isEmpty()) {
             throw ParsingUtils.missingAttributes(reader.getLocation(), required);
         }
-        final Gav gav = ArtifactCoords.newGav(groupId, artifactId, version);
-        final FeaturePackLocation fpl = LegacyGalleon1Universe.toFpl(gav);
+        final FeaturePackLocation fpl = LegacyGalleon1Universe.toFpl(groupId, artifactId, version);
         String depName = null;
         final FeaturePackConfig.Builder depBuilder = transitive ? FeaturePackConfig.transitiveBuilder(fpl) : FeaturePackConfig.builder(fpl);
         while (reader.hasNext()) {
             switch (reader.nextTag()) {
                 case XMLStreamConstants.END_ELEMENT: {
-                    builder.addDependency(gav, FeaturePackDependencySpec.create(depName, depBuilder.build()));
+                    builder.addDependency(ArtifactCoords.newGav(groupId, artifactId, version), FeaturePackDependencySpec.create(depName, depBuilder.build()));
                     return;
                 }
                 case XMLStreamConstants.START_ELEMENT: {

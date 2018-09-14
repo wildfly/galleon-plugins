@@ -65,8 +65,6 @@ import org.eclipse.aether.repository.RemoteRepository;
 import org.eclipse.aether.resolution.ArtifactRequest;
 import org.eclipse.aether.resolution.ArtifactResolutionException;
 import org.eclipse.aether.resolution.ArtifactResult;
-import org.jboss.galleon.ArtifactCoords;
-import org.jboss.galleon.ArtifactCoords.Gav;
 import org.jboss.galleon.Constants;
 import org.jboss.galleon.Errors;
 import org.jboss.galleon.ProvisioningDescriptionException;
@@ -87,6 +85,8 @@ import org.jboss.galleon.util.ZipUtils;
 import org.jboss.galleon.xml.FeaturePackXmlWriter;
 import org.jboss.galleon.xml.PackageXmlParser;
 import org.jboss.galleon.xml.PackageXmlWriter;
+import org.wildfly.galleon.plugin.ArtifactCoords;
+import org.wildfly.galleon.plugin.ArtifactCoords.Gav;
 import org.wildfly.galleon.plugin.WfConstants;
 import org.wildfly.galleon.maven.ModuleParseResult.ModuleDependency;
 import org.wildfly.galleon.maven.build.tasks.ResourcesTask;
@@ -798,13 +798,13 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         try {
             result = repoSystem.resolveArtifact(repoSession, getArtifactRequest(coords));
         } catch (ArtifactResolutionException e) {
-            throw new ProvisioningException(FpMavenErrors.artifactResolution(coords), e);
+            throw new ProvisioningException(FpMavenErrors.artifactResolution(coords.toString()), e);
         }
         if(!result.isResolved()) {
-            throw new ProvisioningException(FpMavenErrors.artifactResolution(coords));
+            throw new ProvisioningException(FpMavenErrors.artifactResolution(coords.toString()));
         }
         if(result.isMissing()) {
-            throw new ProvisioningException(FpMavenErrors.artifactMissing(coords));
+            throw new ProvisioningException(FpMavenErrors.artifactMissing(coords.toString()));
         }
         return Paths.get(result.getArtifact().getFile().toURI());
     }

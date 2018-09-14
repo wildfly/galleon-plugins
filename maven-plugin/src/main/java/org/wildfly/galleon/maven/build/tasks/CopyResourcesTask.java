@@ -23,11 +23,11 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 import org.apache.maven.plugin.MojoExecutionException;
-import org.jboss.galleon.ArtifactCoords;
 import org.jboss.galleon.ProvisioningException;
 import org.jboss.galleon.util.IoUtils;
 import org.wildfly.galleon.maven.ArtifactCoordsUtil;
 import org.wildfly.galleon.maven.WfFeaturePackBuildMojo;
+import org.wildfly.galleon.plugin.ArtifactCoords;
 
 /**
  *

@@ -16,8 +16,7 @@
  */
 package org.wildfly.galleon.maven;
 
-
-import org.jboss.galleon.ArtifactCoords;
+import org.wildfly.galleon.plugin.ArtifactCoords;
 
 /**
  *
