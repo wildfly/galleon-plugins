@@ -58,6 +58,8 @@ public class ForkedEmbeddedUtil {
     }
 
     private static int javaVersion = -1;
+    private static String javaHome;
+    private static String javaCmd;
 
     private static int getJavaVersion() {
         if (javaVersion < 0) {
@@ -76,6 +78,14 @@ public class ForkedEmbeddedUtil {
         return javaVersion;
     }
 
+    private static String getJavaHome() {
+        return javaHome == null ? javaHome = System.getProperty("java.home") : javaHome;
+    }
+
+    private static String getJavaCmd() {
+        return javaCmd == null ? javaCmd = Paths.get(getJavaHome()).resolve("bin").resolve("java").toString() : javaCmd;
+    }
+
     public static void fork(ForkCallback callback, String... args) throws ProvisioningException {
         final Path props = storeSystemProps();
         try {
@@ -88,14 +98,13 @@ public class ForkedEmbeddedUtil {
     public static void fork(ForkCallback callback, Path props, String... args) throws ProvisioningException {
         // prepare the classpath
         final StringBuilder cp = new StringBuilder();
-        collectCpUrls(System.getProperty("java.home"), Thread.currentThread().getContextClassLoader(), cp);
+        collectCpUrls(getJavaHome(), Thread.currentThread().getContextClassLoader(), cp);
 
-        final List<String> argsList = new ArrayList<>(9 + args.length);
-        argsList.add("java");
+        final List<String> argsList = new ArrayList<>(8 + args.length);
+        argsList.add(getJavaCmd());
         argsList.add("-server");
         if (getJavaVersion() >= 11) {
-            argsList.add("--add-modules");
-            argsList.add("java.se");
+            argsList.add("--add-modules=java.se");
         }
         argsList.add("-cp");
         argsList.add(cp.toString());
