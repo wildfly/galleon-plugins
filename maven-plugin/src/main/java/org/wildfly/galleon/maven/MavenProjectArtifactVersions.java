@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.TreeMap;
 
 import org.apache.maven.artifact.Artifact;
+import org.apache.maven.model.Dependency;
 import org.apache.maven.project.MavenProject;
 
 /**
@@ -42,21 +43,40 @@ class MavenProjectArtifactVersions {
 
     private MavenProjectArtifactVersions(MavenProject project) {
         for (Artifact artifact : project.getArtifacts()) {
-            final StringBuilder buf = new StringBuilder(artifact.getGroupId()).append(':').
-                    append(artifact.getArtifactId());
-            final String classifier = artifact.getClassifier();
-            final StringBuilder version = new StringBuilder(buf);
-            version.append(':').append(artifact.getVersion()).append(':');
-            if(classifier != null && !classifier.isEmpty()) {
-                buf.append("::").append(classifier);
-                version.append(classifier);
-            }
-            versions.put(buf.toString(), version.append(':').append(artifact.getType()).toString());
+            put(artifact.getGroupId(), artifact.getArtifactId(), artifact.getClassifier(), artifact.getVersion(), artifact.getType());
         }
+        if (project.getDependencyManagement() != null) {
+            for (Dependency dependency : project.getDependencyManagement().getDependencies()) {
+                final String gac = gac(dependency.getGroupId(), dependency.getArtifactId(), dependency.getClassifier());
+                if (versions.containsKey(gac)) {
+                    put(dependency.getGroupId(), dependency.getArtifactId(), dependency.getClassifier(), dependency.getVersion(), dependency.getType());
+                }
+            }
+        }
+    }
+
+    private static String gac(final String groupId, final String artifactId, final String classifier) {
+        final StringBuilder buf = new StringBuilder(groupId).append(':').append(artifactId);
+        if(classifier != null && !classifier.isEmpty()) {
+            buf.append("::").append(classifier);
+        }
+        return buf.toString();
     }
 
     String getVersion(String gac) {
         return versions.get(gac);
+    }
+
+    private void put(final String groupId, final String artifactId, final String classifier, final String version, final String type) {
+        final StringBuilder buf = new StringBuilder(groupId).append(':').
+                append(artifactId);
+        final StringBuilder versionClassifier = new StringBuilder(buf);
+        versionClassifier.append(':').append(version).append(':');
+        if(classifier != null && !classifier.isEmpty()) {
+            buf.append("::").append(classifier);
+            versionClassifier.append(classifier);
+        }
+        versions.put(buf.toString(), versionClassifier.append(':').append(type).toString());
     }
 
     void remove(String groupId, String artifactId) {
