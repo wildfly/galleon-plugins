@@ -96,11 +96,11 @@
     <dependency>
       <groupId>${project.groupId}</groupId>
       <artifactId>wildfly-feature-spec-gen</artifactId>
+      <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>org.wildfly.core</groupId>
       <artifactId>wildfly-embedded</artifactId>
-      <!-- no clue as to why it should not provide it -->
       <scope>provided</scope>
     </dependency>
     <dependency>

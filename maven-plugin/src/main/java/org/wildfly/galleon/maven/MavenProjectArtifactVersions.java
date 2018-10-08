@@ -29,7 +29,7 @@ import org.apache.maven.model.Dependency;
 import org.apache.maven.project.MavenProject;
 
 /**
- * Maps groupId:artifactId[::classifier] to groupId:artifactId[::classifier]:version
+ * Maps groupId:artifactId[::classifier] to groupId:artifactId:version:[classifier]:type
  *
  * @author Alexey Loubyansky
  */
