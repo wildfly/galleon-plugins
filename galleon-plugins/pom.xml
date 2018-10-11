@@ -53,15 +53,11 @@
       <scope>provided</scope>
     </dependency>
     <dependency>
-      <groupId>org.jboss.modules</groupId>
-      <artifactId>jboss-modules</artifactId>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
       <groupId>org.wildfly.core</groupId>
       <artifactId>wildfly-launcher</artifactId>
       <scope>provided</scope>
     </dependency>
+
     <dependency>
       <groupId>com.io7m.xom</groupId>
       <artifactId>xom</artifactId>
