@@ -20,7 +20,9 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URL;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.net.URLClassLoader;
 import java.nio.file.DirectoryStream;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.FileVisitOption;
@@ -283,55 +285,43 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
 
         addBasicConfigs();
 
-        final Path jbossModules = wildflyHome.resolve("jboss-modules.jar");
-        if(!Files.exists(jbossModules)) {
-            throw new MojoExecutionException(jbossModules + " is missing");
-        }
-
-        final URL[] specGenCp = new URL[3];
-        specGenCp[0] = resolveArtifact(mergedArtifacts, "org.wildfly.galleon-plugins", "wildfly-feature-spec-gen", null).toURI().toURL();
-        specGenCp[1] = jbossModules.toUri().toURL();
-        specGenCp[2] = resolveArtifact(mergedArtifacts, "org.wildfly.core", "wildfly-cli", "client").toURI().toURL();
-
         final String originalMavenRepoLocal = System.getProperty(MAVEN_REPO_LOCAL);
         System.setProperty(MAVEN_REPO_LOCAL, session.getSettings().getLocalRepository());
         debug("Generating feature specs using local maven repo %s", System.getProperty(MAVEN_REPO_LOCAL));
+        final ClassLoader originalCl = Thread.currentThread().getContextClassLoader();
+        URLClassLoader newCl = null;
         try {
-            return FeatureSpecGeneratorInvoker.generateSpecs(wildflyHome, inheritedFeatureSpecs, outputDirectory.toPath(), specGenCp, forkEmbedded, getLog());
-        } catch (ProvisioningException e) {
+            if(!forkEmbedded) {
+                if (originalCl instanceof URLClassLoader) {
+                    newCl = new URLClassLoader(((URLClassLoader) originalCl).getURLs(), originalCl.getParent());
+                    Thread.currentThread().setContextClassLoader(newCl);
+                } else {
+                    getLog().warn("Embedded server will be launched using the context classloader. Subsequent attempts to launch it using the same classloader may fail.");
+                }
+            }
+            final Class<?> specGenCls = (newCl == null ? originalCl : newCl).loadClass("org.wildfly.galleon.plugin.featurespec.generator.FeatureSpecGenerator");
+            final Method specGenMethod = specGenCls.getMethod("generateSpecs");
+            return (int) specGenMethod.invoke(specGenCls.getConstructor(String.class, Path.class, Map.class, boolean.class, boolean.class)
+                    .newInstance(wildflyHome.toString(), outputDirectory.toPath(), inheritedFeatureSpecs, forkEmbedded, getLog().isDebugEnabled()));
+        } catch(InvocationTargetException e) {
+            throw new MojoExecutionException("Feature spec generator failed", e.getCause());
+        } catch (Throwable e) {
             throw new MojoExecutionException("Feature spec generator failed", e);
         } finally {
+            if(newCl != null) {
+                Thread.currentThread().setContextClassLoader(originalCl);
+                try {
+                    newCl.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
             if(originalMavenRepoLocal == null) {
                 System.clearProperty(MAVEN_REPO_LOCAL);
             } else {
                 System.setProperty(MAVEN_REPO_LOCAL, originalMavenRepoLocal);
             }
         }
-    }
-
-    private File resolveArtifact(Map<String, Artifact> buildArtifacts, String groupId, String artifactId, String classifier) throws MojoExecutionException {
-        Artifact artifact = buildArtifacts.get(groupId + ':' + artifactId);
-        if(artifact == null) {
-            throw new MojoExecutionException("Failed to locate " + groupId + ':' + artifactId + " among the project build artifacts");
-        }
-        if (artifact.getFile() != null &&
-                (classifier == null && artifact.getClassifier() == null
-                || classifier != null && classifier.equals(artifact.getClassifier()))) {
-            return artifact.getFile();
-        }
-        final ArtifactItem item = new ArtifactItem();
-        item.setArtifactId(artifact.getArtifactId());
-        item.setGroupId(artifact.getGroupId());
-        item.setVersion(artifact.getVersion());
-        if(classifier != null && !classifier.isEmpty()) {
-            item.setClassifier(classifier);
-        }
-        artifact = findArtifact(item);
-        final File f = artifact == null ? null : artifact.getFile();
-        if(f == null) {
-            throw new MojoExecutionException("Failed to resolve artifact " + item);
-        }
-        return f;
     }
 
     private void addBasicConfigs() throws IOException {
