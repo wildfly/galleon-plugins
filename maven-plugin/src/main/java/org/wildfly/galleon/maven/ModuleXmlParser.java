@@ -28,6 +28,9 @@ import java.io.Reader;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -64,7 +67,7 @@ class ModuleXmlParser {
         return result;
     }
 
-    private static void parseModule(Element element, ModuleParseResult result) {
+    private static void parseModule(Element element, ModuleParseResult result) throws ParsingException {
         String name = element.getAttributeValue("name");
         String slot = getOptionalAttributeValue(element, "slot", "main");
         result.identifier = new ModuleIdentifier(name, slot);
@@ -90,10 +93,10 @@ class ModuleXmlParser {
         final String slot = getOptionalAttributeValue(element, "slot", "main");
         ModuleIdentifier moduleId = new ModuleIdentifier(targetName, targetSlot);
         result.identifier = new ModuleIdentifier(name, slot);
-        result.dependencies.add(new ModuleParseResult.ModuleDependency(moduleId, false));
+        result.dependencies.add(new ModuleParseResult.ModuleDependency(moduleId, false, Collections.emptyMap()));
     }
 
-    private static void parseDependencies(Element element, ModuleParseResult result) {
+    private static void parseDependencies(Element element, ModuleParseResult result) throws ParsingException {
         final Elements modules = element.getChildElements("module", element.getNamespaceURI());
         final int size = modules.size();
         for (int i = 0; i < size; i ++) {
@@ -106,9 +109,35 @@ class ModuleXmlParser {
             } else {
                 moduleId = ModuleIdentifier.fromString(name);
             }
-            boolean optional = Boolean.parseBoolean(getOptionalAttributeValue(moduleElement, "optional", "false"));
-            result.dependencies.add(new ModuleParseResult.ModuleDependency(moduleId, optional));
+            final boolean optional = Boolean.parseBoolean(getOptionalAttributeValue(moduleElement, "optional", "false"));
+
+            final Element properties = moduleElement.getFirstChildElement("properties", moduleElement.getNamespaceURI());
+            final Map<String, String> props = properties != null ? parseProperties(properties) : Collections.emptyMap();
+
+            result.dependencies.add(new ModuleParseResult.ModuleDependency(moduleId, optional, props));
         }
+    }
+
+    private static Map<String, String> parseProperties(Element element) throws ParsingException {
+        final Elements properties = element.getChildElements("property", element.getNamespaceURI());
+        final int size = properties.size();
+        if(size == 0) {
+            return Collections.emptyMap();
+        }
+        final Map<String, String> props = new HashMap<>(size);
+        for (int i = 0; i < size; i ++) {
+            final Element propertyElement = properties.get(i);
+            final String name = propertyElement.getAttributeValue("name");
+            if(name == null) {
+                throw new ParsingException("Element property is missing required attribute name");
+            }
+            final String value = propertyElement.getAttributeValue("value");
+            if(value == null) {
+                throw new ParsingException("Element property is missing required attribute value");
+            }
+            props.put(name, value);
+        }
+        return Collections.unmodifiableMap(props);
     }
 
     private static void parseResources(Element element, ModuleParseResult result) {

@@ -40,6 +40,7 @@ public interface WfConstants {
     String EXTENSIONS_DOMAIN = "extensions-domain";
     String EXTENSIONS_HOST = "extensions-host";
     String EXTENSIONS_STANDALONE = "extensions-standalone";
+    String GALLEON_PASSIVE = "galleon.passive";
     String HOST = "host";
     String LAYOUT = "layout";
     String LAYERS = "layers";

@@ -18,6 +18,7 @@ package org.wildfly.galleon.maven;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import nu.xom.Attribute;
 import nu.xom.Document;
@@ -26,7 +27,7 @@ import nu.xom.Document;
  * @author Stuart Douglas
  */
 class ModuleParseResult {
-    final List<ModuleDependency> dependencies = new ArrayList<ModuleDependency>();
+    final List<ModuleDependency> dependencies = new ArrayList<>();
     final List<String> resourceRoots = new ArrayList<>();
     final List<ArtifactName> artifacts = new ArrayList<>();
     final Document document;
@@ -64,10 +65,12 @@ class ModuleParseResult {
     static class ModuleDependency {
         private final ModuleIdentifier moduleId;
         private final boolean optional;
+        private final Map<String, String> props;
 
-        ModuleDependency(ModuleIdentifier moduleId, boolean optional) {
+        ModuleDependency(ModuleIdentifier moduleId, boolean optional, Map<String, String> props) {
             this.moduleId = moduleId;
             this.optional = optional;
+            this.props = props;
         }
 
         ModuleIdentifier getModuleId() {
@@ -76,6 +79,18 @@ class ModuleParseResult {
 
         boolean isOptional() {
             return optional;
+        }
+
+        boolean hasProperties() {
+            return !props.isEmpty();
+        }
+
+        boolean hasProperty(String name) {
+            return props.containsKey(name);
+        }
+
+        String getProperty(String name) {
+            return props.get(name);
         }
 
         @Override

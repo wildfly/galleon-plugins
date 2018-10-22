@@ -68,13 +68,13 @@ import org.jboss.galleon.Errors;
 import org.jboss.galleon.MessageWriter;
 import org.jboss.galleon.ProvisioningException;
 import org.jboss.galleon.ProvisioningManager;
+import org.jboss.galleon.ProvisioningOption;
 import org.jboss.galleon.config.ConfigId;
 import org.jboss.galleon.config.ConfigModel;
 import org.jboss.galleon.config.FeaturePackConfig;
 import org.jboss.galleon.config.ProvisioningConfig;
 import org.jboss.galleon.layout.ProvisioningLayoutFactory;
 import org.jboss.galleon.plugin.InstallPlugin;
-import org.jboss.galleon.plugin.PluginOption;
 import org.jboss.galleon.plugin.ProvisioningPluginWithOptions;
 import org.jboss.galleon.progresstracking.ProgressTracker;
 import org.jboss.galleon.runtime.FeaturePackRuntime;
@@ -104,9 +104,9 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private static final String CONFIG_GEN_PATH = "wildfly/wildfly-config-gen.jar";
     private static final String CONFIG_GEN_CLASS = "org.wildfly.galleon.plugin.config.generator.WfConfigGenerator";
 
-    private static final PluginOption OPTION_MVN_DIST = PluginOption.builder("jboss-maven-dist").hasNoValue().build();
-    public static final PluginOption OPTION_DUMP_CONFIG_SCRIPTS = PluginOption.builder("jboss-dump-config-scripts").build();
-    private static final PluginOption OPTION_FORK_EMBEDDED = PluginOption.builder("jboss-fork-embedded").build();
+    private static final ProvisioningOption OPTION_MVN_DIST = ProvisioningOption.builder("jboss-maven-dist").hasNoValue().build();
+    public static final ProvisioningOption OPTION_DUMP_CONFIG_SCRIPTS = ProvisioningOption.builder("jboss-dump-config-scripts").build();
+    private static final ProvisioningOption OPTION_FORK_EMBEDDED = ProvisioningOption.builder("jboss-fork-embedded").build();
 
     private ProvisioningRuntime runtime;
     private MessageWriter log;
@@ -136,7 +136,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private Map<Path, PackageRuntime> jbossModules = new LinkedHashMap<>();
 
     @Override
-    protected List<PluginOption> initPluginOptions() {
+    protected List<ProvisioningOption> initPluginOptions() {
         return Arrays.asList(OPTION_MVN_DIST, OPTION_DUMP_CONFIG_SCRIPTS, OPTION_FORK_EMBEDDED);
     }
 
@@ -305,7 +305,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         try {
             log.verbose("Generating example configs");
             ProvisioningConfig config = configBuilder.build();
-            Map<String, String> options = runtime.getPluginOptions();
+            Map<String, String> options = runtime.getLayout().getOptions();
             if(!options.containsKey(OPTION_MVN_DIST.getName())) {
                 final Map<String, String> tmp = new HashMap<>(options.size() + 1);
                 tmp.putAll(options);
