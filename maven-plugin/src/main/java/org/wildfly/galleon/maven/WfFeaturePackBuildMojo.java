@@ -75,6 +75,7 @@ import org.jboss.galleon.layout.FeaturePackDescriber;
 import org.jboss.galleon.layout.FeaturePackDescription;
 import org.jboss.galleon.maven.plugin.FpMavenErrors;
 import org.jboss.galleon.spec.FeaturePackSpec;
+import org.jboss.galleon.spec.PackageDependencySpec;
 import org.jboss.galleon.spec.PackageSpec;
 import org.jboss.galleon.universe.FeaturePackLocation;
 import org.jboss.galleon.util.IoUtils;
@@ -726,7 +727,7 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
                             depName += '.' + moduleId.getSlot();
                         }
                         if (moduleXmlByPkgName.containsKey(depName)) {
-                            pkgSpecBuilder.addPackageDep(depName, moduleDep.isOptional());
+                            pkgSpecBuilder.addPackageDep(getPackageDepSpec(packageName, moduleXml, moduleDep, depName));
                             continue;
                         }
                         Map.Entry<String, FeaturePackDescription> depSrc = null;
@@ -750,7 +751,7 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
                             }
                         }
                         if (depSrc != null) {
-                            pkgSpecBuilder.addPackageDep(depSrc.getKey(), depName, moduleDep.isOptional());
+                            pkgSpecBuilder.addPackageDep(depSrc.getKey(), getPackageDepSpec(packageName, moduleXml, moduleDep, depName));
                         } else if (moduleDep.isOptional() || isProvided(depName)) {
                             // getLog().warn("UNSATISFIED EXTERNAL OPTIONAL DEPENDENCY " + packageName + " -> " + depName);
                         } else {
@@ -772,6 +773,23 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
             modulesAll.addPackageDep(packageName, true);
             fpBuilder.addPackage(pkgSpec);
         }
+    }
+
+    private PackageDependencySpec getPackageDepSpec(final String packageName, final Path moduleXml, ModuleDependency moduleDep,
+            String depName) throws ParsingException {
+        final String passiveValue = moduleDep.getProperty(WfConstants.GALLEON_PASSIVE);
+        final PackageDependencySpec depSpec;
+        if(passiveValue != null && Boolean.parseBoolean(passiveValue)) {
+            if(!moduleDep.isOptional()) {
+                throw new ParsingException("Required dependency on module " + packageName + " cannot be annotated as galleon.passive in " + moduleXml);
+            }
+            depSpec = PackageDependencySpec.passive(depName);
+        } else if(moduleDep.isOptional()) {
+            depSpec = PackageDependencySpec.optional(depName);
+        } else {
+            depSpec = PackageDependencySpec.required(depName);
+        }
+        return depSpec;
     }
 
     private Properties getFPConfigProperties() throws MojoExecutionException {

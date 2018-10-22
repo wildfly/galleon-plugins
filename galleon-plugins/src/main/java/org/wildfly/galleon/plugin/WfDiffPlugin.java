@@ -35,12 +35,12 @@ import java.util.Map;
 import org.jboss.galleon.Errors;
 import org.jboss.galleon.MessageWriter;
 import org.jboss.galleon.ProvisioningException;
+import org.jboss.galleon.ProvisioningOption;
 import org.jboss.galleon.config.ConfigId;
 import org.jboss.galleon.config.ConfigModel;
 import org.jboss.galleon.diff.FileSystemDiff;
 import org.jboss.galleon.diff.ProvisioningDiffResult;
 import org.jboss.galleon.plugin.DiffPlugin;
-import org.jboss.galleon.plugin.PluginOption;
 import org.jboss.galleon.plugin.ProvisioningPluginWithOptions;
 import org.jboss.galleon.runtime.FeaturePackRuntime;
 import org.jboss.galleon.runtime.ProvisioningRuntime;
@@ -70,17 +70,17 @@ public class WfDiffPlugin extends ProvisioningPluginWithOptions implements DiffP
             .addFiles("standalone.xml", "logging.properties")
             .build();
 
-    public static final PluginOption HOST = PluginOption.builder("host").setDefaultValue("127.0.0.1").build();
-    public static final PluginOption PORT = PluginOption.builder("port").setDefaultValue("9990").build();
-    public static final PluginOption PROTOCOL = PluginOption.builder("protocol").setDefaultValue("remote+http").build();
-    public static final PluginOption USERNAME = PluginOption.builder("username").setDefaultValue("galleon").build();
-    public static final PluginOption PASSWORD = PluginOption.builder("password").setDefaultValue("galleon").build();
-    public static final PluginOption SERVER_CONFIG = PluginOption.builder("server-config").setDefaultValue("standalone.xml").build();
+    public static final ProvisioningOption HOST = ProvisioningOption.builder("host").setDefaultValue("127.0.0.1").build();
+    public static final ProvisioningOption PORT = ProvisioningOption.builder("port").setDefaultValue("9990").build();
+    public static final ProvisioningOption PROTOCOL = ProvisioningOption.builder("protocol").setDefaultValue("remote+http").build();
+    public static final ProvisioningOption USERNAME = ProvisioningOption.builder("username").setDefaultValue("galleon").build();
+    public static final ProvisioningOption PASSWORD = ProvisioningOption.builder("password").setDefaultValue("galleon").build();
+    public static final ProvisioningOption SERVER_CONFIG = ProvisioningOption.builder("server-config").setDefaultValue("standalone.xml").build();
 
     private MavenRepoManager maven;
 
     @Override
-    protected List<PluginOption> initPluginOptions() {
+    protected List<ProvisioningOption> initPluginOptions() {
         return Arrays.asList(
                 HOST,
                 PORT,
