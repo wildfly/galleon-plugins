@@ -130,6 +130,7 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
         FEATURE_PACK_PROPS("feature-pack-properties"),
         FEATURE_PACK_VERSION("feature-pack-version"),
         GROUP("group"),
+        IF_EMPTY("if-empty"),
         INCLUDE("include"),
         MODEL("model"),
         NAME("name"),
@@ -154,13 +155,14 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
         private static final Map<QName, Attribute> attributes;
 
         static {
-            Map<QName, Attribute> attributesMap = new HashMap<>(23);
+            Map<QName, Attribute> attributesMap = new HashMap<>(24);
             attributesMap.put(new QName(ARTIFACT.getLocalName()), ARTIFACT);
             attributesMap.put(new QName(BASEDIR.getLocalName()), BASEDIR);
             attributesMap.put(new QName(EXTRACT.getLocalName()), EXTRACT);
             attributesMap.put(new QName(FEATURE_PACK_PROPS.getLocalName()), FEATURE_PACK_PROPS);
             attributesMap.put(new QName(FEATURE_PACK_VERSION.getLocalName()), FEATURE_PACK_VERSION);
             attributesMap.put(new QName(GROUP.getLocalName()), GROUP);
+            attributesMap.put(new QName(IF_EMPTY.getLocalName()), IF_EMPTY);
             attributesMap.put(new QName(INCLUDE.getLocalName()), INCLUDE);
             attributesMap.put(new QName(MODEL.getLocalName()), MODEL);
             attributesMap.put(new QName(NAME.getLocalName()), NAME);
@@ -607,6 +609,7 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
         final int count = reader.getAttributeCount();
         String path = null;
         boolean recursive = false;
+        boolean ifEmpty = false;
         for (int i = 0; i < count; i++) {
             final Attribute attribute = Attribute.of(reader.getAttributeName(i));
             switch (attribute) {
@@ -614,9 +617,10 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
                     path = reader.getAttributeValue(i);
                     break;
                 case RECURSIVE:
-                    if(Boolean.parseBoolean(reader.getAttributeValue(i))) {
-                        recursive = true;
-                    }
+                    recursive = Boolean.parseBoolean(reader.getAttributeValue(i));
+                    break;
+                case IF_EMPTY:
+                    ifEmpty = Boolean.parseBoolean(reader.getAttributeValue(i));
                     break;
                 default:
                     throw ParsingUtils.unexpectedContent(reader);
@@ -626,7 +630,7 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
             throw ParsingUtils.missingAttributes(reader.getLocation(), Collections.singleton(Attribute.PATH));
         }
         ParsingUtils.parseNoContent(reader);
-        return new DeletePath(path, recursive);
+        return new DeletePath(path, recursive, ifEmpty);
     }
 
     private XslTransform parseTransform(XMLExtendedStreamReader reader) throws XMLStreamException {

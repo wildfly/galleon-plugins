@@ -29,10 +29,12 @@ public class DeletePath implements WildFlyPackageTask {
 
     private final String path;
     private final boolean recursive;
+    private final boolean ifEmpty;
 
-    DeletePath(String path, boolean recursive) {
+    DeletePath(String path, boolean recursive, boolean ifEmpty) {
         this.path = path;
         this.recursive = recursive;
+        this.ifEmpty = ifEmpty;
     }
 
     @Override
@@ -48,6 +50,10 @@ public class DeletePath implements WildFlyPackageTask {
         return recursive;
     }
 
+    public boolean isIfEmpty() {
+        return ifEmpty;
+    }
+
     @Override
     public void execute(WfInstallPlugin plugin, PackageRuntime pkg) throws ProvisioningException {
         plugin.deletePath(this);
@@ -57,6 +63,7 @@ public class DeletePath implements WildFlyPackageTask {
     public int hashCode() {
         final int prime = 31;
         int result = 1;
+        result = prime * result + (ifEmpty ? 1231 : 1237);
         result = prime * result + ((path == null) ? 0 : path.hashCode());
         result = prime * result + (recursive ? 1231 : 1237);
         return result;
@@ -71,6 +78,8 @@ public class DeletePath implements WildFlyPackageTask {
         if (getClass() != obj.getClass())
             return false;
         DeletePath other = (DeletePath) obj;
+        if (ifEmpty != other.ifEmpty)
+            return false;
         if (path == null) {
             if (other.path != null)
                 return false;
