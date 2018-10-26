@@ -48,6 +48,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.transform.Transformer;
@@ -781,12 +782,24 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
         if(deletePath.isRecursive()) {
             IoUtils.recursiveDelete(path);
-        } else {
-            try {
-                Files.delete(path);
-            } catch (IOException e) {
-                throw new ProvisioningException(Errors.deletePath(path), e);
+            return;
+        }
+        if(deletePath.isIfEmpty()) {
+            if(!Files.isDirectory(path)) {
+                throw new ProvisioningException(Errors.notADir(path));
             }
+            try(Stream<Path> stream = Files.list(path)) {
+                if(stream.iterator().hasNext()) {
+                    return;
+                }
+            } catch (IOException e) {
+                throw new ProvisioningException(Errors.readDirectory(path));
+            }
+        }
+        try {
+            Files.delete(path);
+        } catch (IOException e) {
+            throw new ProvisioningException(Errors.deletePath(path), e);
         }
     }
 
