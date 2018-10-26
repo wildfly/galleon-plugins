@@ -36,7 +36,7 @@
   <inceptionYear>2016</inceptionYear>
   <licenses>
     <license>
-      <name>Apache License Version 2.0</name>
+      <name>Apache License 2.0</name>
       <url>http://repository.jboss.org/licenses/apache-2.0.txt</url>
       <distribution>repo</distribution>
     </license>
