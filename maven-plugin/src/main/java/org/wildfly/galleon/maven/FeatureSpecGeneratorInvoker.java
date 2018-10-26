@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.wildfly.galleon.maven;
 
 import java.io.BufferedReader;
@@ -42,19 +43,14 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
 import javax.xml.stream.XMLStreamException;
 
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.execution.MavenSession;
-import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugin.logging.Log;
-import org.apache.maven.plugins.annotations.Component;
-import org.apache.maven.plugins.annotations.LifecyclePhase;
-import org.apache.maven.plugins.annotations.Mojo;
-import org.apache.maven.plugins.annotations.Parameter;
-import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.DefaultProjectBuildingRequest;
 import org.apache.maven.project.MavenProject;
 import org.apache.maven.project.ProjectBuildingRequest;
@@ -62,7 +58,8 @@ import org.apache.maven.shared.artifact.resolve.ArtifactResolver;
 import org.apache.maven.shared.artifact.resolve.ArtifactResolverException;
 import org.apache.maven.shared.artifact.resolve.ArtifactResult;
 import org.apache.maven.shared.filtering.MavenFilteringException;
-import org.codehaus.plexus.archiver.manager.ArchiverManager;
+import org.eclipse.aether.RepositorySystem;
+import org.eclipse.aether.repository.RemoteRepository;
 import org.jboss.galleon.Constants;
 import org.jboss.galleon.ProvisioningDescriptionException;
 import org.jboss.galleon.ProvisioningException;
@@ -78,25 +75,19 @@ import org.jboss.galleon.universe.UniverseResolver;
 import org.jboss.galleon.util.CollectionUtils;
 import org.jboss.galleon.util.IoUtils;
 import org.wildfly.galleon.plugin.ArtifactCoords;
-import org.wildfly.galleon.plugin.ArtifactCoords.Gav;
 import org.wildfly.galleon.plugin.Utils;
 import org.wildfly.galleon.plugin.WfConstants;
 import org.wildfly.galleon.plugin.WildFlyPackageTask;
 import org.wildfly.galleon.plugin.WildFlyPackageTasks;
+import org.wildfly.galleon.plugin.ArtifactCoords.Gav;
 import org.wildfly.galleon.plugin.config.CopyArtifact;
 import org.wildfly.galleon.plugin.config.WildFlyPackageTasksParser;
-import org.eclipse.aether.RepositorySystem;
-import org.eclipse.aether.repository.RemoteRepository;
 
 /**
- * This plug-in generates WildFly feature specifications.
- * It starts a minimal embedded server with the specified extensions, resolving dependencies via Aether, and gets
- * an export of the meta-model from the server to produce the specifications for Galleon.
  *
- * @author Emmanuel Hugonnet (c) 2017 Red Hat, inc.
+ * @author Alexey Loubyansky
  */
-@Mojo(name = "generate-feature-specs", requiresDependencyResolution = ResolutionScope.RUNTIME, defaultPhase = LifecyclePhase.GENERATE_RESOURCES)
-public class WfFeatureSpecBuildMojo extends AbstractMojo {
+public class FeatureSpecGeneratorInvoker {
 
     private static final String MAVEN_REPO_LOCAL = "maven.repo.local";
 
@@ -111,61 +102,18 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
         TASKS_XML_PATH_END = pmWildFly.resolve(WfConstants.TASKS_XML);
     }
 
-    @Parameter(defaultValue = "${project}", readonly = true, required = true)
-    protected MavenProject project;
-
-    @Parameter(defaultValue = "${session}", readonly = true, required = true)
-    protected MavenSession session;
-
-    @Parameter( defaultValue = "${project.remoteProjectRepositories}", readonly = true, required = true )
+    private MavenProject project;
+    private MavenSession session;
     private List<RemoteRepository> repositories;
-
-    /**
-     * The directory where the generated specifications are written.
-     */
-    @Parameter(alias = "output-dir", required = true)
-    private File outputDirectory;
-
-    /**
-     * The feature-pack build configuration file directory
-     */
-    @Parameter(alias = "config-dir", defaultValue = "${basedir}", property = "wildfly.feature.pack.configDir")
-    private File configDir;
-
-    /**
-     * The feature-pack build configuration file.
-     */
-    @Parameter(alias = "config-file", defaultValue = "wildfly-feature-pack-build.xml", property = "wildfly.feature.pack.configFile")
-    private String configFile;
-
-    /**
-     * Whether to launch the embedded server to read feature descriptions in a separate process
-     */
-    @Parameter(alias = "fork-embedded", required = false)
-    private boolean forkEmbedded;
-
-    /**
-     * A directory from which the embedded WildFly instance will be started that is used for exporting the meta-model.
-     * Intended mainly for debugging.
-     */
-    @Parameter(alias = "wildfly-home", property = "wfgp.wildflyHome", defaultValue = "${project.build.directory}/wildfly", required = true)
-    private Path wildflyHome;
-
-    /**
-     * A directory where the module templates from the dependent feature packs are gathered before they are transformed
-     * and copied under their default destination {@link #wildflyHome}/modules. Intended mainly for debugging.
-     */
-    @Parameter(alias = "module-templates", property = "wfgp.moduleTemplatesDir", defaultValue = "${project.build.directory}/module-templates", required = true)
-    private Path moduleTemplatesDir;
-
-    @Component
-    private ArchiverManager archiverManager;
-
-    @Component
     private RepositorySystem repoSystem;
-
-    @Component
     private ArtifactResolver artifactResolver;
+    private WildFlyFeaturePackBuild buildConfig;
+    private Log log;
+
+    private File featureSpecsOutput;
+    private boolean forkEmbedded;
+    private Path wildflyHome;
+    private Path moduleTemplatesDir;
 
     private Map<String, Artifact> mergedArtifacts = new HashMap<>();
     private Map<Path, Map<String, Artifact>> moduleTemplates = new HashMap<>();
@@ -180,7 +128,20 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
     private ProvisioningLayoutFactory layoutFactory;
     private ProvisioningLayout<FeaturePackLayout> configLayout;
 
-    @Override
+    FeatureSpecGeneratorInvoker(WfFeaturePackBuildMojo mojo) throws MojoExecutionException {
+        this.project = mojo.project;
+        this.session = mojo.session;
+        this.repositories = mojo.repositories;
+        this.repoSystem = mojo.repoSystem;
+        this.artifactResolver = mojo.artifactResolver;
+        this.buildConfig = mojo.getBuildConfig();
+        this.featureSpecsOutput = mojo.featureSpecsOutput;
+        this.forkEmbedded = mojo.forkEmbedded;
+        this.wildflyHome = mojo.wildflyHome.toPath();
+        this.moduleTemplatesDir = mojo.moduleTemplatesDir.toPath();
+        this.log = mojo.getLog();
+    }
+
     public void execute() throws MojoExecutionException, MojoFailureException {
 
         final long startTime = System.currentTimeMillis();
@@ -202,7 +163,7 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
             if(layoutFactory != null) {
                 layoutFactory.close();
             }
-            if(getLog().isDebugEnabled() && specsTotal >= 0) {
+            if(log.isDebugEnabled() && specsTotal >= 0) {
                 final long totalTime = System.currentTimeMillis() - startTime;
                 final long secs = totalTime / 1000;
                 debug("Generated " + specsTotal + " feature specs in " + secs + "." + (totalTime - secs * 1000) + " secs");
@@ -210,20 +171,11 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
         }
     }
 
-    public void setWildflyHome(String wildflyHome) {
-        this.wildflyHome = Paths.get(wildflyHome);
-    }
-
-    public void setModuleTemplatesDir(String moduleTemplatesDir) {
-        this.moduleTemplatesDir = Paths.get(moduleTemplatesDir);
-    }
-
     private int doExecute() throws MojoExecutionException, MojoFailureException, MavenFilteringException, IOException {
 
         Files.createDirectories(wildflyHome.resolve("bin"));
         Files.createFile(wildflyHome.resolve("bin").resolve("jboss-cli-logging.properties"));
 
-        final WildFlyFeaturePackBuild buildConfig = Util.loadFeaturePackBuildConfig(configDir, configFile);
         if(buildConfig.hasStandaloneExtensions()) {
             Files.createDirectories(wildflyHome.resolve(WfConstants.STANDALONE).resolve(WfConstants.CONFIGURATION));
             standaloneExtensions = new HashSet<>(buildConfig.getStandaloneExtensions());
@@ -273,7 +225,7 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
             final Path targetModules = wildflyHome.resolve(MODULES);
             for(Map.Entry<Path, Map<String, Artifact>> entry : moduleTemplates.entrySet()) {
                 try {
-                    ModuleXmlVersionResolver.convertModule(moduleTemplatesDir.resolve(entry.getKey()), targetModules.resolve(entry.getKey()), entry.getValue(), hardcodedArtifacts, getLog());
+                    ModuleXmlVersionResolver.convertModule(moduleTemplatesDir.resolve(entry.getKey()), targetModules.resolve(entry.getKey()), entry.getValue(), hardcodedArtifacts, log);
                 } catch (XMLStreamException e) {
                     throw new MojoExecutionException("Failed to process " + moduleTemplatesDir.resolve(entry.getKey()), e);
                 }
@@ -296,13 +248,13 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
                     newCl = new URLClassLoader(((URLClassLoader) originalCl).getURLs(), originalCl.getParent());
                     Thread.currentThread().setContextClassLoader(newCl);
                 } else {
-                    getLog().warn("Embedded server will be launched using the context classloader. Subsequent attempts to launch it using the same classloader may fail.");
+                    log.warn("Embedded server will be launched using the context classloader. Subsequent attempts to launch it using the same classloader may fail.");
                 }
             }
             final Class<?> specGenCls = (newCl == null ? originalCl : newCl).loadClass("org.wildfly.galleon.plugin.featurespec.generator.FeatureSpecGenerator");
             final Method specGenMethod = specGenCls.getMethod("generateSpecs");
             return (int) specGenMethod.invoke(specGenCls.getConstructor(String.class, Path.class, Map.class, boolean.class, boolean.class)
-                    .newInstance(wildflyHome.toString(), outputDirectory.toPath(), inheritedFeatureSpecs, forkEmbedded, getLog().isDebugEnabled()));
+                    .newInstance(wildflyHome.toString(), featureSpecsOutput.toPath(), inheritedFeatureSpecs, forkEmbedded, log.isDebugEnabled()));
         } catch(InvocationTargetException e) {
             throw new MojoExecutionException("Feature spec generator failed", e.getCause());
         } catch (Throwable e) {
@@ -742,7 +694,6 @@ public class WfFeatureSpecBuildMojo extends AbstractMojo {
     }
 
     private void debug(String format, Object... args) {
-        final Log log = getLog();
         if (log.isDebugEnabled()) {
             log.debug(String.format(format, args));
         }

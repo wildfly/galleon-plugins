@@ -456,7 +456,7 @@ class FeatureSpecNode {
             try {
                 Files.createDirectories(specDir);
             } catch (IOException e) {
-                throw new ProvisioningException(Errors.mkdirs(specDir));
+                throw new ProvisioningException(Errors.mkdirs(specDir), e);
             }
         }
         try {
