@@ -48,6 +48,9 @@ import javax.xml.stream.XMLStreamException;
 
 import nu.xom.ParsingException;
 
+import org.apache.maven.artifact.DefaultArtifact;
+import org.apache.maven.artifact.handler.DefaultArtifactHandler;
+import org.apache.maven.execution.MavenSession;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
@@ -56,15 +59,15 @@ import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
+import org.apache.maven.project.DefaultProjectBuildingRequest;
 import org.apache.maven.project.MavenProject;
 import org.apache.maven.project.MavenProjectHelper;
+import org.apache.maven.project.ProjectBuildingRequest;
+import org.apache.maven.shared.artifact.resolve.ArtifactResolver;
+import org.apache.maven.shared.artifact.resolve.ArtifactResolverException;
+import org.apache.maven.shared.artifact.resolve.ArtifactResult;
 import org.eclipse.aether.RepositorySystem;
-import org.eclipse.aether.RepositorySystemSession;
-import org.eclipse.aether.artifact.DefaultArtifact;
 import org.eclipse.aether.repository.RemoteRepository;
-import org.eclipse.aether.resolution.ArtifactRequest;
-import org.eclipse.aether.resolution.ArtifactResolutionException;
-import org.eclipse.aether.resolution.ArtifactResult;
 import org.jboss.galleon.Constants;
 import org.jboss.galleon.Errors;
 import org.jboss.galleon.ProvisioningDescriptionException;
@@ -127,14 +130,17 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
     protected MavenProject project;
 
+    @Parameter(defaultValue = "${session}", readonly = true, required = true)
+    protected MavenSession session;
+
+    @Parameter( defaultValue = "${project.remoteProjectRepositories}", readonly = true, required = true )
+    protected List<RemoteRepository> repositories;
+
     @Component
-    private RepositorySystem repoSystem;
+    protected RepositorySystem repoSystem;
 
-    @Parameter(defaultValue = "${repositorySystemSession}", readonly = true)
-    private RepositorySystemSession repoSession;
-
-    @Parameter(defaultValue = "${project.remoteProjectRepositories}", readonly = true)
-    private List<RemoteRepository> remoteRepos;
+    @Component
+    protected ArtifactResolver artifactResolver;
 
     /**
      * The feature-pack build configuration file.
@@ -190,12 +196,42 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
     @Parameter(alias="feature-pack-artifact-id", defaultValue = "${project.artifactId}", required=false)
     private String fpArtifactId;
 
+    /**
+     * Used only for feature spec generation and indicates whether to launch
+     * the embedded server to read feature descriptions in a separate process
+     */
+    @Parameter(alias = "fork-embedded", required = false)
+    protected boolean forkEmbedded;
+
+    /**
+     * Used only for feature spec generation and points to a directory from
+     * which the embedded WildFly instance will be started that is used for
+     * exporting the meta-model. Intended mainly for debugging.
+     */
+    @Parameter(alias = "wildfly-home", property = "wfgp.wildflyHome", defaultValue = "${project.build.directory}/wildfly", required = true)
+    protected File wildflyHome;
+
+    /**
+     * Used only for feature spec generation and points to a directory where
+     * the module templates from the dependent feature packs are gathered before
+     * they are transformed and copied under their default destination
+     * {@link #wildflyHome}/modules. Intended mainly for debugging.
+     */
+    @Parameter(alias = "module-templates", property = "wfgp.moduleTemplatesDir", defaultValue = "${project.build.directory}/module-templates", required = true)
+    protected File moduleTemplatesDir;
+
+    /**
+     * The directory where the generated feature specs are written.
+     */
+    @Parameter(alias = "feature-specs-output", defaultValue = "${project.build.directory}/resources/features", required = true)
+    protected File featureSpecsOutput;
+
     @Component
     private MavenProjectHelper projectHelper;
 
     private MavenProjectArtifactVersions artifactVersions;
 
-    private WildFlyFeaturePackBuild wfFpConfig;
+    private WildFlyFeaturePackBuild buildConfig;
     private Map<String, FeaturePackDescription> fpDependencies = Collections.emptyMap();
     private Map<String, PackageSpec.Builder> extendedPackages = Collections.emptyMap();
 
@@ -206,6 +242,10 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         } catch(RuntimeException | Error | MojoExecutionException | MojoFailureException e) {
             throw e;
         }
+    }
+
+    protected WildFlyFeaturePackBuild getBuildConfig() throws MojoExecutionException {
+        return buildConfig == null ? buildConfig = Util.loadFeaturePackBuildConfig(configDir, configFile) : buildConfig;
     }
 
     private void doExecute() throws MojoExecutionException, MojoFailureException {
@@ -227,9 +267,13 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         final Path fpPackagesDir = fpDir.resolve(Constants.PACKAGES);
 
         // feature-pack build config
-        wfFpConfig = Util.loadFeaturePackBuildConfig(configDir, configFile);
+        buildConfig = getBuildConfig();
 
-        FeaturePackLocation fpl = wfFpConfig.getProducer();
+        if(buildConfig.hasStandaloneExtensions() || buildConfig.hasDomainExtensions() || buildConfig.hasHostExtensions()) {
+            new FeatureSpecGeneratorInvoker(this).execute();
+        }
+
+        FeaturePackLocation fpl = buildConfig.getProducer();
         String channel = fpl.getChannelName();
         if(channel == null || channel.isEmpty()) {
             final String v = project.getVersion();
@@ -241,7 +285,7 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         // feature-pack builder
         final FeaturePackDescription.Builder fpBuilder = FeaturePackDescription.builder(FeaturePackSpec.builder(fpl.getFPID()));
 
-        for(String defaultPackage : wfFpConfig.getDefaultPackages()) {
+        for(String defaultPackage : buildConfig.getDefaultPackages()) {
             fpBuilder.getSpecBuilder().addDefaultPackage(defaultPackage);
         }
 
@@ -269,7 +313,7 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
             }
         }
 
-        if(wfFpConfig.hasSchemaGroups()) {
+        if(buildConfig.hasSchemaGroups()) {
             addDocsSchemas(fpPackagesDir, fpBuilder);
         }
 
@@ -301,8 +345,8 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         copyIfExists(targetResources, fpDir, Constants.LAYERS);
         copyIfExists(targetResources, fpDir, Constants.CONFIGS);
 
-        if(wfFpConfig.hasConfigs()) {
-            for(ConfigModel config : wfFpConfig.getConfigs()) {
+        if(buildConfig.hasConfigs()) {
+            for(ConfigModel config : buildConfig.getConfigs()) {
                 try {
                     fpBuilder.getSpecBuilder().addConfig(config);
                 } catch (ProvisioningDescriptionException e) {
@@ -325,11 +369,11 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         final Path fpResourcesDir = fpDir.resolve(Constants.RESOURCES);
         final Path resourcesWildFly = fpResourcesDir.resolve(WfConstants.WILDFLY);
         mkdirs(resourcesWildFly);
-        if(wfFpConfig.hasPlugins()) {
-            addPlugins(fpDir, wfFpConfig.getPlugins());
+        if(buildConfig.hasPlugins()) {
+            addPlugins(fpDir, buildConfig.getPlugins());
         }
-        if(wfFpConfig.hasResourcesTasks()) {
-            for(ResourcesTask task : wfFpConfig.getResourcesTasks()) {
+        if(buildConfig.hasResourcesTasks()) {
+            for(ResourcesTask task : buildConfig.getResourcesTasks()) {
                 task.execute(this, fpResourcesDir);
             }
         }
@@ -342,7 +386,7 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         }
 
         // artifact versions
-        for(Gav gav : wfFpConfig.getDependencies().keySet()) {
+        for(Gav gav : buildConfig.getDependencies().keySet()) {
             artifactVersions.remove(gav.getGroupId(), gav.getArtifactId());
         }
         try {
@@ -351,14 +395,14 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
             throw new MojoExecutionException("Failed to store artifact versions", e);
         }
 
-        if(wfFpConfig.hasStandaloneExtensions()) {
-            persistExtensions(resourcesWildFly, WfConstants.EXTENSIONS_STANDALONE, wfFpConfig.getStandaloneExtensions());
+        if(buildConfig.hasStandaloneExtensions()) {
+            persistExtensions(resourcesWildFly, WfConstants.EXTENSIONS_STANDALONE, buildConfig.getStandaloneExtensions());
         }
-        if(wfFpConfig.hasDomainExtensions()) {
-            persistExtensions(resourcesWildFly, WfConstants.EXTENSIONS_DOMAIN, wfFpConfig.getDomainExtensions());
+        if(buildConfig.hasDomainExtensions()) {
+            persistExtensions(resourcesWildFly, WfConstants.EXTENSIONS_DOMAIN, buildConfig.getDomainExtensions());
         }
-        if(wfFpConfig.hasHostExtensions()) {
-            persistExtensions(resourcesWildFly, WfConstants.EXTENSIONS_HOST, wfFpConfig.getHostExtensions());
+        if(buildConfig.hasHostExtensions()) {
+            persistExtensions(resourcesWildFly, WfConstants.EXTENSIONS_HOST, buildConfig.getHostExtensions());
         }
 
         // scripts
@@ -535,7 +579,7 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
             mkdirs(schemasPackageDir);
             mkdirs(schemaGroupsTxt.getParent());
             writer = Files.newBufferedWriter(schemaGroupsTxt);
-            for (String group : wfFpConfig.getSchemaGroups()) {
+            for (String group : buildConfig.getSchemaGroups()) {
                 writer.write(group);
                 writer.newLine();
             }
@@ -583,12 +627,12 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
     }
 
     private void processFeaturePackDependencies(final FeaturePackSpec.Builder fpBuilder) throws Exception {
-        if(wfFpConfig.getDependencies().isEmpty()) {
+        if(buildConfig.getDependencies().isEmpty()) {
             return;
         }
 
-        fpDependencies = new LinkedHashMap<>(wfFpConfig.getDependencies().size());
-        for (Map.Entry<ArtifactCoords.Gav, FeaturePackDependencySpec> depEntry : wfFpConfig.getDependencies().entrySet()) {
+        fpDependencies = new LinkedHashMap<>(buildConfig.getDependencies().size());
+        for (Map.Entry<ArtifactCoords.Gav, FeaturePackDependencySpec> depEntry : buildConfig.getDependencies().entrySet()) {
             ArtifactCoords depCoords = depEntry.getKey().toArtifactCoords();
             if (depCoords.getVersion() == null) {
                 final String coordsStr = artifactVersions.getVersion(depCoords.getGroupId() + ':' + depCoords.getArtifactId());
@@ -826,26 +870,19 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
     }
 
     public Path resolveArtifact(ArtifactCoords coords) throws ProvisioningException {
-        final ArtifactResult result;
+        final ProjectBuildingRequest buildingRequest = new DefaultProjectBuildingRequest(session.getProjectBuildingRequest());
+        buildingRequest.setLocalRepository(session.getLocalRepository());
+        buildingRequest.setRemoteRepositories(project.getRemoteArtifactRepositories());
+
         try {
-            result = repoSystem.resolveArtifact(repoSession, getArtifactRequest(coords));
-        } catch (ArtifactResolutionException e) {
+            final ArtifactResult result = artifactResolver.resolveArtifact(buildingRequest,
+                    new DefaultArtifact(coords.getGroupId(), coords.getArtifactId(), coords.getVersion(),
+                            "provided", coords.getExtension(), coords.getClassifier(),
+                            new DefaultArtifactHandler(coords.getExtension())));
+            return result.getArtifact().getFile().toPath();
+        } catch (ArtifactResolverException e) {
             throw new ProvisioningException(FpMavenErrors.artifactResolution(coords.toString()), e);
         }
-        if(!result.isResolved()) {
-            throw new ProvisioningException(FpMavenErrors.artifactResolution(coords.toString()));
-        }
-        if(result.isMissing()) {
-            throw new ProvisioningException(FpMavenErrors.artifactMissing(coords.toString()));
-        }
-        return Paths.get(result.getArtifact().getFile().toURI());
-    }
-
-    private ArtifactRequest getArtifactRequest(ArtifactCoords coords) {
-        final ArtifactRequest req = new ArtifactRequest();
-        req.setArtifact(new DefaultArtifact(coords.getGroupId(), coords.getArtifactId(), coords.getClassifier(), coords.getExtension(), coords.getVersion()));
-        req.setRepositories(remoteRepos);
-        return req;
     }
 
     private static void ensureLineEndings(Path file) throws MojoExecutionException {
