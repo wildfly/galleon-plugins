@@ -194,7 +194,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
         mergedTaskPropsResolver = new MapPropertyResolver(mergedTaskProps);
 
-        pkgProgressTracker = runtime.getLayoutFactory().getProgressTracker(ProvisioningLayoutFactory.TRACK_PACKAGES);
+        final ProvisioningLayoutFactory layoutFactory = runtime.getLayout().getFactory();
+        pkgProgressTracker = layoutFactory.getProgressTracker(ProvisioningLayoutFactory.TRACK_PACKAGES);
         long pkgsTotal = 0;
         for(FeaturePackRuntime fp : runtime.getFeaturePacks()) {
             pkgsTotal += fp.getPackageNames().size();
@@ -205,7 +206,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
         pkgProgressTracker.complete();
         if (!jbossModules.isEmpty()) {
-            final ProgressTracker<PackageRuntime> modulesTracker = runtime.getLayoutFactory().getProgressTracker("JBMODULES");
+            final ProgressTracker<PackageRuntime> modulesTracker = layoutFactory.getProgressTracker("JBMODULES");
             modulesTracker.starting(jbossModules.size());
             for (Map.Entry<Path, PackageRuntime> entry : jbossModules.entrySet()) {
                 final PackageRuntime pkg = entry.getValue();
@@ -261,7 +262,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         final ProvisioningManager pm = ProvisioningManager.builder()
                 .setInstallationHome(examplesTmp)
                 .setMessageWriter(log)
-                .setLayoutFactory(runtime.getLayoutFactory())
+                .setLayoutFactory(runtime.getLayout().getFactory())
                 .build();
 
         List<Path> configPaths = new ArrayList<>();

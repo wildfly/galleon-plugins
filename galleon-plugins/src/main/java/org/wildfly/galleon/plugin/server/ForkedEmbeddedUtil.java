@@ -56,6 +56,8 @@ public class ForkedEmbeddedUtil {
         void forkedForEmbedded(String... args) throws ProvisioningException;
 
         default void forkedEmbeddedMessage(String msg) {}
+
+        default void forkedEmbeddedDone(String... args) throws ProvisioningException {}
     }
 
     private static int javaVersion = -1;
@@ -91,6 +93,7 @@ public class ForkedEmbeddedUtil {
         final Path props = storeSystemProps();
         try {
             fork(callback, props, args);
+            callback.forkedEmbeddedDone(args);
         } finally {
             IoUtils.recursiveDelete(props);
         }
