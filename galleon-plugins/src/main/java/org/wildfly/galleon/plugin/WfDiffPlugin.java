@@ -17,9 +17,6 @@
 
 package org.wildfly.galleon.plugin;
 
-
-
-import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -27,97 +24,72 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
+
 import org.jboss.galleon.Errors;
 import org.jboss.galleon.MessageWriter;
 import org.jboss.galleon.ProvisioningException;
-import org.jboss.galleon.ProvisioningOption;
-import org.jboss.galleon.config.ConfigId;
 import org.jboss.galleon.config.ConfigModel;
-import org.jboss.galleon.diff.FileSystemDiff;
-import org.jboss.galleon.diff.ProvisioningDiffResult;
+import org.jboss.galleon.diff.FsDiff;
+import org.jboss.galleon.diff.FsEntry;
+import org.jboss.galleon.diff.ProvisioningDiffProvider;
+import org.jboss.galleon.layout.FeaturePackLayout;
+import org.jboss.galleon.layout.ProvisioningLayout;
 import org.jboss.galleon.plugin.DiffPlugin;
-import org.jboss.galleon.plugin.ProvisioningPluginWithOptions;
-import org.jboss.galleon.runtime.FeaturePackRuntime;
-import org.jboss.galleon.runtime.ProvisioningRuntime;
-import org.jboss.galleon.universe.FeaturePackLocation.FPID;
-import org.jboss.galleon.universe.maven.MavenArtifact;
-import org.jboss.galleon.universe.maven.repo.MavenRepoManager;
-import org.jboss.galleon.util.PathFilter;
+import org.jboss.galleon.repo.RepositoryArtifactResolver;
 
 /**
- * WildFly plugin to compute the model difference between an instance and a clean provisioned instance.
  *
- * @author Emmanuel Hugonnet (c) 2017 Red Hat, inc.
+ * @author Alexey Loubyansky
  */
-public class WfDiffPlugin extends ProvisioningPluginWithOptions implements DiffPlugin {
+public class WfDiffPlugin implements DiffPlugin {
 
-    //private static final String WF_DIFF_CONFIG_GENERATOR = "org.wildfly.galleon.plugin.config.generator.WfDiffConfigGenerator";
-    //private static final String WF_DIFF_CONFIG_GENERATOR = "org.wildfly.galleon.plugin.config.generator.WfProvisionedStateDiff";
     private static final String WF_DIFF_CONFIG_GENERATOR = "org.wildfly.galleon.plugin.config.generator.WfConfigsReader";
 
-    private static final PathFilter FILTER_FP = PathFilter.Builder.instance()
-            .addDirectories("*" + File.separatorChar + "tmp", "*" + File.separatorChar + "log", "*_xml_history", "model_diff")
-            .addFiles("standalone.xml", "process-uuid", "logging.properties")
-            .build();
-
-    private static final PathFilter FILTER = PathFilter.Builder.instance()
-            .addDirectories("*" + File.separatorChar + "tmp", "model_diff")
-            .addFiles("standalone.xml", "logging.properties")
-            .build();
-
-    public static final ProvisioningOption HOST = ProvisioningOption.builder("host").setDefaultValue("127.0.0.1").build();
-    public static final ProvisioningOption PORT = ProvisioningOption.builder("port").setDefaultValue("9990").build();
-    public static final ProvisioningOption PROTOCOL = ProvisioningOption.builder("protocol").setDefaultValue("remote+http").build();
-    public static final ProvisioningOption USERNAME = ProvisioningOption.builder("username").setDefaultValue("galleon").build();
-    public static final ProvisioningOption PASSWORD = ProvisioningOption.builder("password").setDefaultValue("galleon").build();
-    public static final ProvisioningOption SERVER_CONFIG = ProvisioningOption.builder("server-config").setDefaultValue("standalone.xml").build();
-
-    private MavenRepoManager maven;
-
+    /* (non-Javadoc)
+     * @see org.jboss.galleon.plugin.NewDiffPlugin#diff(org.jboss.galleon.diff.ProvisioningDiffProvider)
+     */
     @Override
-    protected List<ProvisioningOption> initPluginOptions() {
-        return Arrays.asList(
-                HOST,
-                PORT,
-                PROTOCOL,
-                USERNAME,
-                PASSWORD,
-                SERVER_CONFIG);
-    }
+    public void diff(ProvisioningDiffProvider diffProvider) throws ProvisioningException {
 
-    @Override
-    public ProvisioningDiffResult computeDiff(ProvisioningRuntime runtime, Path customizedInstallation, Path target) throws ProvisioningException {
-        final MessageWriter log = runtime.getMessageWriter();
-        log.verbose("WildFly diff plug-in");
-        FileSystemDiff diff = new FileSystemDiff(log, runtime.getStagedDir(), customizedInstallation);
-        final Path configGenJar = runtime.getResource("wildfly/wildfly-config-gen.jar");
+        final MessageWriter log = diffProvider.getMessageWriter();
+        log.print("WildFly Diff Plugin");
+
+        final ProvisioningLayout<?> layout = diffProvider.getProvisioningLayout();
+        final Path configGenJar = layout.getResource("wildfly/wildfly-config-gen.jar");
         if(!Files.exists(configGenJar)) {
             throw new ProvisioningException(Errors.pathDoesNotExist(configGenJar));
         }
 
-        maven = (MavenRepoManager) runtime.getArtifactResolver(MavenRepoManager.REPOSITORY_ID);
-        final Map<String, String> artifactVersions = getArtifactVersions(runtime);
+        final PropertyResolver propertyResolver = getPropertyResolver(layout);
 
+        final FsDiff fsDiff = diffProvider.getFsDiff();
+        /*
+        Map<ConfigId, String> configIds = Collections.emptyMap();
+        if(fsDiff.hasModifiedEntries()) {
+            for(String relativePath : fsDiff.getModifiedPaths()) {
+                if(relativePath.startsWith("standalone/configuration") && relativePath.endsWith(".xml")) {
+                    final FsEntry modifiedEntry = fsDiff.getModifiedEntry(relativePath)[0];
+                    configIds = CollectionUtils.put(configIds, new ConfigId("standalone", modifiedEntry.getName()), modifiedEntry.getRelativePath());
+                }
+            }
+        }
+        */
+        final FsEntry homeEntry = fsDiff.getOtherRoot();
 
         final URL[] cp = new URL[4];
         try {
             cp[0] = configGenJar.toUri().toURL();
-            MavenArtifact artifact = Utils.toArtifactCoords(artifactVersions, "org.jboss.modules:jboss-modules", false);
-            maven.resolve(artifact);
-            cp[1] = artifact.getPath().toUri().toURL();
-            artifact = Utils.toArtifactCoords(artifactVersions, "org.wildfly.core:wildfly-cli::client", false);
-            maven.resolve(artifact);
-            cp[2] = artifact.getPath().toUri().toURL();
-            artifact = Utils.toArtifactCoords(artifactVersions, "org.jboss.core:wildfly-launcher", false);
-            maven.resolve(artifact);
-            cp[3] = artifact.getPath().toUri().toURL();
+            cp[1] = resolve(homeEntry.getPath(), "jboss-modules.jar").toUri().toURL();
+            final RepositoryArtifactResolver maven = layout.getFactory().getUniverseResolver().getArtifactResolver("repository.maven");
+            cp[2] = maven.resolve(toArtifactCoords("org.wildfly.core:wildfly-cli::client", propertyResolver)).toUri().toURL();
+            cp[3] = maven.resolve(toArtifactCoords("org.wildfly.core:wildfly-launcher", propertyResolver)).toUri().toURL();
         } catch (IOException e) {
-            throw new ProvisioningException("Failed to init classpath for " + runtime.getStagedDir(), e);
+            throw new ProvisioningException("Failed to init classpath", e);
         }
         if(log.isVerboseEnabled()) {
             log.verbose("Config diff generator classpath:");
@@ -127,14 +99,14 @@ public class WfDiffPlugin extends ProvisioningPluginWithOptions implements DiffP
         }
 
         List<ConfigModel> configs;
-        Map<FPID, ConfigId> includedConfigs = new HashMap<>();
         final ClassLoader originalCl = Thread.currentThread().getContextClassLoader();
         final URLClassLoader configGenCl = new URLClassLoader(cp, originalCl);
         Thread.currentThread().setContextClassLoader(configGenCl);
         try {
             final Class<?> wfDiffGenerator = configGenCl.loadClass(WF_DIFF_CONFIG_GENERATOR);
-            final Method exportDiff = wfDiffGenerator.getMethod("exportDiff", ProvisioningRuntime.class, Map.class, Path.class, Path.class);
-            configs = (List<ConfigModel>) exportDiff.invoke(null, runtime, includedConfigs, customizedInstallation, target);
+            //final Method exportDiff = wfDiffGenerator.getMethod("exportDiff", ProvisioningLayout.class, ProvisionedState.class, MessageWriter.class, Path.class, Collection.class);
+            final Method exportDiff = wfDiffGenerator.getMethod("exportDiff", ProvisioningDiffProvider.class);
+            configs = (List<ConfigModel>) exportDiff.invoke(null, diffProvider);
         } catch(InvocationTargetException e) {
             final Throwable cause = e.getCause();
             if(cause instanceof ProvisioningException) {
@@ -151,34 +123,86 @@ public class WfDiffPlugin extends ProvisioningPluginWithOptions implements DiffP
             } catch (IOException e) {
             }
         }
-
-        return new WfDiffResult(includedConfigs,
-                configs,
-                // Collections.singletonList(target.resolve("finalize.cli").toAbsolutePath()),
-                Collections.emptyList(),
-                diff.diff(getFilter(runtime)));
     }
 
-    private PathFilter getFilter(ProvisioningRuntime runtime) {
-        //if ("diff-to-feature-pack".equals(runtime.getOperation())) {
-        //    return FILTER_FP;
-        //}
-        return FILTER;
+    private Path resolve(Path currentState, String... path) throws ProvisioningException {
+        Path p = currentState;
+        for(String s : path) {
+            p = p.resolve(s);
+        }
+        if(!Files.exists(p)) {
+            throw new ProvisioningException(Errors.pathDoesNotExist(p));
+        }
+        return p;
     }
 
-    private Map<String, String> getArtifactVersions(ProvisioningRuntime runtime) throws ProvisioningException {
+    private PropertyResolver getPropertyResolver(ProvisioningLayout<?> layout) throws ProvisioningException {
         final Map<String, String> artifactVersions = new HashMap<>();
-        for(FeaturePackRuntime fp : runtime.getFeaturePacks()) {
+        for(FeaturePackLayout fp : layout.getOrderedFeaturePacks()) {
             final Path wfRes = fp.getResource(WfConstants.WILDFLY);
             if(!Files.exists(wfRes)) {
                 continue;
             }
+
             final Path artifactProps = wfRes.resolve(WfConstants.ARTIFACT_VERSIONS_PROPS);
-            if(!Files.exists(artifactProps)) {
-                continue;
+            if(Files.exists(artifactProps)) {
+                try (Stream<String> lines = Files.lines(artifactProps)) {
+                    final Iterator<String> iterator = lines.iterator();
+                    while (iterator.hasNext()) {
+                        final String line = iterator.next();
+                        final int i = line.indexOf('=');
+                        if (i < 0) {
+                            throw new ProvisioningException("Failed to locate '=' character in " + line);
+                        }
+                        artifactVersions.put(line.substring(0, i), line.substring(i + 1));
+                    }
+                } catch (IOException e) {
+                    throw new ProvisioningException(Errors.readFile(artifactProps), e);
+                }
             }
-            Utils.readProperties(artifactProps, artifactVersions);
         }
-        return artifactVersions;
+        return new MapPropertyResolver(artifactVersions);
+    }
+
+    private String toArtifactCoords(String str, PropertyResolver versionResolver) throws ProvisioningException {
+
+        String[] parts = str.split(":");
+        if(parts.length < 2) {
+            throw new IllegalArgumentException("Unexpected artifact coordinates format: " + str);
+        }
+        final String groupId = parts[0];
+        final String artifactId = parts[1];
+        String version = null;
+        String classifier = "";
+        String ext = "jar";
+        if(parts.length > 2) {
+            if(!parts[2].isEmpty()) {
+                version = parts[2];
+            }
+            if(parts.length > 3) {
+                classifier = parts[3];
+                if(parts.length > 4 && !parts[4].isEmpty()) {
+                    ext = parts[4];
+                    if (parts.length > 5) {
+                        throw new IllegalArgumentException("Unexpected artifact coordinates format: " + str);
+                    }
+                }
+            }
+        }
+
+        if(version != null) {
+            return groupId + ':' + artifactId + ':' + ext + ':' + classifier + ':' + version;
+        }
+
+        final String resolvedStr = versionResolver.resolveProperty(groupId + ':' + artifactId);
+        if (resolvedStr == null) {
+            throw new ProvisioningException("Failed to resolve the version of " + str);
+        }
+
+        parts = resolvedStr.split(":");
+        if(parts.length < 3) {
+            throw new ProvisioningException("Failed to resolve version for artifact: " + resolvedStr);
+        }
+        return groupId + ':' + artifactId + ':' + ext + ':' + classifier + ':' + parts[2];
     }
 }

@@ -102,7 +102,7 @@ public class WfConfigGenerator implements ForkedEmbeddedUtil.ForkCallback {
             initScriptWriter(runtime);
         }
 
-        final ProgressTracker<ProvisionedConfig> progressTracker = runtime.getLayoutFactory()
+        final ProgressTracker<ProvisionedConfig> progressTracker = runtime.getLayout().getFactory()
                 .getProgressTracker(ProvisioningLayoutFactory.TRACK_CONFIGS);
 
         try(WfProvisionedConfigHandler configHandler = new WfProvisionedConfigHandler(runtime, this)) {

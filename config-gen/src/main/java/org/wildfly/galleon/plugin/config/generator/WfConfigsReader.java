@@ -32,8 +32,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import javax.xml.stream.XMLStreamException;
-
 import org.jboss.as.cli.CommandFormatException;
 import org.jboss.as.cli.parsing.StateParser;
 import org.jboss.as.cli.parsing.arguments.ArgumentValueCallbackHandler;
@@ -47,9 +45,13 @@ import org.jboss.galleon.Errors;
 import org.jboss.galleon.MessageWriter;
 import org.jboss.galleon.ProvisioningDescriptionException;
 import org.jboss.galleon.ProvisioningException;
+import org.jboss.galleon.config.ConfigId;
 import org.jboss.galleon.config.ConfigModel;
 import org.jboss.galleon.config.FeatureConfig;
 import org.jboss.galleon.config.ProvisioningConfig;
+import org.jboss.galleon.diff.FsDiff;
+import org.jboss.galleon.diff.FsEntry;
+import org.jboss.galleon.diff.ProvisioningDiffProvider;
 import org.jboss.galleon.layout.FeaturePackLayout;
 import org.jboss.galleon.layout.ProvisioningLayout;
 import org.jboss.galleon.layout.ProvisioningLayoutFactory;
@@ -65,6 +67,7 @@ import org.jboss.galleon.state.ProvisionedConfig;
 import org.jboss.galleon.state.ProvisionedFeature;
 import org.jboss.galleon.state.ProvisionedState;
 import org.jboss.galleon.util.CollectionUtils;
+import org.jboss.galleon.xml.ConfigXmlParser;
 import org.jboss.galleon.xml.ConfigXmlWriter;
 import org.jboss.galleon.xml.ProvisionedFeatureBuilder;
 import org.jboss.galleon.xml.ProvisioningXmlParser;
@@ -80,6 +83,9 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
     private static final String DOMAIN_ELEMENT = "<domain ";
     private static final String HOST_ELEMENT = "<host ";
     private static final String SERVER_ELEMENT = "<server ";
+
+    private static final String ADDED = "added";
+    private static final String UPDATED = "updated";
 
     public static class ConfigSpecMapper implements ProvisionedConfigHandler {
 
@@ -142,37 +148,48 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
         READ_ONLY_PATHS = Collections.unmodifiableSet(tmp);
     }
 
-    public static List<ConfigModel> exportDiff(ProvisioningLayout<?> layout, ProvisionedState provisionedState, MessageWriter log, Path home) throws ProvisioningException {
-        final WfConfigsReader reader = new WfConfigsReader();
-        reader.log = log;
-        reader.home = home;
-        reader.generate(layout, provisionedState, home, log, false);
+    public static void exportDiff(ProvisioningDiffProvider diffProvider) throws ProvisioningException {
 
-        Path baseDir = Paths.get(System.getProperty("user.home")).resolve("galleon-scripts");
-        for(ConfigModel config : reader.userConfigs) {
-            try {
-                ConfigXmlWriter.getInstance().write(config, baseDir.resolve(config.getName()));
-            } catch (XMLStreamException e) {
-                // TODO Auto-generated catch block
-                e.printStackTrace();
-            } catch (IOException e) {
-                // TODO Auto-generated catch block
-                e.printStackTrace();
+        final FsDiff fsDiff = diffProvider.getFsDiff();
+
+        Map<ConfigId, String> configIds = Collections.emptyMap();
+        if(fsDiff.hasModifiedEntries()) {
+            for(String relativePath : fsDiff.getModifiedPaths()) {
+                if(relativePath.startsWith("standalone/configuration") && relativePath.endsWith(".xml")) {
+                    final FsEntry modifiedEntry = fsDiff.getModifiedEntry(relativePath)[0];
+                    configIds = CollectionUtils.put(configIds, new ConfigId("standalone", modifiedEntry.getName()), modifiedEntry.getRelativePath());
+                }
             }
         }
 
-        return reader.userConfigs;
+        final WfConfigsReader reader = new WfConfigsReader();
+        reader.log = diffProvider.getMessageWriter();
+        reader.home = fsDiff.getOtherRoot().getPath();
+        reader.configIds = configIds;
+        reader.generate(diffProvider.getProvisioningLayout(), diffProvider.getProvisionedState(), reader.home, reader.log, false);
+
+        if(!reader.updatedConfigs.isEmpty()) {
+            for(ConfigModel config : reader.updatedConfigs) {
+                diffProvider.updateConfig(config, configIds.get(config.getId()));
+            }
+        }
+        if(!reader.addedConfigs.isEmpty()) {
+            for(ConfigModel config : reader.addedConfigs) {
+                diffProvider.addConfig(config, configIds.get(config.getId()));
+            }
+        }
     }
 
     private Path home;
     private MessageWriter log;
+    private Map<ConfigId, String> configIds;
     private ProvisioningLayout<?> layout;
     private ProvisionedConfig provisionedConfig;
     private ConfigSpecMapper specMapper = new ConfigSpecMapper();
     private Map<String, FeatureSpec> loadedSpecs = Collections.emptyMap();
-    private List<ConfigModel> userConfigs = Collections.emptyList();
-    private String configModel;
-    private String configName;
+    private ConfigId configId;
+    private List<ConfigModel> updatedConfigs = Collections.emptyList();
+    private List<ConfigModel> addedConfigs = Collections.emptyList();
 
     @Override
     protected String getHome(ProvisioningRuntime runtime) {
@@ -182,6 +199,26 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
     @Override
     protected void doGenerate(ProvisioningLayout<?> layout, ProvisionedState provisionedState) throws ProvisioningException {
         this.layout = layout;
+
+        for(ConfigId configId : configIds.keySet()) {
+            final Path configXml = home.resolve(configId.getModel()).resolve(configId.getName());
+            if (Files.exists(configXml)) {
+                throw new ProvisioningException("Config " + configId + " does not exist: " + configXml);
+            }
+            for (ProvisionedConfig pc : provisionedState.getConfigs()) {
+                if (pc.getModel().equals(configId.getModel()) && pc.getName().equals(configId.getName())) {
+                    provisionedConfig = pc;
+                    break;
+                }
+            }
+            if (provisionedConfig == null) {
+                throw new ProvisioningException("Failed to locate " + configId + " among the provisioned configs");
+            }
+            this.configId = configId;
+            readConfig(getConfigArg(configId.getModel()), configXml);
+            provisionedConfig = null;
+        }
+/*
         final List<ProvisionedConfig> provisionedConfigs = provisionedState.getConfigs();
         Map<String, Path> actualStandaloneConfigs = new HashMap<>(provisionedConfigs.size());
         Path configDir = home.resolve(WfConstants.STANDALONE).resolve(WfConstants.CONFIGURATION);
@@ -212,15 +249,17 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
             configName = newConfig.getFileName().toString();
             readConfig(getConfigArg(configModel), newConfig);
         }
+        */
     }
 
     @Override
     protected String[] getForkArgs() throws ProvisioningException {
         final String[] superArgs = super.getForkArgs();
-        int i = superArgs.length + 2;
+        int i = superArgs.length + 3;
         final String[] args = new String[i];
         System.arraycopy(superArgs, 0, args, 0, superArgs.length);
-        final Path configXml = layout.getTmpPath("diffgen").resolve("provisioning.xml");
+        final Path workDir = layout.getTmpPath("forked-wf-diff");
+        final Path configXml = workDir.resolve("provisioning.xml");
         try {
             ProvisioningXmlWriter.getInstance().write(layout.getConfig(), configXml);
         } catch (Exception e) {
@@ -228,6 +267,7 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
         }
         args[--i] = configXml.toString();
         args[--i] = layout.getFactory().getHome().toString();
+        args[--i] = workDir.resolve("configs").toAbsolutePath().toString();
         return args;
     }
 
@@ -239,6 +279,58 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
         final Path layoutFactoryHome = Paths.get(args[--i]);
         layout = ProvisioningLayoutFactory.getInstance(layoutFactoryHome, null).newConfigLayout(provisioningConfig);
         super.forkedForEmbedded(args);
+        --i;
+        if(!addedConfigs.isEmpty()) {
+            persistConfigs(args[i], ADDED, addedConfigs);
+        }
+        if(!updatedConfigs.isEmpty()) {
+            persistConfigs(args[i], UPDATED, updatedConfigs);
+        }
+    }
+
+    @Override
+    public void forkedEmbeddedDone(String... args) throws ProvisioningException {
+        final Path configsDir = Paths.get(args[args.length - 3]);
+        if(!Files.exists(configsDir)) {
+            return;
+        }
+        Path p = configsDir.resolve(ADDED);
+        if(Files.exists(p)) {
+            try(DirectoryStream<Path> stream = Files.newDirectoryStream(p)) {
+                for(Path xml : stream) {
+                    addedConfigs = CollectionUtils.add(addedConfigs, ConfigXmlParser.parse(xml));
+                }
+            } catch (IOException e) {
+                throw new ProvisioningException(Errors.readDirectory(p), e);
+            }
+        }
+        p = configsDir.resolve(UPDATED);
+        if(Files.exists(p)) {
+            try(DirectoryStream<Path> stream = Files.newDirectoryStream(p)) {
+                for(Path xml : stream) {
+                    updatedConfigs = CollectionUtils.add(updatedConfigs, ConfigXmlParser.parse(xml));
+                }
+            } catch (IOException e) {
+                throw new ProvisioningException(Errors.readDirectory(p), e);
+            }
+        }
+    }
+
+    private static void persistConfigs(final String baseDir, String type, List<ConfigModel> configs) throws ProvisioningException {
+        final Path configsDir = Paths.get(baseDir).resolve(type);
+        try {
+            Files.createDirectories(configsDir);
+        } catch (IOException e) {
+            throw new ProvisioningException(Errors.mkdirs(configsDir), e);
+        }
+        final ConfigXmlWriter writer = ConfigXmlWriter.getInstance();
+        for(ConfigModel config : configs) {
+            try {
+                writer.write(config, configsDir.resolve(config.getName()));
+            } catch (Exception e) {
+                throw new ProvisioningException(Errors.writeFile(configsDir.resolve(config.getName())), e);
+            }
+        }
     }
 
     private String getConfigArg(final String configModel) {
@@ -253,7 +345,7 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
                 throw new IllegalStateException("Unexpected config model " + configModel);
         }
     }
-
+/*
     private void locateConfigs(Path configDir, Map<String, Path> actualConfigs, String... firstElement) throws ProvisioningException {
         try(DirectoryStream<Path> stream = Files.newDirectoryStream(configDir)) {
             for(Path p : stream) {
@@ -274,7 +366,7 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
             throw new ProvisioningException(Errors.readDirectory(configDir), e);
         }
     }
-
+*/
     private String hostName;
 
     private void readConfig(String configArg, Path configPath) throws ProvisioningException {
@@ -322,20 +414,25 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
         }
 
         final int model;
-        if(configModel.equals(WfConstants.STANDALONE)) {
-            model = 0;
-        } else if(configModel.equals(WfConstants.DOMAIN)) {
-            model = 1;
-        } else if(configModel.equals(WfConstants.HOST)) {
-            model = 2;
-        } else {
-            throw new IllegalStateException("Unexpected config model " + configModel);
+        switch(configId.getModel()) {
+            case WfConstants.STANDALONE:
+                model = 0;
+                break;
+            case WfConstants.DOMAIN:
+                model = 1;
+                break;
+            case WfConstants.HOST:
+                model = 2;
+                break;
+            default:
+                throw new IllegalStateException("Unexpected config model " + configId.getModel());
         }
 
         if(log != null) {
-            log.print("Analyzing " + configName);
+            log.print("Analyzing " + configId);
         }
 
+        final ConfigModel definedConfig = layout.getConfig().getDefinedConfig(configId);
         ConfigModel.Builder configBuilder = null;
         String prevSpec = null;
         ResolvedSpecId specId = null;
@@ -403,7 +500,7 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
                     feature.setParam(prop.getName(), prop.getValue().asString());
                 }
                 if(configBuilder == null) {
-                    configBuilder = ConfigModel.builder(configModel, configName);
+                    configBuilder = definedConfig == null ? ConfigModel.builder(configId.getModel(), configId.getName()) : ConfigModel.builder(definedConfig);
                 }
                 configBuilder.addFeature(feature);
                 if(log != null) {
@@ -479,7 +576,7 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
             }
             if (feature != null) {
                 if(configBuilder == null) {
-                    configBuilder = ConfigModel.builder(configModel, configName);
+                    configBuilder = definedConfig == null ? ConfigModel.builder(configId.getModel(), configId.getName()) : ConfigModel.builder(definedConfig);
                 }
                 configBuilder.addFeature(feature);
             }
@@ -501,7 +598,7 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
                         continue;
                     }
                     if(configBuilder == null) {
-                        configBuilder = ConfigModel.builder(configModel, configName);
+                        configBuilder = definedConfig == null ? ConfigModel.builder(configId.getModel(), configId.getName()) : ConfigModel.builder(definedConfig);
                     }
                     final FeatureId.Builder idBuilder = FeatureId.builder(specName);
                     for(Map.Entry<String, Object> entry2 : removedId.getParams().entrySet()) {
@@ -516,14 +613,18 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
         }
         if(!specMapper.excludedSpecs.isEmpty()) {
             if(configBuilder == null) {
-                configBuilder = ConfigModel.builder(configModel, configName);
+                configBuilder = definedConfig == null ? ConfigModel.builder(configId.getModel(), configId.getName()) : ConfigModel.builder(definedConfig);
             }
             for(String excludedSpec : specMapper.excludedSpecs) {
                 configBuilder.excludeSpec(excludedSpec);
             }
         }
         if(configBuilder != null) {
-            userConfigs = CollectionUtils.add(userConfigs, configBuilder.build());
+            if(definedConfig == null) {
+                addedConfigs = CollectionUtils.add(addedConfigs, configBuilder.build());
+            } else {
+                updatedConfigs = CollectionUtils.add(updatedConfigs, configBuilder.build());
+            }
         }
     }
 
@@ -599,24 +700,43 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
 
     @Override
     protected void doStartServer(String... args) throws ProvisioningException {
-        if(configModel == null) {
-            configModel = WfConstants.STANDALONE;
+        if(configId == null) {
+            configId = new ConfigId(WfConstants.STANDALONE, getArg(WfConstants.EMBEDDED_ARG_SERVER_CONFIG, "standalone.xml", args));
         }
         super.doStartServer(args);
     }
 
     @Override
     protected void doStartHc(String... args) throws ProvisioningException {
-        if(configModel == null) {
-            configModel = WfConstants.DOMAIN;
-            for(String arg : args) {
-                if(arg.startsWith(WfConstants.EMBEDDED_ARG_HOST_CONFIG)) {
-                    configModel = WfConstants.HOST;
+        if(configId == null) {
+            int i = 0;
+            while(i < args.length) {
+                final String argValue = args[i++];
+                if(argValue.equals(WfConstants.EMBEDDED_ARG_HOST_CONFIG)) {
+                    configId = new ConfigId(WfConstants.HOST, args[i]);
                     break;
+                } else if(argValue.equals(WfConstants.EMBEDDED_ARG_DOMAIN_CONFIG)) {
+                    configId = new ConfigId(WfConstants.DOMAIN, args[i]);
+                    // no break, domain is the default
                 }
             }
         }
         super.doStartHc(args);
+    }
+
+    void stopEmbedded() throws ProvisioningException {
+        super.stopEmbedded();
+        configId = null;
+    }
+
+    private static String getArg(final String argName, final String defValue, String... args) {
+        int i = 0;
+        while(i < args.length) {
+            if(argName.equals(args[i++])) {
+                return args[i];
+            }
+        }
+        return defValue;
     }
 
     /**

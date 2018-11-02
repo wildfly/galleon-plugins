@@ -105,7 +105,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private static final String CONFIG_GEN_PATH = "wildfly/wildfly-config-gen.jar";
     private static final String CONFIG_GEN_CLASS = "org.wildfly.galleon.plugin.config.generator.WfConfigGenerator";
 
-    private static final ProvisioningOption OPTION_MVN_DIST = ProvisioningOption.builder("jboss-maven-dist").hasNoValue().build();
+    private static final ProvisioningOption OPTION_MVN_DIST = ProvisioningOption.builder("jboss-maven-dist").build();
     public static final ProvisioningOption OPTION_DUMP_CONFIG_SCRIPTS = ProvisioningOption.builder("jboss-dump-config-scripts").build();
     private static final ProvisioningOption OPTION_FORK_EMBEDDED = ProvisioningOption.builder("jboss-fork-embedded").build();
 
@@ -194,7 +194,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
         mergedTaskPropsResolver = new MapPropertyResolver(mergedTaskProps);
 
-        pkgProgressTracker = runtime.getLayoutFactory().getProgressTracker(ProvisioningLayoutFactory.TRACK_PACKAGES);
+        final ProvisioningLayoutFactory layoutFactory = runtime.getLayout().getFactory();
+        pkgProgressTracker = layoutFactory.getProgressTracker(ProvisioningLayoutFactory.TRACK_PACKAGES);
         long pkgsTotal = 0;
         for(FeaturePackRuntime fp : runtime.getFeaturePacks()) {
             pkgsTotal += fp.getPackageNames().size();
@@ -205,7 +206,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
         pkgProgressTracker.complete();
         if (!jbossModules.isEmpty()) {
-            final ProgressTracker<PackageRuntime> modulesTracker = runtime.getLayoutFactory().getProgressTracker("JBMODULES");
+            final ProgressTracker<PackageRuntime> modulesTracker = layoutFactory.getProgressTracker("JBMODULES");
             modulesTracker.starting(jbossModules.size());
             for (Map.Entry<Path, PackageRuntime> entry : jbossModules.entrySet()) {
                 final PackageRuntime pkg = entry.getValue();
@@ -261,7 +262,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         final ProvisioningManager pm = ProvisioningManager.builder()
                 .setInstallationHome(examplesTmp)
                 .setMessageWriter(log)
-                .setLayoutFactory(runtime.getLayoutFactory())
+                .setLayoutFactory(runtime.getLayout().getFactory())
                 .build();
 
         List<Path> configPaths = new ArrayList<>();
