@@ -105,7 +105,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private static final String CONFIG_GEN_PATH = "wildfly/wildfly-config-gen.jar";
     private static final String CONFIG_GEN_CLASS = "org.wildfly.galleon.plugin.config.generator.WfConfigGenerator";
 
-    private static final ProvisioningOption OPTION_MVN_DIST = ProvisioningOption.builder("jboss-maven-dist").hasNoValue().build();
+    private static final ProvisioningOption OPTION_MVN_DIST = ProvisioningOption.builder("jboss-maven-dist").build();
     public static final ProvisioningOption OPTION_DUMP_CONFIG_SCRIPTS = ProvisioningOption.builder("jboss-dump-config-scripts").build();
     private static final ProvisioningOption OPTION_FORK_EMBEDDED = ProvisioningOption.builder("jboss-fork-embedded").build();
 
