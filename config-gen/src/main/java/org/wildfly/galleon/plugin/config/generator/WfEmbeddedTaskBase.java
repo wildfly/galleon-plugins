@@ -38,6 +38,7 @@ import org.jboss.galleon.Errors;
 import org.jboss.galleon.MessageWriter;
 import org.jboss.galleon.ProvisioningException;
 import org.jboss.galleon.layout.ProvisioningLayout;
+import org.jboss.galleon.runtime.FeaturePackRuntimeBuilder;
 import org.jboss.galleon.runtime.ProvisioningRuntime;
 import org.jboss.galleon.state.ProvisionedState;
 import org.wildfly.core.embedded.EmbeddedManagedProcess;
@@ -79,7 +80,7 @@ public abstract class WfEmbeddedTaskBase<R> implements ForkedEmbeddedUtil.ForkCa
     private PrintWriter scriptWriter;
     private StringBuilder scriptBuf;
 
-    public R generate(ProvisioningLayout<?> layout, ProvisionedState provisionedState, Path home, MessageWriter log, boolean forkEmbedded) throws ProvisioningException {
+    public R generate(ProvisioningLayout<FeaturePackRuntimeBuilder> layout, ProvisionedState provisionedState, Path home, MessageWriter log, boolean forkEmbedded) throws ProvisioningException {
         this.messageWriter = log;
         this.forkEmbedded = forkEmbedded;
         this.jbossHome = home.toString();
@@ -121,7 +122,7 @@ public abstract class WfEmbeddedTaskBase<R> implements ForkedEmbeddedUtil.ForkCa
         return null;
     }
 
-    protected abstract void doGenerate(ProvisioningLayout<?> layout, ProvisionedState provisionedState) throws ProvisioningException;
+    protected abstract void doGenerate(ProvisioningLayout<FeaturePackRuntimeBuilder> layout, ProvisionedState provisionedState) throws ProvisioningException;
 
     protected void handleSuccess(ModelNode response) throws ProvisioningException {
     }

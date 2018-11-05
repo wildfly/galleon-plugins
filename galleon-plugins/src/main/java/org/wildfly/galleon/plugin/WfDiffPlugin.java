@@ -26,27 +26,25 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
 import org.jboss.galleon.Errors;
 import org.jboss.galleon.MessageWriter;
 import org.jboss.galleon.ProvisioningException;
-import org.jboss.galleon.config.ConfigModel;
 import org.jboss.galleon.diff.FsDiff;
 import org.jboss.galleon.diff.FsEntry;
 import org.jboss.galleon.diff.ProvisioningDiffProvider;
 import org.jboss.galleon.layout.FeaturePackLayout;
 import org.jboss.galleon.layout.ProvisioningLayout;
-import org.jboss.galleon.plugin.DiffPlugin;
+import org.jboss.galleon.plugin.StateDiffPlugin;
 import org.jboss.galleon.repo.RepositoryArtifactResolver;
 
 /**
  *
  * @author Alexey Loubyansky
  */
-public class WfDiffPlugin implements DiffPlugin {
+public class WfDiffPlugin implements StateDiffPlugin {
 
     private static final String WF_DIFF_CONFIG_GENERATOR = "org.wildfly.galleon.plugin.config.generator.WfConfigsReader";
 
@@ -68,17 +66,6 @@ public class WfDiffPlugin implements DiffPlugin {
         final PropertyResolver propertyResolver = getPropertyResolver(layout);
 
         final FsDiff fsDiff = diffProvider.getFsDiff();
-        /*
-        Map<ConfigId, String> configIds = Collections.emptyMap();
-        if(fsDiff.hasModifiedEntries()) {
-            for(String relativePath : fsDiff.getModifiedPaths()) {
-                if(relativePath.startsWith("standalone/configuration") && relativePath.endsWith(".xml")) {
-                    final FsEntry modifiedEntry = fsDiff.getModifiedEntry(relativePath)[0];
-                    configIds = CollectionUtils.put(configIds, new ConfigId("standalone", modifiedEntry.getName()), modifiedEntry.getRelativePath());
-                }
-            }
-        }
-        */
         final FsEntry homeEntry = fsDiff.getOtherRoot();
 
         final URL[] cp = new URL[4];
@@ -98,15 +85,13 @@ public class WfDiffPlugin implements DiffPlugin {
             }
         }
 
-        List<ConfigModel> configs;
         final ClassLoader originalCl = Thread.currentThread().getContextClassLoader();
         final URLClassLoader configGenCl = new URLClassLoader(cp, originalCl);
         Thread.currentThread().setContextClassLoader(configGenCl);
         try {
             final Class<?> wfDiffGenerator = configGenCl.loadClass(WF_DIFF_CONFIG_GENERATOR);
-            //final Method exportDiff = wfDiffGenerator.getMethod("exportDiff", ProvisioningLayout.class, ProvisionedState.class, MessageWriter.class, Path.class, Collection.class);
             final Method exportDiff = wfDiffGenerator.getMethod("exportDiff", ProvisioningDiffProvider.class);
-            configs = (List<ConfigModel>) exportDiff.invoke(null, diffProvider);
+            exportDiff.invoke(null, diffProvider);
         } catch(InvocationTargetException e) {
             final Throwable cause = e.getCause();
             if(cause instanceof ProvisioningException) {
