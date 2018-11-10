@@ -41,6 +41,7 @@ import org.jboss.galleon.spec.FeatureAnnotation;
 import org.jboss.galleon.spec.FeatureParameterSpec;
 import org.jboss.galleon.spec.FeatureReferenceSpec;
 import org.jboss.galleon.spec.FeatureSpec;
+import org.jboss.galleon.spec.PackageDependencySpec;
 import org.jboss.galleon.util.CollectionUtils;
 import org.jboss.galleon.xml.FeatureSpecXmlWriter;
 import org.wildfly.galleon.plugin.WfConstants;
@@ -446,7 +447,16 @@ class FeatureSpecNode {
         if (descr.hasDefined("packages")) {
             for (ModelNode packageDep : descr.get("packages").asList()) {
                 if (packageDep.hasDefined("package")) {
-                    builder.addPackageDep(packageDep.require("package").asString());
+                    PackageDependencySpec spec;
+                    String packageName = packageDep.require("package").asString();
+                    if (packageDep.hasDefined(Constants.PASSIVE)) {
+                        spec = PackageDependencySpec.passive(packageName);
+                    } else if (packageDep.hasDefined("optional")) {
+                        spec = PackageDependencySpec.optional(packageName);
+                    } else {
+                        spec = PackageDependencySpec.required(packageName);
+                    }
+                    builder.addPackageDep(spec);
                 }
             }
         }

@@ -771,7 +771,10 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
                             depName += '.' + moduleId.getSlot();
                         }
                         if (moduleXmlByPkgName.containsKey(depName)) {
-                            pkgSpecBuilder.addPackageDep(getPackageDepSpec(packageName, moduleXml, moduleDep, depName));
+                            PackageDependencySpec spec = getPackageDepSpec(packageName, moduleXml, moduleDep, depName);
+                            if (!spec.isOptional()) {
+                                pkgSpecBuilder.addPackageDep(spec);
+                            }
                             continue;
                         }
                         Map.Entry<String, FeaturePackDescription> depSrc = null;
@@ -795,7 +798,10 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
                             }
                         }
                         if (depSrc != null) {
-                            pkgSpecBuilder.addPackageDep(depSrc.getKey(), getPackageDepSpec(packageName, moduleXml, moduleDep, depName));
+                            PackageDependencySpec spec = getPackageDepSpec(packageName, moduleXml, moduleDep, depName);
+                            if (!spec.isOptional()) {
+                                pkgSpecBuilder.addPackageDep(depSrc.getKey(), spec);
+                            }
                         } else if (moduleDep.isOptional() || isProvided(depName)) {
                             // getLog().warn("UNSATISFIED EXTERNAL OPTIONAL DEPENDENCY " + packageName + " -> " + depName);
                         } else {
