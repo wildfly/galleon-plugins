@@ -23,7 +23,6 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -32,43 +31,37 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.jboss.as.cli.CommandFormatException;
-import org.jboss.as.cli.parsing.StateParser;
-import org.jboss.as.cli.parsing.arguments.ArgumentValueCallbackHandler;
-import org.jboss.as.cli.parsing.arguments.ArgumentValueInitialState;
 import org.jboss.as.controller.client.helpers.ClientConstants;
 import org.jboss.as.controller.client.helpers.Operations;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.Property;
-import org.jboss.galleon.Constants;
 import org.jboss.galleon.Errors;
 import org.jboss.galleon.MessageWriter;
-import org.jboss.galleon.ProvisioningDescriptionException;
 import org.jboss.galleon.ProvisioningException;
 import org.jboss.galleon.config.ConfigId;
-import org.jboss.galleon.config.ConfigModel;
-import org.jboss.galleon.config.FeatureConfig;
 import org.jboss.galleon.config.ProvisioningConfig;
 import org.jboss.galleon.diff.FsDiff;
 import org.jboss.galleon.diff.FsEntry;
 import org.jboss.galleon.diff.ProvisioningDiffProvider;
-import org.jboss.galleon.layout.FeaturePackLayout;
+import org.jboss.galleon.layout.FeaturePackLayoutFactory;
 import org.jboss.galleon.layout.ProvisioningLayout;
 import org.jboss.galleon.layout.ProvisioningLayoutFactory;
 import org.jboss.galleon.plugin.ProvisionedConfigHandler;
+import org.jboss.galleon.runtime.FeaturePackRuntimeBuilder;
 import org.jboss.galleon.runtime.ProvisioningRuntime;
 import org.jboss.galleon.runtime.ResolvedFeatureId;
 import org.jboss.galleon.runtime.ResolvedFeatureSpec;
 import org.jboss.galleon.runtime.ResolvedSpecId;
-import org.jboss.galleon.spec.FeatureId;
-import org.jboss.galleon.spec.FeatureParameterSpec;
+import org.jboss.galleon.spec.FeaturePackSpec;
 import org.jboss.galleon.spec.FeatureSpec;
 import org.jboss.galleon.state.ProvisionedConfig;
 import org.jboss.galleon.state.ProvisionedFeature;
 import org.jboss.galleon.state.ProvisionedState;
+import org.jboss.galleon.universe.FeaturePackLocation;
 import org.jboss.galleon.util.CollectionUtils;
-import org.jboss.galleon.xml.ConfigXmlParser;
-import org.jboss.galleon.xml.ConfigXmlWriter;
+import org.jboss.galleon.xml.ProvisionedConfigBuilder;
+import org.jboss.galleon.xml.ProvisionedConfigXmlParser;
+import org.jboss.galleon.xml.ProvisionedConfigXmlWriter;
 import org.jboss.galleon.xml.ProvisionedFeatureBuilder;
 import org.jboss.galleon.xml.ProvisioningXmlParser;
 import org.jboss.galleon.xml.ProvisioningXmlWriter;
@@ -130,6 +123,10 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
         }
     }
 
+    private interface FsEntryProvider {
+        FsEntry getFsEntry(String relativePath);
+    }
+
     private static final String DOT_XML = ".xml";
     private static final Set<String> READ_ONLY_PATHS;
 
@@ -148,34 +145,131 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
         READ_ONLY_PATHS = Collections.unmodifiableSet(tmp);
     }
 
-    public static void exportDiff(ProvisioningDiffProvider diffProvider) throws ProvisioningException {
+    private static void processPaths(Path home, Iterable<String> relativePaths, FsEntryProvider fsEntries, Map<ConfigId, String> affectedConfigs) throws ProvisioningException {
+        for(String relativePath : relativePaths) {
+            if(!isWfConfig(relativePath)) {
+                continue;
+            }
+            final String rootElement = getRootElement(home.resolve(relativePath));
+            String model;
+            if(rootElement.regionMatches(0, SERVER_ELEMENT, 0, SERVER_ELEMENT.length())) {
+                model = WfConstants.STANDALONE;
+            } else if(rootElement.regionMatches(0, DOMAIN_ELEMENT, 0, DOMAIN_ELEMENT.length())) {
+                model = WfConstants.DOMAIN;
+            } else if(rootElement.regionMatches(0, HOST_ELEMENT, 0, HOST_ELEMENT.length())) {
+                model = WfConstants.HOST;
+            } else {
+                continue;
+            }
+            final FsEntry modifiedEntry = fsEntries.getFsEntry(relativePath);
+            affectedConfigs.put(new ConfigId(model, modifiedEntry.getName()), modifiedEntry.getRelativePath());
+        }
+    }
 
+    private static boolean isWfConfig(String relativePath) {
+        if(!relativePath.endsWith(DOT_XML)) {
+            return false;
+        }
+        int i;
+        if(relativePath.startsWith(WfConstants.STANDALONE)) {
+            i = WfConstants.STANDALONE.length();
+        } else if(relativePath.startsWith(WfConstants.DOMAIN)) {
+            i = WfConstants.DOMAIN.length();
+        } else {
+            return false;
+        }
+        if(relativePath.charAt(i) != '/') {
+            return false;
+        }
+        if(!relativePath.regionMatches(++i, WfConstants.CONFIGURATION, 0, WfConstants.CONFIGURATION.length())) {
+            return false;
+        }
+        i += WfConstants.CONFIGURATION.length();
+        if(relativePath.charAt(i) != '/') {
+            return false;
+        }
+        if(relativePath.indexOf('/', i + 1) > 0) {
+            return false;
+        }
+        return true;
+    }
+
+    public static void exportDiff(ProvisioningDiffProvider diffProvider) throws ProvisioningException {
         final FsDiff fsDiff = diffProvider.getFsDiff();
 
-        Map<ConfigId, String> configIds = Collections.emptyMap();
+        final Map<ConfigId, String> affectedConfigs = new LinkedHashMap<>(0);
         if(fsDiff.hasModifiedEntries()) {
-            for(String relativePath : fsDiff.getModifiedPaths()) {
-                if(relativePath.startsWith("standalone/configuration") && relativePath.endsWith(".xml")) {
-                    final FsEntry modifiedEntry = fsDiff.getModifiedEntry(relativePath)[0];
-                    configIds = CollectionUtils.put(configIds, new ConfigId("standalone", modifiedEntry.getName()), modifiedEntry.getRelativePath());
+            processPaths(fsDiff.getOtherRoot().getPath(), fsDiff.getModifiedPaths(), new FsEntryProvider() {
+                @Override
+                public FsEntry getFsEntry(String relativePath) {
+                    return fsDiff.getModifiedEntry(relativePath)[0];
+                }}, affectedConfigs);
+        }
+        if(fsDiff.hasAddedEntries()) {
+            processPaths(fsDiff.getOtherRoot().getPath(), fsDiff.getAddedPaths(), new FsEntryProvider() {
+                @Override
+                public FsEntry getFsEntry(String relativePath) {
+                    return fsDiff.getAddedEntry(relativePath);
+                }}, affectedConfigs);
+        }
+
+        if(!affectedConfigs.isEmpty()) {
+            final WfConfigsReader reader = new WfConfigsReader();
+            reader.log = diffProvider.getMessageWriter();
+            reader.home = fsDiff.getOtherRoot().getPath();
+            reader.configIds = affectedConfigs;
+
+            reader.generate(diffProvider.getProvisioningLayout(), diffProvider.getProvisionedState(), reader.home, reader.log, false);
+
+            WfFeatureDiffCallback featureCallback = null;
+            if (!reader.updatedConfigs.isEmpty()) {
+                featureCallback = new WfFeatureDiffCallback();
+                for (ProvisionedConfig config : reader.updatedConfigs) {
+                    diffProvider.updateConfig(featureCallback, config,
+                            reader.configIds.get(new ConfigId(config.getModel(), config.getName())));
+                }
+            }
+            if (!reader.addedConfigs.isEmpty()) {
+                if (featureCallback == null) {
+                    featureCallback = new WfFeatureDiffCallback();
+                }
+                for (ProvisionedConfig config : reader.addedConfigs) {
+                    diffProvider.addConfig(featureCallback, config,
+                            reader.configIds.get(new ConfigId(config.getModel(), config.getName())));
                 }
             }
         }
-
-        final WfConfigsReader reader = new WfConfigsReader();
-        reader.log = diffProvider.getMessageWriter();
-        reader.home = fsDiff.getOtherRoot().getPath();
-        reader.configIds = configIds;
-        reader.generate(diffProvider.getProvisioningLayout(), diffProvider.getProvisionedState(), reader.home, reader.log, false);
-
-        if(!reader.updatedConfigs.isEmpty()) {
-            for(ConfigModel config : reader.updatedConfigs) {
-                diffProvider.updateConfig(config, configIds.get(config.getId()));
-            }
-        }
-        if(!reader.addedConfigs.isEmpty()) {
-            for(ConfigModel config : reader.addedConfigs) {
-                diffProvider.addConfig(config, configIds.get(config.getId()));
+        if(fsDiff.hasRemovedEntries()) {
+            for(String relativePath : fsDiff.getRemovedPaths()) {
+                if(!isWfConfig(relativePath)) {
+                    continue;
+                }
+                final FsEntry removed = fsDiff.getRemovedEntry(relativePath);
+                final ConfigId configId;
+                switch(relativePath.substring(0, relativePath.indexOf('/'))) {
+                    case WfConstants.STANDALONE:
+                        configId = new ConfigId(WfConstants.STANDALONE, removed.getName());
+                        break;
+                    case WfConstants.DOMAIN:
+                        String model = null;
+                        for(ProvisionedConfig provisioned : diffProvider.getProvisionedState().getConfigs()) {
+                            if(provisioned.getName().equals(removed.getName())) {
+                                if(model != null) {
+                                    model = null;
+                                    break;
+                                }
+                                model = provisioned.getModel();
+                            }
+                        }
+                        if(model == null) {
+                            continue;
+                        }
+                        configId = new ConfigId(model, removed.getName());
+                        break;
+                    default:
+                        continue;
+                }
+                diffProvider.removeConfig(configId, relativePath);
             }
         }
     }
@@ -183,13 +277,12 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
     private Path home;
     private MessageWriter log;
     private Map<ConfigId, String> configIds;
-    private ProvisioningLayout<?> layout;
-    private ProvisionedConfig provisionedConfig;
-    private ConfigSpecMapper specMapper = new ConfigSpecMapper();
+    private ProvisioningLayout<FeaturePackRuntimeBuilder> layout;
+    private ProvisionedState provisionedState;
     private Map<String, FeatureSpec> loadedSpecs = Collections.emptyMap();
     private ConfigId configId;
-    private List<ConfigModel> updatedConfigs = Collections.emptyList();
-    private List<ConfigModel> addedConfigs = Collections.emptyList();
+    private List<ProvisionedConfig> updatedConfigs = Collections.emptyList();
+    private List<ProvisionedConfig> addedConfigs = Collections.emptyList();
 
     @Override
     protected String getHome(ProvisioningRuntime runtime) {
@@ -197,59 +290,18 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
     }
 
     @Override
-    protected void doGenerate(ProvisioningLayout<?> layout, ProvisionedState provisionedState) throws ProvisioningException {
+    protected void doGenerate(ProvisioningLayout<FeaturePackRuntimeBuilder> layout, ProvisionedState provisionedState) throws ProvisioningException {
         this.layout = layout;
+        this.provisionedState = provisionedState;
 
-        for(ConfigId configId : configIds.keySet()) {
-            final Path configXml = home.resolve(configId.getModel()).resolve(configId.getName());
-            if (Files.exists(configXml)) {
+        for(Map.Entry<ConfigId, String> entry : configIds.entrySet()) {
+            final Path configXml = home.resolve(entry.getValue());
+            if (!Files.exists(configXml)) {
                 throw new ProvisioningException("Config " + configId + " does not exist: " + configXml);
             }
-            for (ProvisionedConfig pc : provisionedState.getConfigs()) {
-                if (pc.getModel().equals(configId.getModel()) && pc.getName().equals(configId.getName())) {
-                    provisionedConfig = pc;
-                    break;
-                }
-            }
-            if (provisionedConfig == null) {
-                throw new ProvisioningException("Failed to locate " + configId + " among the provisioned configs");
-            }
-            this.configId = configId;
+            this.configId = entry.getKey();
             readConfig(getConfigArg(configId.getModel()), configXml);
-            provisionedConfig = null;
         }
-/*
-        final List<ProvisionedConfig> provisionedConfigs = provisionedState.getConfigs();
-        Map<String, Path> actualStandaloneConfigs = new HashMap<>(provisionedConfigs.size());
-        Path configDir = home.resolve(WfConstants.STANDALONE).resolve(WfConstants.CONFIGURATION);
-        if(Files.exists(configDir)) {
-            locateConfigs(configDir, actualStandaloneConfigs, SERVER_ELEMENT);
-        }
-        configDir = home.resolve(WfConstants.DOMAIN).resolve(WfConstants.CONFIGURATION);
-        if(Files.exists(configDir)) {
-            locateConfigs(configDir, actualStandaloneConfigs, DOMAIN_ELEMENT, HOST_ELEMENT);
-        }
-
-        for(ProvisionedConfig config : provisionedConfigs) {
-            final Path path = actualStandaloneConfigs.remove(config.getName());
-            if(path == null) {
-                // TODO exclude the config
-                System.out.println("Exclude config " + config.getName());
-                continue;
-            }
-            this.provisionedConfig = config;
-            this.configModel = config.getModel();
-            this.configName = config.getName();
-            readConfig(getConfigArg(configModel), path);
-            this.provisionedConfig = null;
-        }
-        configModel = WfConstants.STANDALONE;
-        for(Path newConfig : actualStandaloneConfigs.values()) {
-            configModel = newConfig.getParent().getParent().getFileName().toString();
-            configName = newConfig.getFileName().toString();
-            readConfig(getConfigArg(configModel), newConfig);
-        }
-        */
     }
 
     @Override
@@ -277,7 +329,12 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
         final String provisioningXml = args[--i];
         final ProvisioningConfig provisioningConfig = ProvisioningXmlParser.parse(Paths.get(provisioningXml));
         final Path layoutFactoryHome = Paths.get(args[--i]);
-        layout = ProvisioningLayoutFactory.getInstance(layoutFactoryHome, null).newConfigLayout(provisioningConfig);
+        layout = ProvisioningLayoutFactory.getInstance(layoutFactoryHome, null).newConfigLayout(provisioningConfig, new FeaturePackLayoutFactory<FeaturePackRuntimeBuilder>() {
+            @Override
+            public FeaturePackRuntimeBuilder newFeaturePack(FeaturePackLocation fpl, FeaturePackSpec spec, Path dir, int type)
+                    throws ProvisioningException {
+                return new FeaturePackRuntimeBuilder(fpl.getFPID(), null, dir, type);
+            }}, false);
         super.forkedForEmbedded(args);
         --i;
         if(!addedConfigs.isEmpty()) {
@@ -298,7 +355,7 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
         if(Files.exists(p)) {
             try(DirectoryStream<Path> stream = Files.newDirectoryStream(p)) {
                 for(Path xml : stream) {
-                    addedConfigs = CollectionUtils.add(addedConfigs, ConfigXmlParser.parse(xml));
+                    addedConfigs = CollectionUtils.add(addedConfigs, ProvisionedConfigXmlParser.parse(xml));
                 }
             } catch (IOException e) {
                 throw new ProvisioningException(Errors.readDirectory(p), e);
@@ -308,7 +365,7 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
         if(Files.exists(p)) {
             try(DirectoryStream<Path> stream = Files.newDirectoryStream(p)) {
                 for(Path xml : stream) {
-                    updatedConfigs = CollectionUtils.add(updatedConfigs, ConfigXmlParser.parse(xml));
+                    updatedConfigs = CollectionUtils.add(updatedConfigs, ProvisionedConfigXmlParser.parse(xml));
                 }
             } catch (IOException e) {
                 throw new ProvisioningException(Errors.readDirectory(p), e);
@@ -316,15 +373,15 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
         }
     }
 
-    private static void persistConfigs(final String baseDir, String type, List<ConfigModel> configs) throws ProvisioningException {
+    private static void persistConfigs(final String baseDir, String type, List<ProvisionedConfig> configs) throws ProvisioningException {
         final Path configsDir = Paths.get(baseDir).resolve(type);
         try {
             Files.createDirectories(configsDir);
         } catch (IOException e) {
             throw new ProvisioningException(Errors.mkdirs(configsDir), e);
         }
-        final ConfigXmlWriter writer = ConfigXmlWriter.getInstance();
-        for(ConfigModel config : configs) {
+        final ProvisionedConfigXmlWriter writer = ProvisionedConfigXmlWriter.getInstance();
+        for(ProvisionedConfig config : configs) {
             try {
                 writer.write(config, configsDir.resolve(config.getName()));
             } catch (Exception e) {
@@ -345,28 +402,7 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
                 throw new IllegalStateException("Unexpected config model " + configModel);
         }
     }
-/*
-    private void locateConfigs(Path configDir, Map<String, Path> actualConfigs, String... firstElement) throws ProvisioningException {
-        try(DirectoryStream<Path> stream = Files.newDirectoryStream(configDir)) {
-            for(Path p : stream) {
-                if(!Files.isRegularFile(p)) {
-                    continue;
-                }
-                final String fileName = p.getFileName().toString();
-                final int length = fileName.length();
-                if(length < DOT_XML.length() + 1 || !fileName.regionMatches(true, length - DOT_XML.length(), DOT_XML, 0, DOT_XML.length())) {
-                    continue;
-                }
-                if(!isConfig(p, firstElement)) {
-                    continue;
-                }
-                actualConfigs.put(fileName, p);
-            }
-        } catch (IOException e) {
-            throw new ProvisioningException(Errors.readDirectory(configDir), e);
-        }
-    }
-*/
+
     private String hostName;
 
     private void readConfig(String configArg, Path configPath) throws ProvisioningException {
@@ -408,11 +444,6 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
             return;
         }
 
-        specMapper.reset();
-        if(provisionedConfig != null) {
-            specMapper.map(provisionedConfig);
-        }
-
         final int model;
         switch(configId.getModel()) {
             case WfConstants.STANDALONE:
@@ -432,11 +463,9 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
             log.print("Analyzing " + configId);
         }
 
-        final ConfigModel definedConfig = layout.getConfig().getDefinedConfig(configId);
-        ConfigModel.Builder configBuilder = null;
+        ProvisionedConfigBuilder configBuilder = null;
         String prevSpec = null;
         ResolvedSpecId specId = null;
-        Map<ResolvedFeatureId, ProvisionedFeature> specFeatures = Collections.emptyMap();
         for(ModelNode featureNode : response.get("result").asList()) {
             String specName;
             try {
@@ -444,29 +473,33 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
             } catch(Throwable t) {
                 throw new ProvisioningException("Failed to process " + featureNode, t);
             }
-            if (model == 1 && specName.startsWith("profile.")) {
-                specName = specName.substring("profile.".length());
+            if (model == 1) {
+                if (specName.startsWith("profile.")) {
+                    specName = specName.substring("profile.".length());
+                }
             }
 
             if(!specName.equals(prevSpec)) {
-                specId = specMapper.specs.get(specName);
-                if(specId == null) {
-                    specId = resolveSpec(specName);
-                    if(specId == null) {
-                        if(model == 1 && specName.startsWith("domain.")) {
-                            specName = specName.substring("domain.".length());
-                            specId = resolveSpec(specName);
-                        } else if(model == 2 && specName.startsWith("host.")) {
-                            specName = specName.substring("host.".length());
-                            specId = resolveSpec(specName);
+                specId = resolveSpec(specName);
+                if (specId == null) {
+                    if(model == 1 && specName.startsWith("domain.")) {
+                        specId = resolveSpec(specName.substring("domain.".length()));
+                        if(specId == null) {
+                            throw new ProvisioningException("Failed to locate feature spec " + featureNode.get("spec").asString()
+                                    + " in the installed feature-packs");
                         }
-                    }
-                    if(specId == null) {
-                        throw new ProvisioningException("Failed to locate feature spec " + featureNode.get("spec").asString() + " in the installed feature-packs");
+                    } else if(model == 2 && specName.startsWith("host.")) {
+                            specId = resolveSpec(specName.substring("host.".length()));
+                            if(specId == null) {
+                                throw new ProvisioningException("Failed to locate feature spec " + featureNode.get("spec").asString()
+                                        + " in the installed feature-packs");
+                            }
+                    } else {
+                        throw new ProvisioningException("Failed to locate feature spec " + featureNode.get("spec").asString()
+                                + " in the installed feature-packs");
                     }
                 }
                 prevSpec = specName;
-                specFeatures = specMapper.features.get(specName);
             }
 
             ResolvedFeatureId actualFeatureId = null;
@@ -481,39 +514,13 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
                 }
             }
 
-            final ProvisionedFeature provisionedFeature = specFeatures == null ? null : specFeatures.remove(actualFeatureId);
-
-            if(!featureNode.hasDefined("params")) {
-                continue;
-            }
-            final List<Property> params = featureNode.get("params").asPropertyList();
-            if (params.isEmpty()) {
+            if(specName.equals("path") && READ_ONLY_PATHS.contains(actualFeatureId.getParams().get("path"))) {
                 continue;
             }
 
-            if(provisionedFeature == null) {
-                if(specName.equals("path") && READ_ONLY_PATHS.contains(actualFeatureId.getParams().get("path"))) {
-                    continue;
-                }
-                final FeatureConfig feature = actualFeatureId == null ? new FeatureConfig(specName) : newFeatureConfig(actualFeatureId);
-                for (Property prop : params) {
-                    feature.setParam(prop.getName(), prop.getValue().asString());
-                }
-                if(configBuilder == null) {
-                    configBuilder = definedConfig == null ? ConfigModel.builder(configId.getModel(), configId.getName()) : ConfigModel.builder(definedConfig);
-                }
-                configBuilder.addFeature(feature);
-                if(log != null) {
-                    log.print("Added feature %s", feature);
-                }
-                continue;
-            }
+            final List<Property> params = featureNode.hasDefined("params") ? featureNode.get("params").asPropertyList() : Collections.emptyList();
 
-            FeatureConfig feature = null;
-            final Map<String, String> provisionedParams = new HashMap<>(((ProvisionedFeatureBuilder) provisionedFeature).getConfigParams());
-            for (String idParam : actualFeatureId.getParams().keySet()) {
-                provisionedParams.remove(idParam);
-            }
+            final ProvisionedFeatureBuilder featureBuilder = actualFeatureId == null ? ProvisionedFeatureBuilder.builder(specId) : ProvisionedFeatureBuilder.builder(actualFeatureId);
             final FeatureSpec featureSpec = getFeatureSpec(specId);
             for (Property param : params) {
                 final String paramName = param.getName();
@@ -523,119 +530,42 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
                     }
                     continue;
                 }
-                final FeatureParameterSpec paramSpec = featureSpec.getParam(paramName);
-                final Object provisionedValue = resolve(param, provisionedParams.remove(paramName));
-
-                final Object actualValue = toJava(param.getValue());
-                if (provisionedValue != null && actualValue.equals(provisionedValue)) {
+                if (paramName.equals("module") && specName.equals("extension")
+                        && param.getValue().equals(actualFeatureId.getParams().get("extension"))) {
                     continue;
                 }
-                if (provisionedValue == null) {
-                    if (paramName.equals("module") && specName.equals("extension")
-                            && actualValue.equals(actualFeatureId.getParams().get("extension"))) {
-                        continue;
-                    }
-                    if (feature == null) {
-                        feature = actualFeatureId == null ? new FeatureConfig(specName) : newFeatureConfig(actualFeatureId);
-                    }
-                    feature.setParam(paramName, param.getValue().asString());
-                    if(log != null) {
-                        log.print("Parameter %s of %s set to %s", paramName, actualFeatureId, actualValue);
-                    }
-                    continue;
-                }
+                featureBuilder.setConfigParam(param.getName(), param.getValue().asString());
+            }
 
-                if(log != null) {
-                    log.print("Parameter %s of %s changed from %s to %s", paramName, actualFeatureId, provisionedValue, actualValue);
-                }
-
-                if (!provisionedValue.equals(resolve(param, paramSpec.getDefaultValue()))) {
-                    if (feature == null) {
-                        feature = actualFeatureId == null ? new FeatureConfig(specName) : newFeatureConfig(actualFeatureId);
-                    }
-                    feature.setParam(paramName, param.getValue().asString());
-                }
-            }
-            if (!provisionedParams.isEmpty()) {
-                for (Map.Entry<String, String> entry : provisionedParams.entrySet()) {
-                    final String paramName = entry.getKey();
-                    final FeatureParameterSpec paramSpec = featureSpec.getParam(paramName);
-                    if (Constants.GLN_UNDEFINED.equals(paramSpec.getDefaultValue())
-                            || paramName.equals("extension") && specName.startsWith("subsystem.")
-                            || paramName.equals("persist-name") && specName.equals("host")) {
-                        continue;
-                    }
-                    if (feature == null) {
-                        feature = actualFeatureId == null ? new FeatureConfig(specName) : newFeatureConfig(actualFeatureId);
-                    }
-                    feature.unsetParam(paramName);
-                    if(log != null) {
-                        log.print("Parameter %s of %s is unset", paramName, actualFeatureId);
-                    }
-                }
-            }
-            if (feature != null) {
-                if(configBuilder == null) {
-                    configBuilder = definedConfig == null ? ConfigModel.builder(configId.getModel(), configId.getName()) : ConfigModel.builder(definedConfig);
-                }
-                configBuilder.addFeature(feature);
-            }
-        }
-
-        if(!specMapper.features.isEmpty()) {
-            for(Map<ResolvedFeatureId, ProvisionedFeature> removed : specMapper.features.values()) {
-                if(removed.isEmpty()) {
-                    continue;
-                }
-                for(Map.Entry<ResolvedFeatureId, ProvisionedFeature> entry : removed.entrySet()) {
-                    final ResolvedFeatureId removedId = entry.getKey();
-                    if(removedId == null) {
-                        throw new ProvisioningException("Feature " + entry.getValue() + " has no ID");
-                    }
-                    final String specName = removedId.getSpecId().getName();
-                    if(specName.equals("core-service.management") ||
-                            specName.equals("server-root")) {
-                        continue;
-                    }
-                    if(configBuilder == null) {
-                        configBuilder = definedConfig == null ? ConfigModel.builder(configId.getModel(), configId.getName()) : ConfigModel.builder(definedConfig);
-                    }
-                    final FeatureId.Builder idBuilder = FeatureId.builder(specName);
-                    for(Map.Entry<String, Object> entry2 : removedId.getParams().entrySet()) {
-                        idBuilder.setParam(entry2.getKey(), entry2.getValue().toString());
-                    }
-                    configBuilder.excludeFeature(idBuilder.build());
-                    if(log != null) {
-                        log.print("Excluded %s", removedId);
-                    }
-                }
-            }
-        }
-        if(!specMapper.excludedSpecs.isEmpty()) {
             if(configBuilder == null) {
-                configBuilder = definedConfig == null ? ConfigModel.builder(configId.getModel(), configId.getName()) : ConfigModel.builder(definedConfig);
+                configBuilder = ProvisionedConfigBuilder.builder().setModel(configId.getModel()).setName(configId.getName());
             }
-            for(String excludedSpec : specMapper.excludedSpecs) {
-                configBuilder.excludeSpec(excludedSpec);
-            }
+            configBuilder.addFeature(featureBuilder.build());
         }
         if(configBuilder != null) {
-            if(definedConfig == null) {
-                addedConfigs = CollectionUtils.add(addedConfigs, configBuilder.build());
-            } else {
+            boolean existing = false;
+            for(ProvisionedConfig config : provisionedState.getConfigs()) {
+                if((config.getModel() == null || config.getModel().equals(configId.getModel())) &&
+                        (config.getName() == null || config.getName().equals(configId.getName()))) {
+                    existing = true;
+                    break;
+                }
+            }
+            if(existing) {
                 updatedConfigs = CollectionUtils.add(updatedConfigs, configBuilder.build());
+            } else {
+                addedConfigs = CollectionUtils.add(addedConfigs, configBuilder.build());
             }
         }
     }
 
     private ResolvedSpecId resolveSpec(final String specName) throws ProvisioningException {
-        @SuppressWarnings("unchecked")
-        final List<FeaturePackLayout> fps = (List<FeaturePackLayout>) layout.getOrderedFeaturePacks();
+        final List<FeaturePackRuntimeBuilder> fps = (List<FeaturePackRuntimeBuilder>) layout.getOrderedFeaturePacks();
         for(int i = fps.size() - 1; i >= 0; i--) {
-            final FeaturePackLayout fp = fps.get(i);
-            final FeatureSpec spec = fp.loadFeatureSpec(specName);
+            final FeaturePackRuntimeBuilder fp = fps.get(i);
+            final ResolvedFeatureSpec spec = fp.getFeatureSpec(specName);
             if(spec != null) {
-                return new ResolvedSpecId(fp.getFPID().getProducer(), specName);
+                return spec.getId();
             }
         }
         return null;
@@ -646,39 +576,26 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
         if(featureSpec != null) {
             return featureSpec;
         }
-        featureSpec = layout.getFeaturePack(specId.getProducer()).loadFeatureSpec(specId.getName());
+        featureSpec = layout.getFeaturePack(specId.getProducer()).getFeatureSpec(specId.getName()).getSpec();
         loadedSpecs = CollectionUtils.put(loadedSpecs, specId.getName(), featureSpec);
         return featureSpec;
     }
 
-    private FeatureConfig newFeatureConfig(ResolvedFeatureId id) throws ProvisioningDescriptionException {
-        FeatureConfig featureConfig = new FeatureConfig(id.getSpecId().getName());
-        for(Map.Entry<String, Object> param : id.getParams().entrySet()) {
-            featureConfig.setParam(param.getKey(), param.getValue().toString());
-        }
-        return featureConfig;
-    }
-
-    private static boolean isConfig(Path configPath, String... firstElement) throws ProvisioningException {
+    private static String getRootElement(Path configPath) throws ProvisioningException {
         try(BufferedReader reader = Files.newBufferedReader(configPath)) {
             String line = reader.readLine();
             if(line == null) {
-                return false;
+                return null;
             }
             do {
                 line = line.trim();
                 if(!line.isEmpty() && line.charAt(0) == '<') {
                     if(line.length() < 2) {
-                        return false;
+                        return null;
                     }
                     final char c = line.charAt(1);
                     if(c != '?' && c != '!') {
-                        for(String e : firstElement) {
-                            if(line.regionMatches(0, e, 0, e.length())) {
-                                return true;
-                            }
-                        }
-                        return false;
+                        return line;
                     }
                 }
                 line = reader.readLine();
@@ -686,7 +603,7 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
         } catch (IOException e) {
             throw new ProvisioningException(Errors.readFile(configPath), e);
         }
-        return false;
+        return null;
     }
 
     @Override
@@ -737,77 +654,5 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
             }
         }
         return defValue;
-    }
-
-    /**
-     * The below methods are necessary to properly compare complex attribute values
-     */
-
-    private static Object resolve(Property prop, final String provisionedValue) throws ProvisioningException {
-        if(provisionedValue == null ||
-                provisionedValue.isEmpty() ||
-                provisionedValue.length() > 2 && provisionedValue.charAt(0) == '$' && provisionedValue.charAt(1) == '{') {
-            return provisionedValue;
-        }
-        return toJava(toDmr(prop, provisionedValue));
-    }
-
-    private static ModelNode toDmr(Property prop, final String provisionedValue) throws ProvisioningException {
-        try {
-            return ModelNode.fromString(provisionedValue);
-        } catch (Exception e) {
-            final ArgumentValueCallbackHandler handler = new ArgumentValueCallbackHandler();
-            try {
-                StateParser.parse(provisionedValue, handler, ArgumentValueInitialState.INSTANCE);
-            } catch (CommandFormatException e1) {
-                throw new ProvisioningException("Failed to parse parameter " + prop.getName() + " '" + provisionedValue + "'", e1);
-            }
-            return handler.getResult();
-        }
-    }
-
-    private static final Object EMPTY_LIST_OR_OBJ = new Object();
-
-    private static Object toJava(ModelNode node) {
-        switch(node.getType()) {
-            case LIST: {
-                final List<ModelNode> list = node.asList();
-                if(list.isEmpty()) {
-                    return EMPTY_LIST_OR_OBJ;
-                }
-                final int size = list.size();
-                if(size == 1) {
-                    return Collections.singletonList(toJava(list.get(0)));
-                }
-                final List<Object> o = new ArrayList<>(size);
-                for(ModelNode item : list) {
-                    o.add(toJava(item));
-                }
-                return o;
-            }
-            case OBJECT: {
-                final List<Property> list = node.asPropertyList();
-                if(list.isEmpty()) {
-                    return EMPTY_LIST_OR_OBJ;
-                }
-                final int size = list.size();
-                if(size == 1) {
-                    final Property prop = list.get(0);
-                    return Collections.singletonMap(prop.getName(), toJava(prop.getValue()));
-                }
-                Map<String, Object> map = new HashMap<>(size);
-                for (Property prop : list) {
-                    map.put(prop.getName(), toJava(prop.getValue()));
-                }
-                return map;
-            }
-            case PROPERTY: {
-                final Property prop = node.asProperty();
-                return Collections.singletonMap(prop.getName(), toJava(prop.getValue()));
-            }
-            default: {
-                return node.asString();
-            }
-        }
     }
 }
