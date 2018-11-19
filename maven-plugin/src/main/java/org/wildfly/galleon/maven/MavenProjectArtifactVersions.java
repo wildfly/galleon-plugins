@@ -35,6 +35,8 @@ import org.apache.maven.project.MavenProject;
  */
 class MavenProjectArtifactVersions {
 
+    private static final String TEST_JAR = "test-jar";
+
     static MavenProjectArtifactVersions getInstance(MavenProject project) {
         return new MavenProjectArtifactVersions(project);
     }
@@ -43,10 +45,16 @@ class MavenProjectArtifactVersions {
 
     private MavenProjectArtifactVersions(MavenProject project) {
         for (Artifact artifact : project.getArtifacts()) {
+            if(TEST_JAR.equals(artifact.getType())) {
+                continue;
+            }
             put(artifact.getGroupId(), artifact.getArtifactId(), artifact.getClassifier(), artifact.getVersion(), artifact.getType());
         }
         if (project.getDependencyManagement() != null) {
             for (Dependency dependency : project.getDependencyManagement().getDependencies()) {
+                if(TEST_JAR.equals(dependency.getType())) {
+                    continue;
+                }
                 final String gac = gac(dependency.getGroupId(), dependency.getArtifactId(), dependency.getClassifier());
                 if (versions.containsKey(gac)) {
                     put(dependency.getGroupId(), dependency.getArtifactId(), dependency.getClassifier(), dependency.getVersion(), dependency.getType());
