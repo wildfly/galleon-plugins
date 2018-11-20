@@ -74,6 +74,7 @@ import org.jboss.galleon.config.ConfigId;
 import org.jboss.galleon.config.ConfigModel;
 import org.jboss.galleon.config.FeaturePackConfig;
 import org.jboss.galleon.config.ProvisioningConfig;
+import org.jboss.galleon.diff.FsDiff;
 import org.jboss.galleon.layout.ProvisioningLayoutFactory;
 import org.jboss.galleon.plugin.InstallPlugin;
 import org.jboss.galleon.plugin.ProvisioningPluginWithOptions;
@@ -143,6 +144,19 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
     public ProvisioningRuntime getRuntime() {
         return runtime;
+    }
+
+    @Override
+    public void preInstall(ProvisioningRuntime runtime) throws ProvisioningException {
+        final FsDiff fsDiff = runtime.getFsDiff();
+        if(fsDiff == null) {
+            return;
+        }
+        final String runningMode = fsDiff.getEntry("standalone/tmp/startup-marker") != null ? WfConstants.STANDALONE
+                : fsDiff.getEntry("domain/tmp/startup-marker") != null ? WfConstants.DOMAIN : null;
+        if (runningMode != null) {
+            throw new ProvisioningException("The server appears to be running (" + runningMode + " mode).");
+        }
     }
 
     /* (non-Javadoc)
