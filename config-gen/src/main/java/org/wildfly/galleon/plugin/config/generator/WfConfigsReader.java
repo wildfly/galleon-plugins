@@ -460,7 +460,7 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
         }
 
         if(log != null) {
-            log.print("Analyzing " + configId);
+            log.verbose("Reading config %s", configId);
         }
 
         ProvisionedConfigBuilder configBuilder = null;
