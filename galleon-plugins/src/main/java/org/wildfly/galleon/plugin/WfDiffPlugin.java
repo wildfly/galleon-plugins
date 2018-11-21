@@ -55,7 +55,7 @@ public class WfDiffPlugin implements StateDiffPlugin {
     public void diff(ProvisioningDiffProvider diffProvider) throws ProvisioningException {
 
         final MessageWriter log = diffProvider.getMessageWriter();
-        log.print("WildFly Diff Plugin");
+        log.print("WildFly State Diff Plugin (experimental)");
 
         final ProvisioningLayout<?> layout = diffProvider.getProvisioningLayout();
         final Path configGenJar = layout.getResource("wildfly/wildfly-config-gen.jar");
@@ -79,7 +79,7 @@ public class WfDiffPlugin implements StateDiffPlugin {
             throw new ProvisioningException("Failed to init classpath", e);
         }
         if(log.isVerboseEnabled()) {
-            log.verbose("Config diff generator classpath:");
+            log.verbose("Config reader classpath:");
             for(int i = 0; i < cp.length; ++i) {
                 log.verbose(i+1 + ". " + cp[i]);
             }
