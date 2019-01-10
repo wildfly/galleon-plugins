@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Red Hat, Inc. and/or its affiliates
+ * Copyright 2016-2019 Red Hat, Inc. and/or its affiliates
  * and other contributors as indicated by the @author tags.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -678,6 +678,11 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
                 } else if(pkgName.equals("bin")) {
                     final Path binStandalonePkgDir = packagesDir.resolve("bin.standalone").resolve(Constants.CONTENT).resolve(pkgName);
                     final Path binDomainPkgDir = packagesDir.resolve("bin.domain").resolve(Constants.CONTENT).resolve(pkgName);
+                    final Path binCommonPkgDir = packagesDir.resolve("bin.common").resolve(Constants.CONTENT).resolve(pkgName);
+                    final Path binAppClientPkgDir = packagesDir.resolve("bin.appclient").resolve(Constants.CONTENT).resolve(pkgName);
+                    final Path binWsToolsPkgDir = packagesDir.resolve("bin.wstools").resolve(Constants.CONTENT).resolve(pkgName);
+                    final Path binVaultToolsPkgDir = packagesDir.resolve("bin.vaulttools").resolve(Constants.CONTENT).resolve(pkgName);
+                    final Path toolsBinPkgDir = packagesDir.resolve("tools").resolve(Constants.CONTENT).resolve(pkgName);
                     try (DirectoryStream<Path> binStream = Files.newDirectoryStream(p)) {
                         for (Path binPath : binStream) {
                             final String fileName = binPath.getFileName().toString();
@@ -685,20 +690,44 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
                                 IoUtils.copy(binPath, binStandalonePkgDir.resolve(fileName));
                             } else if(fileName.startsWith(WfConstants.DOMAIN)) {
                                 IoUtils.copy(binPath, binDomainPkgDir.resolve(fileName));
-                            } else {
-                                IoUtils.copy(binPath, pkgContentDir.resolve(fileName));
+                            } else if(fileName.startsWith("common")) {
+                                IoUtils.copy(binPath, binCommonPkgDir.resolve(fileName));
+                            } else if(fileName.startsWith("appclient")) {
+                                IoUtils.copy(binPath, binAppClientPkgDir.resolve(fileName));
+                            } else if(fileName.startsWith("ws")) {
+                                IoUtils.copy(binPath, binWsToolsPkgDir.resolve(fileName));
+                            } else if(fileName.startsWith("vault")) {
+                                IoUtils.copy(binPath, binVaultToolsPkgDir.resolve(fileName));
+                            } else{
+                                IoUtils.copy(binPath, toolsBinPkgDir.resolve(fileName));
                             }
                         }
                     }
-
+                    if(Files.exists(binCommonPkgDir)) {
+                        ensureLineEndings(binCommonPkgDir);
+                        getExtendedPackage("bin.common", true);
+                    }
                     if(Files.exists(binStandalonePkgDir)) {
                         ensureLineEndings(binStandalonePkgDir);
-                        getExtendedPackage("bin.standalone", true).addPackageDep(pkgName);
+                        getExtendedPackage("bin.standalone", true).addPackageDep("bin.common");
                     }
                     if(Files.exists(binDomainPkgDir)) {
                         ensureLineEndings(binDomainPkgDir);
                         getExtendedPackage("bin.domain", true).addPackageDep(pkgName);
                     }
+                    if(Files.exists(binAppClientPkgDir)) {
+                        ensureLineEndings(binAppClientPkgDir);
+                        getExtendedPackage("bin.appclient", true).addPackageDep("bin.common");
+                    }
+                    if(Files.exists(binWsToolsPkgDir)) {
+                        ensureLineEndings(binWsToolsPkgDir);
+                        getExtendedPackage("bin.wstools", true).addPackageDep("bin.common");
+                    }
+                    if(Files.exists(binVaultToolsPkgDir)) {
+                        ensureLineEndings(binVaultToolsPkgDir);
+                        getExtendedPackage("bin.vaulttools", true).addPackageDep("bin.common");
+                    }
+                    pkgBuilder.addPackageDep("tools");
                 } else {
                     IoUtils.copy(p, pkgContentDir);
                 }
