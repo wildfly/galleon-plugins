@@ -332,7 +332,7 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
                 final FeaturePackDescription fpDepLayout = fpDep.getValue();
                 for(Map.Entry<String, PackageSpec.Builder> entry : extendedPackages.entrySet()) {
                     if(fpDepLayout.hasPackage(entry.getKey())) {
-                        entry.getValue().addPackageDep(fpDep.getKey(), entry.getKey());
+                        entry.getValue().addPackageDep(fpDep.getKey(), entry.getKey(), true);
                     }
                 }
             }
@@ -698,14 +698,22 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
                                 IoUtils.copy(binPath, binWsToolsPkgDir.resolve(fileName));
                             } else if(fileName.startsWith("vault")) {
                                 IoUtils.copy(binPath, binVaultToolsPkgDir.resolve(fileName));
-                            } else{
+                            } else {
                                 IoUtils.copy(binPath, toolsBinPkgDir.resolve(fileName));
                             }
                         }
                     }
+                    PackageSpec.Builder toolsBuilder = null;
+                    if(Files.exists(toolsBinPkgDir)) {
+                        pkgBuilder.addPackageDep("tools");
+                        toolsBuilder = getExtendedPackage("tools", true);
+                    }
                     if(Files.exists(binCommonPkgDir)) {
                         ensureLineEndings(binCommonPkgDir);
                         getExtendedPackage("bin.common", true);
+                        if(toolsBuilder != null) {
+                            toolsBuilder.addPackageDep(PackageDependencySpec.required("bin.common"));
+                        }
                     }
                     if(Files.exists(binStandalonePkgDir)) {
                         ensureLineEndings(binStandalonePkgDir);
@@ -718,16 +726,24 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
                     if(Files.exists(binAppClientPkgDir)) {
                         ensureLineEndings(binAppClientPkgDir);
                         getExtendedPackage("bin.appclient", true).addPackageDep("bin.common");
+                        if(toolsBuilder != null) {
+                            toolsBuilder.addPackageDep(PackageDependencySpec.optional("bin.appclient"));
+                        }
                     }
                     if(Files.exists(binWsToolsPkgDir)) {
                         ensureLineEndings(binWsToolsPkgDir);
                         getExtendedPackage("bin.wstools", true).addPackageDep("bin.common");
+                        if(toolsBuilder != null) {
+                            toolsBuilder.addPackageDep(PackageDependencySpec.optional("bin.wstools"));
+                        }
                     }
                     if(Files.exists(binVaultToolsPkgDir)) {
                         ensureLineEndings(binVaultToolsPkgDir);
                         getExtendedPackage("bin.vaulttools", true).addPackageDep("bin.common");
+                        if(toolsBuilder != null) {
+                            toolsBuilder.addPackageDep(PackageDependencySpec.optional("bin.vaulttools"));
+                        }
                     }
-                    pkgBuilder.addPackageDep("tools");
                 } else {
                     IoUtils.copy(p, pkgContentDir);
                 }
