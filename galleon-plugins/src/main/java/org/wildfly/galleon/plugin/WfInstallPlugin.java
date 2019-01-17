@@ -106,9 +106,16 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private static final String CONFIG_GEN_PATH = "wildfly/wildfly-config-gen.jar";
     private static final String CONFIG_GEN_CLASS = "org.wildfly.galleon.plugin.config.generator.WfConfigGenerator";
 
-    private static final ProvisioningOption OPTION_MVN_DIST = ProvisioningOption.builder("jboss-maven-dist").setBooleanValueSet().build();
+    private static final ProvisioningOption OPTION_MVN_DIST = ProvisioningOption.builder("jboss-maven-dist")
+            //.setBooleanValueSet() this method does not exist in 3.0.0.Final which at this moment used by WildFly Full
+            // once it upgrades to 3.0.1.CR1 this method can be used in favor of the one below this comment
+            .addToValueSet("true", "false")
+            .build();
     public static final ProvisioningOption OPTION_DUMP_CONFIG_SCRIPTS = ProvisioningOption.builder("jboss-dump-config-scripts").setPersistent(false).build();
-    private static final ProvisioningOption OPTION_FORK_EMBEDDED = ProvisioningOption.builder("jboss-fork-embedded").setBooleanValueSet().build();
+    private static final ProvisioningOption OPTION_FORK_EMBEDDED = ProvisioningOption.builder("jboss-fork-embedded")
+            //.setBooleanValueSet()
+            .addToValueSet("true", "false")
+            .build();
 
     private ProvisioningRuntime runtime;
     private MessageWriter log;
