@@ -24,7 +24,7 @@
   <parent>
     <groupId>org.wildfly.galleon-plugins</groupId>
     <artifactId>wildfly-provisioning-parent</artifactId>
-    <version>3.0.1.Final-SNAPSHOT</version>
+    <version>3.0.1.CR2</version>
   </parent>
 
   <artifactId>wildfly-galleon-plugins</artifactId>
