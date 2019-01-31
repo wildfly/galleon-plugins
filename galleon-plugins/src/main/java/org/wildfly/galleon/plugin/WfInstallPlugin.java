@@ -521,7 +521,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 @Override
                 public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs)
                     throws IOException {
-                    final Path targetDir = stagedDir.resolve(fpModuleDir.relativize(dir));
+                    final Path targetDir = stagedDir.resolve(fpModuleDir.relativize(dir).toString());
                     try {
                         Files.copy(dir, targetDir);
                     } catch (FileAlreadyExistsException e) {
@@ -544,7 +544,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                             }
                         }
                     } else {
-                        Files.copy(file, stagedDir.resolve(fpModuleDir.relativize(file)), StandardCopyOption.REPLACE_EXISTING);
+                        Files.copy(file, stagedDir.resolve(fpModuleDir.relativize(file).toString()), StandardCopyOption.REPLACE_EXISTING);
                     }
                     return FileVisitResult.CONTINUE;
                 }
@@ -556,7 +556,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
     private void processModuleTemplate(PackageRuntime pkg, Path moduleXmlRelativePath) throws ProvisioningException, IOException {
         final Path moduleTemplate = pkg.getResource(WfConstants.PM, WfConstants.WILDFLY, WfConstants.MODULE).resolve(moduleXmlRelativePath);
-        final Path targetPath = runtime.getStagedDir().resolve(moduleXmlRelativePath);
+        final Path targetPath = runtime.getStagedDir().resolve(moduleXmlRelativePath.toString());
 
         final Builder builder = new Builder(false);
         final Document document;
@@ -768,7 +768,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                         new SimpleFileVisitor<Path>() {
                             @Override
                             public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
-                                final Path targetDir = target.resolve(src.relativize(dir));
+                                final Path targetDir = target.resolve(src.relativize(dir).toString());
                                 try {
                                     Files.copy(dir, targetDir);
                                 } catch (FileAlreadyExistsException e) {
@@ -781,7 +781,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
                             @Override
                             public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-                                PropertyReplacer.copy(file, target.resolve(src.relativize(file)), mergedTaskPropsResolver);
+                                PropertyReplacer.copy(file, target.resolve(src.relativize(file).toString()), mergedTaskPropsResolver);
                                 return FileVisitResult.CONTINUE;
                             }
                         });

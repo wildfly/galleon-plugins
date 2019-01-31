@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Red Hat, Inc. and/or its affiliates
+ * Copyright 2016-2019 Red Hat, Inc. and/or its affiliates
  * and other contributors as indicated by the @author tags.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -93,13 +93,13 @@ public class FeatureSpecGeneratorInvoker {
 
     private static final String MODULES = "modules";
 
-    private static final Path MODULE_PATH_SEGMENT;
-    private static final Path TASKS_XML_PATH_END;
+    private static final String MODULE_PATH_SEGMENT;
+    private static final String TASKS_XML_PATH_END;
 
     static {
-        final Path pmWildFly = Paths.get(WfConstants.PM).resolve(WfConstants.WILDFLY);
-        MODULE_PATH_SEGMENT = pmWildFly.resolve(WfConstants.MODULE).resolve(MODULES);
-        TASKS_XML_PATH_END = pmWildFly.resolve(WfConstants.TASKS_XML);
+        final String pmWf = WfConstants.PM + File.separator + WfConstants.WILDFLY;
+        MODULE_PATH_SEGMENT = pmWf + File.separator + WfConstants.MODULE + File.separator + MODULES;
+        TASKS_XML_PATH_END = pmWf + File.separator + WfConstants.TASKS_XML;
     }
 
     private MavenProject project;
@@ -116,7 +116,7 @@ public class FeatureSpecGeneratorInvoker {
     private Path moduleTemplatesDir;
 
     private Map<String, Artifact> mergedArtifacts = new HashMap<>();
-    private Map<Path, Map<String, Artifact>> moduleTemplates = new HashMap<>();
+    private Map<String, Map<String, Artifact>> moduleTemplates = new HashMap<>();
 
     private Map<String, Path> inheritedFeatureSpecs = Collections.emptyMap();
     private Set<String> standaloneExtensions = Collections.emptySet();
@@ -223,7 +223,7 @@ public class FeatureSpecGeneratorInvoker {
         if(!moduleTemplates.isEmpty()) {
             final List<Artifact> hardcodedArtifacts = new ArrayList<>(); // this one includes also the hardcoded artifact versions into module.xml
             final Path targetModules = wildflyHome.resolve(MODULES);
-            for(Map.Entry<Path, Map<String, Artifact>> entry : moduleTemplates.entrySet()) {
+            for(Map.Entry<String, Map<String, Artifact>> entry : moduleTemplates.entrySet()) {
                 try {
                     ModuleXmlVersionResolver.convertModule(moduleTemplatesDir.resolve(entry.getKey()), targetModules.resolve(entry.getKey()), entry.getValue(), hardcodedArtifacts, log);
                 } catch (XMLStreamException e) {
@@ -468,7 +468,10 @@ public class FeatureSpecGeneratorInvoker {
             }
             try(DirectoryStream<Path> stream = Files.newDirectoryStream(p)) {
                 for(Path path : stream) {
-                    final String specName = path.getFileName().toString();
+                    String specName = path.getFileName().toString();
+                    if(specName.charAt(specName.length() - 1) == '/') {
+                        specName = specName.substring(0, specName.length() - 1);
+                    }
                     path = path.resolve(Constants.SPEC_XML);
                     if(!Files.exists(path)) {
                         continue;
@@ -596,7 +599,9 @@ public class FeatureSpecGeneratorInvoker {
                     @Override
                     public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs)
                         throws IOException {
-                        final Path targetDir = moduleTemplatesDir.resolve(source.relativize(dir));
+                        final String relativePath = source.relativize(dir).toString();
+                        final Path targetDir = moduleTemplatesDir.resolve(relativePath);
+                        Files.createDirectories(targetDir.getParent());
                         try {
                             Files.copy(dir, targetDir);
                         } catch (FileAlreadyExistsException e) {
@@ -610,11 +615,11 @@ public class FeatureSpecGeneratorInvoker {
                     public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
                         throws IOException {
                         if (WfConstants.MODULE_XML.equals(file.getFileName().toString())) {
-                            final Path relativePath = source.relativize(file);
+                            final String relativePath = source.relativize(file).toString();
                             moduleTemplates.put(relativePath, fpArtifacts);
                             Files.copy(file, moduleTemplatesDir.resolve(relativePath), StandardCopyOption.REPLACE_EXISTING);
                         } else {
-                            final Path target = wildflyHome.resolve(MODULES).resolve(source.relativize(file));
+                            final Path target = wildflyHome.resolve(MODULES).resolve(source.relativize(file).toString());
                             Files.createDirectories(target.getParent());
                             Files.copy(file, target);
                         }
