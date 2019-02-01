@@ -645,13 +645,12 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
                 }
             }
             final Path depZip = resolveArtifact(depCoords);
-            final FeaturePackLocation depFpl = FeaturePackDescriber.readSpec(depZip).getFPID().getLocation();
-
             final FeaturePackDependencySpec depSpec = depEntry.getValue();
             final FeaturePackConfig depConfig = depSpec.getTarget();
 
-            fpBuilder.addFeaturePackDep(depSpec.getName(), FeaturePackConfig.builder(depFpl).init(depConfig).build());
-            fpDependencies.put(depSpec.getName(), FeaturePackDescriber.describeFeaturePackZip(depZip));
+            final FeaturePackDescription fpDescr = FeaturePackDescriber.describeFeaturePackZip(depZip);
+            fpBuilder.addFeaturePackDep(depSpec.getName(), FeaturePackConfig.builder(fpDescr.getFPID().getLocation()).init(depConfig).build());
+            fpDependencies.put(depSpec.getName(), fpDescr);
         }
     }
 
