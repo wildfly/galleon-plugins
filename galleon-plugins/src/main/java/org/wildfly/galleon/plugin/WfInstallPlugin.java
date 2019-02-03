@@ -172,6 +172,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     @Override
     public void postInstall(ProvisioningRuntime runtime) throws ProvisioningException {
 
+        final long startTime = runtime.isLogTime() ? System.nanoTime() : -1;
         this.runtime = runtime;
         log = runtime.getMessageWriter();
         log.verbose("WildFly Galleon Installation Plugin");
@@ -267,6 +268,10 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         if(!exampleConfigs.isEmpty()) {
             provisionExampleConfigs();
         }
+
+        if(startTime > 0) {
+            log.print(Errors.tookTime("Overall WildFly Galleon Plugin", startTime));
+        }
     }
 
     private void mergeLayerConfs(ProvisioningRuntime runtime) throws ProvisioningException {
@@ -284,6 +289,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 .setInstallationHome(examplesTmp)
                 .setMessageWriter(log)
                 .setLayoutFactory(runtime.getLayout().getFactory())
+                .setRecordState(false)
                 .build();
 
         List<Path> configPaths = new ArrayList<>();
@@ -355,6 +361,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             return;
         }
 
+        final long startTime = runtime.isLogTime() ? System.nanoTime() : -1;
         final Path configGenJar = runtime.getResource(CONFIG_GEN_PATH);
         if(!Files.exists(configGenJar)) {
             throw new ProvisioningException(Errors.pathDoesNotExist(configGenJar));
@@ -393,6 +400,9 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 forkEmbedded = value == null ? true : Boolean.parseBoolean(value);
             }
             m.invoke(generator, runtime, forkEmbedded);
+            if(startTime > 0) {
+                log.print(Errors.tookTime("WildFly configuration generation", startTime));
+            }
         } catch(InvocationTargetException e) {
             final Throwable cause = e.getCause();
             if(cause instanceof ProvisioningException) {
@@ -569,7 +579,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         if (! rootElement.getLocalName().equals("module") &&
                 // module-alias files don't need to be processed
                 // the only reason their are parsed and serialized is to match the processing in the legacy build tools
-                // this fixes the difference in lineendings between the two builds
+                // this fixes the difference in line endings between the two builds
                 !rootElement.getLocalName().equals("module-alias")) {
             // just copy the content and leave
             Files.copy(moduleTemplate, targetPath, StandardCopyOption.REPLACE_EXISTING);
@@ -828,13 +838,10 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private static void mkdirs(final WildFlyPackageTasks tasks, Path installDir) throws ProvisioningException {
         // make dirs
         for (String dirName : tasks.getMkDirs()) {
-            final Path dir = installDir.resolve(dirName);
-            if(!Files.exists(dir)) {
-                try {
-                    Files.createDirectories(dir);
-                } catch (IOException e) {
-                    throw new ProvisioningException(Errors.mkdirs(dir));
-                }
+            try {
+                Files.createDirectories(installDir.resolve(dirName));
+            } catch (IOException e) {
+                throw new ProvisioningException(Errors.mkdirs(installDir.resolve(dirName)));
             }
         }
     }
