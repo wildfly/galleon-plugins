@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Red Hat, Inc. and/or its affiliates
+ * Copyright 2016-2019 Red Hat, Inc. and/or its affiliates
  * and other contributors as indicated by the @author tags.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,9 +16,7 @@
  */
 package org.wildfly.galleon.plugin;
 
-import java.util.HashMap;
 import java.util.Map;
-import java.util.Properties;
 
 /**
  * @author Stuart Douglas
@@ -29,13 +27,6 @@ public class MapPropertyResolver implements PropertyResolver {
 
     public MapPropertyResolver(Map<String, String> props) {
         this.props = props;
-    }
-
-    public MapPropertyResolver(Properties properties) {
-        this.props = new HashMap<>();
-        for(Map.Entry<Object, Object> p : properties.entrySet()) {
-            props.put(p.getKey().toString(), p.getValue() == null ? null: p.getValue().toString());
-        }
     }
 
     @Override
