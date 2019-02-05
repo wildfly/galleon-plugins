@@ -77,6 +77,7 @@ import org.jboss.galleon.config.FeaturePackConfig;
 import org.jboss.galleon.layout.FeaturePackDescriber;
 import org.jboss.galleon.layout.FeaturePackDescription;
 import org.jboss.galleon.maven.plugin.FpMavenErrors;
+import org.jboss.galleon.spec.FeaturePackPlugin;
 import org.jboss.galleon.spec.FeaturePackSpec;
 import org.jboss.galleon.spec.PackageDependencySpec;
 import org.jboss.galleon.spec.PackageSpec;
@@ -355,6 +356,10 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
             }
         }
 
+        if(buildConfig.hasPlugins()) {
+            addPlugins(fpBuilder.getSpecBuilder(), buildConfig.getPlugins());
+        }
+
         final FeaturePackDescription fpLayout;
         try {
             fpLayout = fpBuilder.build();
@@ -369,9 +374,6 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         final Path fpResourcesDir = fpDir.resolve(Constants.RESOURCES);
         final Path resourcesWildFly = fpResourcesDir.resolve(WfConstants.WILDFLY);
         mkdirs(resourcesWildFly);
-        if(buildConfig.hasPlugins()) {
-            addPlugins(fpDir, buildConfig.getPlugins());
-        }
         if(buildConfig.hasResourcesTasks()) {
             for(ResourcesTask task : buildConfig.getResourcesTasks()) {
                 task.execute(this, fpResourcesDir);
@@ -528,27 +530,28 @@ public class WfFeaturePackBuildMojo extends AbstractMojo {
         }
     }
 
-    private void addPlugins(final Path fpDir, List<String> artifacts) throws MojoExecutionException {
-        final Path pluginsDir = fpDir.resolve(Constants.PLUGINS);
-        mkdirs(pluginsDir);
-        for(String artifact : artifacts) {
-            ArtifactCoords coords = ArtifactCoordsUtil.fromJBossModules(artifact, "jar");
+    private void addPlugins(FeaturePackSpec.Builder fpBuilder, Map<String, ArtifactCoords> plugins) throws MojoExecutionException {
+        for(Map.Entry<String, ArtifactCoords> entry : plugins.entrySet()) {
+            ArtifactCoords coords = entry.getValue();
             if(coords.getVersion() == null) {
-                coords = ArtifactCoordsUtil.fromJBossModules(resolveVersion(artifact), "jar");
+                coords = ArtifactCoordsUtil.fromJBossModules(
+                        resolveVersion(coords.getGroupId() + ':' + coords.getArtifactId()), "jar");
             }
-            final Path wfPlugInPath;
             try {
-                wfPlugInPath = resolveArtifact(ArtifactCoords.newInstance(coords.getGroupId(),
+                resolveArtifact(ArtifactCoords.newInstance(coords.getGroupId(),
                         coords.getArtifactId(), coords.getVersion(), coords.getExtension()));
             } catch (ProvisioningException e) {
-                throw new MojoExecutionException("Failed to build feature-pack", e);
+                throw new MojoExecutionException("Failed to resolve feature-pack plugin " + coords, e);
             }
-            try {
-                IoUtils.copy(wfPlugInPath, pluginsDir.resolve(coords.getArtifactId() + '.' + coords.getExtension()));
-            } catch (IOException e) {
-                throw new MojoExecutionException(Errors.copyFile(wfPlugInPath,
-                        pluginsDir.resolve(coords.getArtifactId() + '.' + coords.getExtension())));
+            final StringBuilder buf = new StringBuilder(128);
+            buf.append(coords.getGroupId()).append(':')
+            .append(coords.getArtifactId()).append(':');
+            final String classifier = coords.getClassifier();
+            if(classifier != null && !classifier.isEmpty()) {
+                buf.append(classifier).append(':');
             }
+            buf.append(coords.getExtension()).append(':').append(coords.getVersion());
+            fpBuilder.addPlugin(FeaturePackPlugin.getInstance(entry.getKey(), buf.toString()));
         }
     }
 
