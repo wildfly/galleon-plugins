@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Red Hat, Inc. and/or its affiliates
+ * Copyright 2016-2019 Red Hat, Inc. and/or its affiliates
  * and other contributors as indicated by the @author tags.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,6 +28,7 @@ import org.jboss.galleon.spec.CapabilitySpec;
 import org.jboss.galleon.universe.FeaturePackLocation;
 import org.jboss.galleon.util.CollectionUtils;
 import org.wildfly.galleon.maven.build.tasks.ResourcesTask;
+import org.wildfly.galleon.plugin.ArtifactCoords;
 import org.wildfly.galleon.plugin.ArtifactCoords.Gav;
 
 /**
@@ -46,7 +47,7 @@ public class WildFlyFeaturePackBuild {
         private Set<String> defaultPackages = Collections.emptySet();
         private List<ConfigModel> configs = Collections.emptyList();
         private boolean includePlugin = true;
-        private List<String> plugins = Collections.emptyList();
+        private Map<String, ArtifactCoords> plugins = Collections.emptyMap();
         private List<ResourcesTask> resourcesTasks = Collections.emptyList();
         private List<String> standaloneExtensions = Collections.emptyList();
         private List<String> domainExtensions = Collections.emptyList();
@@ -85,8 +86,8 @@ public class WildFlyFeaturePackBuild {
             return this;
         }
 
-        public Builder addPlugin(String coords) {
-            this.plugins = CollectionUtils.add(plugins, coords);
+        public Builder addPlugin(String id, ArtifactCoords coords) {
+            this.plugins = CollectionUtils.put(plugins, id, coords);
             return this;
         }
 
@@ -129,7 +130,7 @@ public class WildFlyFeaturePackBuild {
     private final Set<String> defaultPackages;
     private final List<ConfigModel> configs;
     private final boolean includePlugin;
-    private final List<String> plugins;
+    private final Map<String, ArtifactCoords> plugins;
     private final List<ResourcesTask> resourcesTasks;
     private final List<String> standaloneExtensions;
     private final List<String> domainExtensions;
@@ -189,7 +190,7 @@ public class WildFlyFeaturePackBuild {
         return !plugins.isEmpty();
     }
 
-    public List<String> getPlugins() {
+    public Map<String, ArtifactCoords> getPlugins() {
         return plugins;
     }
 

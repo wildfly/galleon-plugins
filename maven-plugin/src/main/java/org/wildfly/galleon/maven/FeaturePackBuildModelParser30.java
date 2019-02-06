@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Red Hat, Inc. and/or its affiliates
+ * Copyright 2016-2019 Red Hat, Inc. and/or its affiliates
  * and other contributors as indicated by the @author tags.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -145,6 +145,7 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
         ARTIFACT("artifact"),
         ARTIFACT_ID("artifact-id"),
         GROUP_ID("group-id"),
+        ID("id"),
         NAME("name"),
         PRODUCER("producer"),
         TO("to"),
@@ -156,10 +157,11 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
         private static final Map<QName, Attribute> attributes;
 
         static {
-            Map<QName, Attribute> attributesMap = new HashMap<>(7);
+            Map<QName, Attribute> attributesMap = new HashMap<>(8);
             attributesMap.put(new QName(ARTIFACT.getLocalName()), ARTIFACT);
             attributesMap.put(new QName(ARTIFACT_ID.getLocalName()), ARTIFACT_ID);
             attributesMap.put(new QName(GROUP_ID.getLocalName()), GROUP_ID);
+            attributesMap.put(new QName(ID.getLocalName()), ID);
             attributesMap.put(new QName(NAME.getLocalName()), NAME);
             attributesMap.put(new QName(PRODUCER.getLocalName()), PRODUCER);
             attributesMap.put(new QName(TO.getLocalName()), TO);
@@ -476,7 +478,7 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
                     final Element element = Element.of(reader.getName());
                     switch (element) {
                         case PLUGIN:
-                            builder.addPlugin(parsePlugin(reader));
+                            parsePlugin(reader, builder);
                             break;
                         default:
                             throw ParsingUtils.unexpectedContent(reader);
@@ -491,24 +493,31 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
         throw ParsingUtils.endOfDocument(reader.getLocation());
     }
 
-    private static String parsePlugin(XMLExtendedStreamReader reader) throws XMLStreamException {
-        String artifact = null;
+    private static void parsePlugin(XMLExtendedStreamReader reader, WildFlyFeaturePackBuild.Builder builder) throws XMLStreamException {
+        String id = null;
+        ArtifactCoords coords = null;
         final int count = reader.getAttributeCount();
         for (int i = 0; i < count; i++) {
             final Attribute attribute = Attribute.of(reader.getAttributeName(i));
             switch (attribute) {
+                case ID:
+                    id = reader.getAttributeValue(i);
+                    break;
                 case ARTIFACT:
-                    artifact = reader.getAttributeValue(i);
+                    coords = ArtifactCoordsUtil.fromJBossModules(reader.getAttributeValue(i), "jar");
                     break;
                 default:
                     throw ParsingUtils.unexpectedContent(reader);
             }
         }
         ParsingUtils.parseNoContent(reader);
-        if(artifact == null) {
+        if(coords == null) {
             throw new XMLStreamException(ParsingUtils.missingAttributes(reader.getLocation(), Collections.singleton(Attribute.ARTIFACT)));
         }
-        return artifact;
+        if(id == null) {
+            id = coords.getArtifactId();
+        }
+        builder.addPlugin(id, coords);
     }
 
     private static void parseResources(final XMLExtendedStreamReader reader, final WildFlyFeaturePackBuild.Builder builder) throws XMLStreamException {
