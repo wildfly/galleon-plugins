@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Red Hat, Inc. and/or its affiliates
+ * Copyright 2016-2019 Red Hat, Inc. and/or its affiliates
  * and other contributors as indicated by the @author tags.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,7 +23,7 @@ import org.jboss.galleon.universe.galleon1.LegacyGalleon1Universe;
 import org.jboss.galleon.util.ParsingUtils;
 import org.jboss.galleon.xml.ConfigXml;
 import org.jboss.galleon.xml.FeaturePackPackagesConfigParser10;
-import org.jboss.galleon.xml.ProvisioningXmlParser10;
+import org.jboss.galleon.xml.ProvisioningXmlParser30;
 import org.jboss.galleon.xml.XmlNameProvider;
 import org.jboss.staxmapper.XMLElementReader;
 import org.jboss.staxmapper.XMLExtendedStreamReader;
@@ -71,7 +71,7 @@ class FeaturePackBuildModelParser20 implements XMLElementReader<WildFlyFeaturePa
         private static final Map<QName, Element> elements;
 
         static {
-            Map<QName, Element> elementsMap = new HashMap<QName, Element>(11);
+            Map<QName, Element> elementsMap = new HashMap<>(11);
             elementsMap.put(new QName(NAMESPACE_2_0, Element.BUILD.getLocalName()), Element.BUILD);
             elementsMap.put(new QName(NAMESPACE_2_0, Element.CONFIG.getLocalName()), Element.CONFIG);
             elementsMap.put(new QName(NAMESPACE_2_0, Element.DEFAULT_CONFIGS.getLocalName()), Element.DEFAULT_CONFIGS);
@@ -126,7 +126,7 @@ class FeaturePackBuildModelParser20 implements XMLElementReader<WildFlyFeaturePa
         private static final Map<QName, Attribute> attributes;
 
         static {
-            Map<QName, Attribute> attributesMap = new HashMap<QName, Attribute>(4);
+            Map<QName, Attribute> attributesMap = new HashMap<>(4);
             attributesMap.put(new QName(ARTIFACT_ID.getLocalName()), ARTIFACT_ID);
             attributesMap.put(new QName(GROUP_ID.getLocalName()), GROUP_ID);
             attributesMap.put(new QName(NAME.getLocalName()), NAME);
@@ -306,7 +306,7 @@ class FeaturePackBuildModelParser20 implements XMLElementReader<WildFlyFeaturePa
                             depName = reader.getElementText().trim();
                             break;
                         case DEFAULT_CONFIGS:
-                            ProvisioningXmlParser10.parseDefaultConfigs(reader, depBuilder);
+                            ProvisioningXmlParser30.parseDefaultConfigs(reader, depBuilder);
                             break;
                         case CONFIG:
                             final ConfigModel.Builder configBuilder = ConfigModel.builder();
