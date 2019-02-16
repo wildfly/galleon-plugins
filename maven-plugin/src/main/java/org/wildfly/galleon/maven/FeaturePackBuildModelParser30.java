@@ -24,7 +24,7 @@ import org.jboss.galleon.universe.galleon1.LegacyGalleon1Universe;
 import org.jboss.galleon.util.ParsingUtils;
 import org.jboss.galleon.xml.ConfigXml;
 import org.jboss.galleon.xml.FeaturePackPackagesConfigParser10;
-import org.jboss.galleon.xml.ProvisioningXmlParser10;
+import org.jboss.galleon.xml.ProvisioningXmlParser30;
 import org.jboss.galleon.xml.XmlNameProvider;
 import org.jboss.staxmapper.XMLElementReader;
 import org.jboss.staxmapper.XMLExtendedStreamReader;
@@ -363,7 +363,7 @@ class FeaturePackBuildModelParser30 implements XMLElementReader<WildFlyFeaturePa
                             depName = reader.getElementText().trim();
                             break;
                         case DEFAULT_CONFIGS:
-                            ProvisioningXmlParser10.parseDefaultConfigs(reader, depBuilder);
+                            ProvisioningXmlParser30.parseDefaultConfigs(reader, depBuilder);
                             break;
                         case CONFIG:
                             final ConfigModel.Builder configBuilder = ConfigModel.builder();
