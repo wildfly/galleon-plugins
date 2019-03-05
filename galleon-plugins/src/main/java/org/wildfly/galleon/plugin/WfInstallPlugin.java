@@ -524,6 +524,9 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private void processModules(PackageRuntime pkg, Path fpModuleDir) throws ProvisioningException {
         try {
             final Path stagedDir = runtime.getStagedDir();
+            if(!Files.exists(stagedDir)) {
+                Files.createDirectories(stagedDir);
+            }
             Files.walkFileTree(fpModuleDir, new SimpleFileVisitor<Path>() {
                 @Override
                 public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs)
