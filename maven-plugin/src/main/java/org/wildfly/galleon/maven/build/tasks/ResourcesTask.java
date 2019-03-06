@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Red Hat, Inc. and/or its affiliates
+ * Copyright 2016-2019 Red Hat, Inc. and/or its affiliates
  * and other contributors as indicated by the @author tags.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +20,7 @@ package org.wildfly.galleon.maven.build.tasks;
 import java.nio.file.Path;
 
 import org.apache.maven.plugin.MojoExecutionException;
-import org.wildfly.galleon.maven.WfFeaturePackBuildMojo;
+import org.wildfly.galleon.maven.AbstractFeaturePackBuildMojo;
 
 /**
  *
@@ -28,5 +28,5 @@ import org.wildfly.galleon.maven.WfFeaturePackBuildMojo;
  */
 public interface ResourcesTask {
 
-    void execute(WfFeaturePackBuildMojo builder, Path resourcesDir) throws MojoExecutionException;
+    void execute(AbstractFeaturePackBuildMojo builder, Path resourcesDir) throws MojoExecutionException;
 }

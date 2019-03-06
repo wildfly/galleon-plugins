@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Red Hat, Inc. and/or its affiliates
+ * Copyright 2016-2019 Red Hat, Inc. and/or its affiliates
  * and other contributors as indicated by the @author tags.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -36,6 +36,7 @@ import org.apache.maven.project.MavenProject;
 class MavenProjectArtifactVersions {
 
     private static final String TEST_JAR = "test-jar";
+    private static final String SYSTEM = "system";
 
     static MavenProjectArtifactVersions getInstance(MavenProject project) {
         return new MavenProjectArtifactVersions(project);
@@ -45,7 +46,7 @@ class MavenProjectArtifactVersions {
 
     private MavenProjectArtifactVersions(MavenProject project) {
         for (Artifact artifact : project.getArtifacts()) {
-            if(TEST_JAR.equals(artifact.getType())) {
+            if (TEST_JAR.equals(artifact.getType()) || SYSTEM.equals(artifact.getScope())) {
                 continue;
             }
             put(artifact.getGroupId(), artifact.getArtifactId(), artifact.getClassifier(), artifact.getVersion(), artifact.getType());
