@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Red Hat, Inc. and/or its affiliates
+ * Copyright 2016-2019 Red Hat, Inc. and/or its affiliates
  * and other contributors as indicated by the @author tags.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,6 +27,7 @@ public interface WfConstants {
     String WF_CONFIG_GEN = "wildfly-config-gen";
     String WF_GALLEON_PLUGINS = "wildfly-galleon-plugins";
 
+    String ALL_ARTIFACTS_PROPS = "all-artifacts.properties";
     String ARTIFACT_VERSIONS_PROPS = "artifact-versions.properties";
     String BASE = "base";
     String CONFIG = "config";

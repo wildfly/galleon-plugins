@@ -22,18 +22,25 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.Reader;
 import java.nio.file.DirectoryStream;
+import java.nio.file.FileVisitOption;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.TreeMap;
 import javax.xml.stream.XMLStreamException;
 import nu.xom.ParsingException;
+import org.apache.maven.artifact.Artifact;
 
 import org.apache.maven.artifact.DefaultArtifact;
 import org.apache.maven.artifact.handler.DefaultArtifactHandler;
@@ -58,13 +65,21 @@ import org.jboss.galleon.ProvisioningDescriptionException;
 import org.jboss.galleon.ProvisioningException;
 import org.jboss.galleon.config.ConfigModel;
 import org.jboss.galleon.config.FeaturePackConfig;
+import org.jboss.galleon.config.ProvisioningConfig;
 import org.jboss.galleon.layout.FeaturePackDescriber;
 import org.jboss.galleon.layout.FeaturePackDescription;
+import org.jboss.galleon.layout.FeaturePackLayout;
+import org.jboss.galleon.layout.ProvisioningLayout;
+import org.jboss.galleon.layout.ProvisioningLayoutFactory;
 import org.jboss.galleon.maven.plugin.FpMavenErrors;
+import org.jboss.galleon.maven.plugin.util.MavenArtifactRepositoryManager;
 import org.jboss.galleon.spec.FeaturePackPlugin;
 import org.jboss.galleon.spec.FeaturePackSpec;
 import org.jboss.galleon.spec.PackageDependencySpec;
 import org.jboss.galleon.spec.PackageSpec;
+import org.jboss.galleon.universe.FeaturePackLocation;
+import org.jboss.galleon.universe.UniverseFactoryLoader;
+import org.jboss.galleon.universe.UniverseResolver;
 import org.jboss.galleon.util.CollectionUtils;
 import org.jboss.galleon.util.IoUtils;
 import org.jboss.galleon.util.StringUtils;
@@ -72,26 +87,30 @@ import org.jboss.galleon.util.ZipUtils;
 import org.jboss.galleon.xml.FeaturePackXmlWriter;
 import org.jboss.galleon.xml.PackageXmlParser;
 import org.jboss.galleon.xml.PackageXmlWriter;
+import static org.wildfly.galleon.maven.FeatureSpecGeneratorInvoker.MODULE_PATH_SEGMENT;
 import static org.wildfly.galleon.maven.Util.mkdirs;
 import org.wildfly.galleon.maven.build.tasks.ResourcesTask;
 import org.wildfly.galleon.plugin.ArtifactCoords;
+import org.wildfly.galleon.plugin.Utils;
 import org.wildfly.galleon.plugin.WfConstants;
 
 /**
- * This Maven mojo creates a WildFly style feature-pack archive from the provided resources according to the
- * feature-pack build configuration file and attaches it to the current Maven project as an artifact.
+ * This Maven mojo creates a WildFly style feature-pack archive from the
+ * provided resources according to the feature-pack build configuration file and
+ * attaches it to the current Maven project as an artifact.
  *
- * The content of the future feature-pack archive is first created in the directory called `layout` under the module's
- * build directory which is then ZIPped to create the feature-pack artifact.
+ * The content of the future feature-pack archive is first created in the
+ * directory called `layout` under the module's build directory which is then
+ * ZIPped to create the feature-pack artifact.
  *
  * @author Alexey Loubyansky
  */
 public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
 
     static boolean isProvided(String module) {
-        return module.startsWith("java.") ||
-                module.startsWith("jdk.") ||
-                module.equals("org.jboss.modules");
+        return module.startsWith("java.")
+                || module.startsWith("jdk.")
+                || module.equals("org.jboss.modules");
     }
 
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
@@ -100,7 +119,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     @Parameter(defaultValue = "${session}", readonly = true, required = true)
     protected MavenSession session;
 
-    @Parameter( defaultValue = "${project.remoteProjectRepositories}", readonly = true, required = true )
+    @Parameter(defaultValue = "${project.remoteProjectRepositories}", readonly = true, required = true)
     protected List<RemoteRepository> repositories;
 
     /**
@@ -154,7 +173,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         try {
             artifactVersions = MavenProjectArtifactVersions.getInstance(project);
             doExecute();
-        } catch(RuntimeException | Error | MojoExecutionException | MojoFailureException e) {
+        } catch (RuntimeException | Error | MojoExecutionException | MojoFailureException e) {
             throw e;
         }
     }
@@ -202,15 +221,15 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
 
     public String resolveVersion(final String coordsWoVersion) throws MojoExecutionException {
         final String resolved = artifactVersions.getVersion(coordsWoVersion);
-        if(resolved == null) {
+        if (resolved == null) {
             throw new MojoExecutionException("The project is missing dependency on " + coordsWoVersion);
         }
         return resolved;
     }
 
     protected void buildFeaturePack(FeaturePackDescription.Builder fpBuilder, WildFlyFeaturePackBuild buildConfig) throws MojoExecutionException {
-        if(buildConfig.hasConfigs()) {
-            for(ConfigModel config : buildConfig.getConfigs()) {
+        if (buildConfig.hasConfigs()) {
+            for (ConfigModel config : buildConfig.getConfigs()) {
                 try {
                     fpBuilder.getSpecBuilder().addConfig(config);
                 } catch (ProvisioningDescriptionException e) {
@@ -219,7 +238,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             }
         }
 
-        if(buildConfig.hasPlugins()) {
+        if (buildConfig.hasPlugins()) {
             addPlugins(fpBuilder.getSpecBuilder(), buildConfig.getPlugins());
         }
 
@@ -246,6 +265,8 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         } catch (IOException e) {
             throw new MojoExecutionException("Failed to store artifact versions", e);
         }
+
+        buildAllArtifacts(buildConfig, resourcesWildFly.resolve(WfConstants.ALL_ARTIFACTS_PROPS));
 
         addConfigPackages(resourcesDir.resolve(Constants.PACKAGES), fpDir.resolve(Constants.PACKAGES), fpBuilder);
         Util.copyIfExists(resourcesDir, fpDir, Constants.LAYERS);
@@ -375,9 +396,9 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     }
 
     private void addPlugins(FeaturePackSpec.Builder fpBuilder, Map<String, ArtifactCoords> plugins) throws MojoExecutionException {
-        for(Map.Entry<String, ArtifactCoords> entry : plugins.entrySet()) {
+        for (Map.Entry<String, ArtifactCoords> entry : plugins.entrySet()) {
             ArtifactCoords coords = entry.getValue();
-            if(coords.getVersion() == null) {
+            if (coords.getVersion() == null) {
                 coords = ArtifactCoordsUtil.fromJBossModules(
                         resolveVersion(coords.getGroupId() + ':' + coords.getArtifactId()), "jar");
             }
@@ -389,9 +410,9 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             }
             final StringBuilder buf = new StringBuilder(128);
             buf.append(coords.getGroupId()).append(':')
-            .append(coords.getArtifactId()).append(':');
+                    .append(coords.getArtifactId()).append(':');
             final String classifier = coords.getClassifier();
-            if(classifier != null && !classifier.isEmpty()) {
+            if (classifier != null && !classifier.isEmpty()) {
                 buf.append(classifier).append(':');
             }
             buf.append(coords.getExtension()).append(':').append(coords.getVersion());
@@ -413,7 +434,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                     throw new MojoExecutionException("Failed resolve artifact version for " + depCoords);
                 }
                 depCoords = ArtifactCoordsUtil.fromJBossModules(coordsStr, "zip");
-                if(depCoords.getExtension().equals("pom")) {
+                if (depCoords.getExtension().equals("pom")) {
                     depCoords = new ArtifactCoords(depCoords.getGroupId(), depCoords.getArtifactId(), depCoords.getVersion(), depCoords.getClassifier(), "zip");
                 }
             }
@@ -544,6 +565,159 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     protected void debug(String msg, Object... args) {
         if (getLog().isDebugEnabled()) {
             getLog().debug(String.format(msg, args));
+        }
+    }
+
+    private void buildAllArtifacts(WildFlyFeaturePackBuild buildConfig, Path target) throws MojoExecutionException {
+        try {
+            final MavenProjectArtifactVersions projectArtifacts = MavenProjectArtifactVersions.getInstance(project);
+            Map<String, String> allArtifacts = new TreeMap<>();
+            processFeaturePackDeps(buildConfig, projectArtifacts, allArtifacts);
+            addHardCodedArtifacts(allArtifacts);
+            allArtifacts.putAll(projectArtifacts.getArtifacts());
+            MavenProjectArtifactVersions.store(allArtifacts, target);
+        } catch (IOException | ProvisioningDescriptionException ex) {
+            throw new MojoExecutionException(ex.getMessage(), ex);
+        }
+    }
+
+    private void processFeaturePackDeps(WildFlyFeaturePackBuild buildConfig, MavenProjectArtifactVersions allArtifacts, Map<String, String> all)
+            throws MojoExecutionException, IOException, ProvisioningDescriptionException {
+        final Map<ArtifactCoords.Gav, FeaturePackDependencySpec> fpDeps = buildConfig.getDependencies();
+        if (fpDeps.isEmpty()) {
+            return;
+        }
+        ProvisioningLayout<FeaturePackLayout> layout = createLayout(buildConfig, allArtifacts);
+        try {
+            for (FeaturePackLayout fp : layout.getOrderedFeaturePacks()) {
+                Path allFile = fp.getResource("wildfly/" + WfConstants.ARTIFACT_VERSIONS_PROPS);
+                if (Files.exists(allFile)) {
+                    final Map<String, String> props;
+                    try {
+                        props = Utils.readProperties(allFile);
+                    } catch (ProvisioningException e) {
+                        throw new MojoExecutionException("Failed to read all artifacts file " + allFile + " from " + fp.getFPID(), e);
+                    }
+                    all.putAll(props);
+                }
+            }
+        } finally {
+            layout.close();
+            layout.getFactory().close();
+        }
+    }
+
+    private void addHardCodedArtifacts(Map<String, String> all) throws IOException {
+        Path packages = resourcesDir.resolve(Constants.PACKAGES);
+        if (Files.exists(packages)) {
+            processPackages(fpDir, all);
+        }
+        final Path projectModules = resourcesDir.resolve(WfConstants.MODULES);
+        if (Files.exists(projectModules)) {
+            addHardCodedArtifacts(projectModules, all);
+        }
+    }
+
+    private void processPackages(Path fpDirectory, Map<String, String> all) throws IOException {
+        Files.walkFileTree(fpDirectory, new SimpleFileVisitor<Path>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+                if (dir.endsWith(MODULE_PATH_SEGMENT)) {
+                    addHardCodedArtifacts(dir, all);
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
+                return FileVisitResult.CONTINUE;
+            }
+        });
+    }
+
+    private void addHardCodedArtifacts(final Path source, Map<String, String> all) throws IOException {
+        Files.walkFileTree(source, EnumSet.of(FileVisitOption.FOLLOW_LINKS), Integer.MAX_VALUE,
+                new SimpleFileVisitor<Path>() {
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
+                    throws IOException {
+                if (WfConstants.MODULE_XML.equals(file.getFileName().toString())) {
+                    try {
+                        ModuleXmlVersionResolver.addHardCodedArtifacts(file, all);
+                    } catch (XMLStreamException ex) {
+                        throw new IOException("Error while reading " + file, ex);
+                    }
+                }
+
+                return FileVisitResult.CONTINUE;
+            }
+        });
+    }
+
+    private ProvisioningLayout<FeaturePackLayout> createLayout(WildFlyFeaturePackBuild buildConfig, MavenProjectArtifactVersions artifactVersions) throws MojoExecutionException {
+
+        final MavenArtifactRepositoryManager mvnRepo = new MavenArtifactRepositoryManager(repoSystem, session.getRepositorySession(), repositories);
+        final UniverseFactoryLoader ufl = UniverseFactoryLoader.getInstance().addArtifactResolver(mvnRepo);
+
+        try {
+            ProvisioningLayoutFactory layoutFactory = ProvisioningLayoutFactory.getInstance(UniverseResolver.builder(ufl).build());
+            final ProvisioningConfig.Builder configBuilder = ProvisioningConfig.builder();
+            for (Map.Entry<ArtifactCoords.Gav, FeaturePackDependencySpec> entry : buildConfig.getDependencies().entrySet()) {
+                ArtifactCoords depCoords = entry.getKey().toArtifactCoords();
+                String ext = "zip";
+                if (depCoords.getVersion() == null) {
+                    final String coordsStr = artifactVersions
+                            .getVersion(depCoords.getGroupId() + ':' + depCoords.getArtifactId());
+                    if (coordsStr == null) {
+                        throw new MojoExecutionException("Failed resolve artifact version for " + depCoords);
+                    }
+                    depCoords = ArtifactCoordsUtil.fromJBossModules(coordsStr, ext);
+                    if (!depCoords.getExtension().equals("pom")) {
+                        ext = depCoords.getExtension();
+                    }
+                }
+                final ArtifactItem artifact = new ArtifactItem();
+                artifact.setGroupId(depCoords.getGroupId());
+                artifact.setArtifactId(depCoords.getArtifactId());
+                artifact.setVersion(depCoords.getVersion());
+                artifact.setType(ext);
+                final Artifact resolved = findArtifact(artifact);
+                if (resolved == null) {
+                    throw new MojoExecutionException("Failed to resolve feature-pack artifact " + artifact);
+                }
+                final Path p = resolved.getFile().toPath();
+                if (p == null) {
+                    throw new MojoExecutionException("Failed to resolve feature-pack artifact path " + artifact);
+                }
+                final FeaturePackLocation fpl = layoutFactory.addLocal(p, false);
+                final FeaturePackConfig depConfig = entry.getValue().getTarget();
+                configBuilder.addFeaturePackDep(
+                        depConfig.isTransitive() ? FeaturePackConfig.transitiveBuilder(fpl).init(depConfig).build()
+                                : FeaturePackConfig.builder(fpl).init(depConfig).build());
+            }
+            return layoutFactory.newConfigLayout(configBuilder.build());
+        } catch (ProvisioningException e) {
+            throw new MojoExecutionException("Failed to initialize provisioning layout for the feature-pack dependencies", e);
+        }
+    }
+
+    private Artifact findArtifact(ArtifactItem artifact) throws MojoExecutionException {
+        resolveVersion(artifact);
+        try {
+            ProjectBuildingRequest buildingRequest
+                    = new DefaultProjectBuildingRequest(session.getProjectBuildingRequest());
+            buildingRequest.setLocalRepository(session.getLocalRepository());
+            buildingRequest.setRemoteRepositories(project.getRemoteArtifactRepositories());
+            debug("Resolving artifact %s:%s:%s", artifact.getGroupId(), artifact.getArtifactId(), artifact.getVersion());
+            final ArtifactResult result = artifactResolver.resolveArtifact(buildingRequest, artifact);
+            return result == null ? null : result.getArtifact();
+        } catch (ArtifactResolverException e) {
+            throw new MojoExecutionException("Couldn't resolve artifact: " + e.getMessage(), e);
+        }
+    }
+
+    private void resolveVersion(ArtifactItem artifact) {
+        if (artifact.getVersion() == null) {
+            Artifact managedArtifact = this.project.getManagedVersionMap().get(artifact.getGroupId() + ':' + artifact.getArtifactId() + ':' + artifact.getType());
+            if (managedArtifact != null) {
+                artifact.setVersion(managedArtifact.getVersion());
+            }
         }
     }
 }

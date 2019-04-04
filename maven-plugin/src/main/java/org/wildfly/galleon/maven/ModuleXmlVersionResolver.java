@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Red Hat, Inc. and/or its affiliates
+ * Copyright 2016-2019 Red Hat, Inc. and/or its affiliates
  * and other contributors as indicated by the @author tags.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -178,5 +178,42 @@ public class ModuleXmlVersionResolver {
             }
         }
         return artifactCoords;
+    }
+
+    public static void addHardCodedArtifacts(final Path file,  Map<String, String> hardcodedArtifacts) throws IOException, XMLStreamException {
+        try (Reader is = Files.newBufferedReader(file, Charsets.UTF_8)) {
+            addHardCodedArtifacts(getXmlInputFactory().createXMLEventReader(is), hardcodedArtifacts);
+        }
+    }
+
+    private static void addHardCodedArtifacts(final XMLEventReader r,  Map<String, String> hardcodedArtifacts) throws IOException, XMLStreamException {
+        while (r.hasNext()) {
+            XMLEvent event = r.nextEvent();
+            switch (event.getEventType()) {
+                case XMLStreamConstants.START_ELEMENT:
+                    StartElement startElement = event.asStartElement();
+                    if ("artifact".equals(startElement.getName().getLocalPart())) {
+                        addHardCodedArtifacts(startElement, hardcodedArtifacts);
+                    }
+                    break;
+            }
+        }
+    }
+
+    private static void addHardCodedArtifacts(StartElement artifactElement, Map<String, String> hardcodedArtifacts) {
+        Iterator<?> iter = artifactElement.getAttributes();
+        while (iter.hasNext()) {
+            Attribute attribute = (Attribute) iter.next();
+            if ("name".equals(attribute.getName().getLocalPart())) {
+                String artifactName = attribute.getValue();
+                String artifactCoords = getArtifactCoordinates(artifactName);
+                if (artifactCoords == null) {
+                    final ArtifactCoords coords = ArtifactCoords.fromString(artifactName);
+                    MavenProjectArtifactVersions.put(hardcodedArtifacts, coords.getGroupId(),
+                            coords.getArtifactId(),  coords.getClassifier(), coords.getVersion(),
+                            coords.getExtension());
+                }
+            }
+        }
     }
 }
