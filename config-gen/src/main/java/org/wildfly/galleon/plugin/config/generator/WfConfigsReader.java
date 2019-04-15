@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Red Hat, Inc. and/or its affiliates
+ * Copyright 2016-2019 Red Hat, Inc. and/or its affiliates
  * and other contributors as indicated by the @author tags.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -283,7 +283,6 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
     private ConfigId configId;
     private List<ProvisionedConfig> updatedConfigs = Collections.emptyList();
     private List<ProvisionedConfig> addedConfigs = Collections.emptyList();
-
     @Override
     protected String getHome(ProvisioningRuntime runtime) {
         return home.toString();
@@ -307,7 +306,7 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
     @Override
     protected String[] getForkArgs() throws ProvisioningException {
         final String[] superArgs = super.getForkArgs();
-        int i = superArgs.length + 3;
+        int i = superArgs.length + 2;
         final String[] args = new String[i];
         System.arraycopy(superArgs, 0, args, 0, superArgs.length);
         final Path workDir = layout.getTmpPath("forked-wf-diff");
@@ -318,7 +317,6 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
             throw new ProvisioningException("Failed to persist provisioning config", e);
         }
         args[--i] = configXml.toString();
-        args[--i] = layout.getFactory().getHome().toString();
         args[--i] = workDir.resolve("configs").toAbsolutePath().toString();
         return args;
     }
@@ -328,8 +326,7 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
         int i = args.length;
         final String provisioningXml = args[--i];
         final ProvisioningConfig provisioningConfig = ProvisioningXmlParser.parse(Paths.get(provisioningXml));
-        final Path layoutFactoryHome = Paths.get(args[--i]);
-        layout = ProvisioningLayoutFactory.getInstance(layoutFactoryHome, null).newConfigLayout(provisioningConfig, new FeaturePackLayoutFactory<FeaturePackRuntimeBuilder>() {
+        layout = ProvisioningLayoutFactory.getInstance(null).newConfigLayout(provisioningConfig, new FeaturePackLayoutFactory<FeaturePackRuntimeBuilder>() {
             @Override
             public FeaturePackRuntimeBuilder newFeaturePack(FeaturePackLocation fpl, FeaturePackSpec spec, Path dir, int type)
                     throws ProvisioningException {

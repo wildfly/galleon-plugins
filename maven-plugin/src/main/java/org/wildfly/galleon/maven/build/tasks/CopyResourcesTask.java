@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Red Hat, Inc. and/or its affiliates
+ * Copyright 2016-2019 Red Hat, Inc. and/or its affiliates
  * and other contributors as indicated by the @author tags.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,8 +25,8 @@ import java.nio.file.Paths;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.jboss.galleon.ProvisioningException;
 import org.jboss.galleon.util.IoUtils;
+import org.wildfly.galleon.maven.AbstractFeaturePackBuildMojo;
 import org.wildfly.galleon.maven.ArtifactCoordsUtil;
-import org.wildfly.galleon.maven.WfFeaturePackBuildMojo;
 import org.wildfly.galleon.plugin.ArtifactCoords;
 
 /**
@@ -64,7 +64,7 @@ public class CopyResourcesTask implements ResourcesTask {
     }
 
     @Override
-    public void execute(WfFeaturePackBuildMojo builder, Path resourcesDir) throws MojoExecutionException {
+    public void execute(AbstractFeaturePackBuildMojo builder, Path resourcesDir) throws MojoExecutionException {
         final String error = getValidationErrors();
         if(error != null) {
             throw new MojoExecutionException(error);

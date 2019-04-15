@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Red Hat, Inc. and/or its affiliates
+ * Copyright 2016-2019 Red Hat, Inc. and/or its affiliates
  * and other contributors as indicated by the @author tags.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.Collections;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -36,6 +37,7 @@ import org.apache.maven.project.MavenProject;
 class MavenProjectArtifactVersions {
 
     private static final String TEST_JAR = "test-jar";
+    private static final String SYSTEM = "system";
 
     static MavenProjectArtifactVersions getInstance(MavenProject project) {
         return new MavenProjectArtifactVersions(project);
@@ -45,7 +47,7 @@ class MavenProjectArtifactVersions {
 
     private MavenProjectArtifactVersions(MavenProject project) {
         for (Artifact artifact : project.getArtifacts()) {
-            if(TEST_JAR.equals(artifact.getType())) {
+            if (TEST_JAR.equals(artifact.getType()) || SYSTEM.equals(artifact.getScope())) {
                 continue;
             }
             put(artifact.getGroupId(), artifact.getArtifactId(), artifact.getClassifier(), artifact.getVersion(), artifact.getType());
@@ -75,7 +77,16 @@ class MavenProjectArtifactVersions {
         return versions.get(gac);
     }
 
+    Map<String, String> getArtifacts() {
+        return Collections.unmodifiableMap(versions);
+    }
+
     private void put(final String groupId, final String artifactId, final String classifier, final String version, final String type) {
+        put(versions, groupId, artifactId, classifier, version, type);
+    }
+
+    static void put(Map<String, String> map, final String groupId, final String artifactId,
+            final String classifier, final String version, final String type) {
         final StringBuilder buf = new StringBuilder(groupId).append(':').
                 append(artifactId);
         final StringBuilder versionClassifier = new StringBuilder(buf);
@@ -84,7 +95,7 @@ class MavenProjectArtifactVersions {
             buf.append("::").append(classifier);
             versionClassifier.append(classifier);
         }
-        versions.put(buf.toString(), versionClassifier.append(':').append(type).toString());
+        map.put(buf.toString(), versionClassifier.append(':').append(type).toString());
     }
 
     void remove(String groupId, String artifactId) {
@@ -92,8 +103,12 @@ class MavenProjectArtifactVersions {
     }
 
     void store(Path target) throws IOException {
+        store(versions, target);
+    }
+
+    static void store(Map<String, String> map, Path target) throws IOException {
         try(BufferedWriter writer = Files.newBufferedWriter(target, StandardOpenOption.CREATE)) {
-            for(Map.Entry<String, String> entry : versions.entrySet()) {
+            for(Map.Entry<String, String> entry : map.entrySet()) {
                 writer.write(entry.getKey());
                 writer.write('=');
                 writer.write(entry.getValue());

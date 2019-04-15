@@ -93,7 +93,7 @@ public class FeatureSpecGeneratorInvoker {
 
     private static final String MODULES = "modules";
 
-    private static final String MODULE_PATH_SEGMENT;
+    public static final String MODULE_PATH_SEGMENT;
     private static final String TASKS_XML_PATH_END;
 
     static {
