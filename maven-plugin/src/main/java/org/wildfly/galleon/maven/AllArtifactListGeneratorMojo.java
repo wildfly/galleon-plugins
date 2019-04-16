@@ -16,10 +16,11 @@
  */
 package org.wildfly.galleon.maven;
 
-import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
-import java.util.Map;
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -30,9 +31,12 @@ import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
+import org.apache.maven.project.MavenProjectHelper;
+import org.eclipse.aether.DefaultRepositorySystemSession;
 import org.eclipse.aether.RepositorySystem;
 import org.eclipse.aether.RepositorySystemSession;
 import org.eclipse.aether.repository.RemoteRepository;
+import org.eclipse.aether.resolution.ArtifactDescriptorException;
 import org.jboss.galleon.ProvisioningException;
 import org.jboss.galleon.config.FeaturePackConfig;
 import org.jboss.galleon.config.ProvisioningConfig;
@@ -45,20 +49,25 @@ import org.jboss.galleon.universe.Universe;
 import org.jboss.galleon.universe.UniverseFactoryLoader;
 import org.jboss.galleon.universe.UniverseResolver;
 import org.jboss.galleon.universe.maven.MavenArtifact;
+import org.jboss.galleon.universe.maven.MavenChannel;
 import org.jboss.galleon.universe.maven.MavenProducer;
 import org.jboss.galleon.universe.maven.MavenUniverse;
-import org.jboss.galleon.util.IoUtils;
 import org.wildfly.galleon.plugin.ArtifactCoords;
-import org.wildfly.galleon.plugin.Utils;
-import org.wildfly.galleon.plugin.WfConstants;
+import static org.wildfly.galleon.maven.AbstractFeaturePackBuildMojo.ARTIFACT_LIST_CLASSIFIER;
+import static org.wildfly.galleon.maven.AbstractFeaturePackBuildMojo.ARTIFACT_LIST_EXTENSION;
 
 /**
- * Maven repository generator.
+ * Aggregate all artifact lists (offliners) of a a feature-pack dependencies. In
+ * addition adds to the list the feature-pack itself and universe artifacts. The
+ * list is deployed to maven at install time.
  *
  * @author jdenise@redhat.com
  */
-@Mojo(name = "generate-maven-repository", requiresDependencyResolution = ResolutionScope.RUNTIME, defaultPhase = LifecyclePhase.COMPILE)
-public class MavenRepositoryGeneratorMojo extends AbstractMojo {
+@Mojo(name = "generate-all-artifacts-list", requiresDependencyResolution = ResolutionScope.RUNTIME, defaultPhase = LifecyclePhase.COMPILE)
+public class AllArtifactListGeneratorMojo extends AbstractMojo {
+
+    @Component
+    private MavenProjectHelper projectHelper;
 
     @Component
     protected RepositorySystem repoSystem;
@@ -84,29 +93,16 @@ public class MavenRepositoryGeneratorMojo extends AbstractMojo {
     @Parameter(alias = "feature-pack-version", required = false)
     private String fpVersion;
 
-    /**
-     * Path to a directory in which resolved artifacts are copied. If the
-     * directory exists, it is first deleted. The output directory contains
-     * artifacts as well as maven pom files. The layout inside the directory is
-     * compliant with maven repository layout.
-     */
-    @Parameter(alias = "provisioning-repo-directory", required = true)
-    private File provisioningRepoDirectory;
-
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
-        if (provisioningRepoDirectory.exists()) {
-            IoUtils.recursiveDelete(provisioningRepoDirectory.toPath());
-        }
         final MavenProjectArtifactVersions projectArtifacts = MavenProjectArtifactVersions.getInstance(project);
-        MavenArtifactRepositoryManager artifactResolver = new MavenArtifactRepositoryManager(repoSystem, repoSession, repositories);
-        MavenRepoBuilder builder = new MavenRepoBuilder(provisioningRepoDirectory.toPath(), repoSession.getLocalRepository().getBasedir().toPath());
+        DefaultRepositorySystemSession noWorkspaceSession = new DefaultRepositorySystemSession(repoSession);
+        noWorkspaceSession.setWorkspaceReader(null);
+        MavenArtifactRepositoryManager artifactResolver = new MavenArtifactRepositoryManager(repoSystem, noWorkspaceSession, repositories);
+        ArtifactListMerger builder = new ArtifactListMerger(artifactResolver, repoSession.getLocalRepository().getBasedir().toPath());
         final UniverseFactoryLoader ufl = UniverseFactoryLoader.getInstance().addArtifactResolver(artifactResolver);
         try {
-            // Add feature-pack
-            MavenArtifact fpArtifact = new MavenArtifact();
-            fpArtifact.setArtifactId(fpArtifactId);
-            fpArtifact.setGroupId(fpGroupId);
+            // Add top level feature-pack itself to offliner.
             if (fpVersion == null) {
                 String coords = projectArtifacts.getVersion(fpGroupId + ":" + fpArtifactId);
                 if (coords != null) {
@@ -119,70 +115,76 @@ public class MavenRepositoryGeneratorMojo extends AbstractMojo {
             if (fpVersion == null) {
                 throw new MojoExecutionException("Version for feature-pack has not been found.");
             }
-            fpArtifact.setVersion(fpVersion);
-            fpArtifact.setExtension("zip");
-            artifactResolver.resolve(fpArtifact);
-            Path localPath = fpArtifact.getPath();
-            builder.add(localPath);
+            ArtifactCoords coords = new ArtifactCoords(fpGroupId, fpArtifactId, fpVersion, null, "zip");
+            Path localPath = builder.add(coords);
 
             try (ProvisioningLayoutFactory layoutFactory = ProvisioningLayoutFactory.getInstance(UniverseResolver.builder(ufl).build())) {
                 final FeaturePackLocation fpl = layoutFactory.addLocal(localPath, false);
-                addUniverseArtifacts(fpl, ufl, builder);
                 ProvisioningConfig config = ProvisioningConfig.builder().addFeaturePackDep(fpl).build();
                 try (ProvisioningLayout layout = layoutFactory.newConfigLayout(config)) {
                     FeaturePackLayout fpLayout = layout.getFeaturePack(fpl.getProducer());
-                    for (FeaturePackConfig cfg : fpLayout.getSpec().getFeaturePackDeps()) {
-                        addUniverseArtifacts(cfg.getLocation(), ufl, builder);
-                    }
                     for (FeaturePackConfig cfg : fpLayout.getSpec().getTransitiveDeps()) {
-                        addUniverseArtifacts(cfg.getLocation(), ufl, builder);
+                        addFeaturePackContent(cfg.getLocation(), ufl, builder);
                     }
-                    Path all = fpLayout.getResource(WfConstants.WILDFLY + "/" + WfConstants.ALL_ARTIFACTS_PROPS);
-                    if (all == null) {
-                        throw new MojoExecutionException("File " + all + " not found in feature-pack");
-                    }
-                    final Map<String, String> props;
-                    try {
-                        props = Utils.readProperties(all);
-                    } catch (ProvisioningException e) {
-                        throw new MojoExecutionException("Failed to read all artifacts file " + all + " from " + fpl.getFPID(), e);
-                    }
-                    for (String resolved : props.values()) {
-                        MavenArtifact art = retrieveArtifactCoords(resolved);
-                        artifactResolver.resolve(art);
-                        Path artPath = art.getPath();
-                        builder.add(artPath);
+                    for (FeaturePackConfig cfg : fpLayout.getSpec().getFeaturePackDeps()) {
+                        addFeaturePackContent(cfg.getLocation(), ufl, builder);
                     }
                 }
+                addFeaturePackContent(fpl, ufl, builder);
             }
-        } catch (ProvisioningException ex) {
+            Path targetDir = Paths.get(project.getBuild().getDirectory());
+            if (!Files.exists(targetDir)) {
+                Files.createDirectories(targetDir);
+            }
+            final Path target = targetDir.resolve(fpArtifactId + '-'
+                    + fpVersion + "-all-artifacts-list." + ARTIFACT_LIST_EXTENSION);
+            Files.write(target, builder.build().getBytes());
+            projectHelper.attachArtifact(project, ARTIFACT_LIST_EXTENSION, ARTIFACT_LIST_CLASSIFIER, target.toFile());
+        } catch (IOException | ArtifactDescriptorException | ProvisioningException ex) {
             throw new MojoExecutionException(ex.getMessage(), ex);
         }
     }
 
-    private void addUniverseArtifacts(FeaturePackLocation fpl, UniverseFactoryLoader ufl, MavenRepoBuilder builder) throws ProvisioningException {
+    private void addFeaturePackContent(FeaturePackLocation fpl, UniverseFactoryLoader ufl, ArtifactListMerger builder)
+            throws ProvisioningException, ArtifactDescriptorException, IOException {
+        addUniverseArtifacts(fpl, ufl, builder);
+        addOffliner(fpl, ufl, builder);
+    }
+    private void addOffliner(FeaturePackLocation fpl, UniverseFactoryLoader ufl, ArtifactListMerger builder) throws ProvisioningException, IOException {
+        ArtifactCoords coords = null;
+        if (fpl.isMavenCoordinates()) {
+            String producer = fpl.getProducerName();
+            ArtifactCoords fpCoords = ArtifactCoords.fromString(producer, "zip");
+            coords = new ArtifactCoords(fpCoords.getGroupId(), fpCoords.getArtifactId(),
+                    fpl.getBuild(), ARTIFACT_LIST_CLASSIFIER, ARTIFACT_LIST_EXTENSION);
+        } else {
+            Universe u = ufl.getUniverse(fpl.getUniverse());
+            if (u instanceof MavenUniverse) {
+                MavenUniverse mu = (MavenUniverse) u;
+                MavenChannel channel = mu.getProducer(fpl.getProducerName()).getChannel(fpl.getChannelName());
+                coords = new ArtifactCoords(channel.getFeaturePackGroupId(), channel.getFeaturePackArtifactId(),
+                        fpl.getBuild(), ARTIFACT_LIST_CLASSIFIER, ARTIFACT_LIST_EXTENSION);
+            }
+        }
+        if (coords != null) {
+            builder.addOffliner(coords);
+        }
+    }
+
+    private void addUniverseArtifacts(FeaturePackLocation fpl, UniverseFactoryLoader ufl, ArtifactListMerger builder) throws ProvisioningException, ArtifactDescriptorException, IOException {
         if (fpl.hasUniverse()) {
             Universe u = ufl.getUniverse(fpl.getUniverse());
             if (u instanceof MavenUniverse) {
                 MavenUniverse mu = (MavenUniverse) u;
-                Path universePath = mu.getArtifact().getPath();
-                builder.add(universePath);
+                MavenArtifact universeArtifact = mu.getArtifact();
+                builder.add(new ArtifactCoords(universeArtifact.getGroupId(), universeArtifact.getArtifactId(), universeArtifact.getVersion(),
+                        universeArtifact.getClassifier(), universeArtifact.getExtension()));
                 for (MavenProducer mp : mu.getProducers()) {
-                    builder.add(mp.getArtifact().getPath());
+                    MavenArtifact producerArt = mp.getArtifact();
+                    builder.add(new ArtifactCoords(producerArt.getGroupId(), producerArt.getArtifactId(), producerArt.getVersion(),
+                            producerArt.getClassifier(), producerArt.getExtension()));
                 }
             }
         }
-    }
-
-    private static MavenArtifact retrieveArtifactCoords(String resolvedStr) throws MojoExecutionException {
-        //For example: org.wildfly.core:wildfly-cli:8.0.1.CR1-SNAPSHOT:client:jar
-        ArtifactCoords coords = ArtifactCoordsUtil.fromJBossModules(resolvedStr, null);
-        final MavenArtifact artifact = new MavenArtifact();
-        artifact.setGroupId(coords.getGroupId());
-        artifact.setArtifactId(coords.getArtifactId());
-        artifact.setVersion(coords.getVersion());
-        artifact.setClassifier(coords.getClassifier());
-        artifact.setExtension(coords.getExtension());
-        return artifact;
     }
 }

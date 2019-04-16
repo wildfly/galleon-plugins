@@ -34,6 +34,7 @@ import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
@@ -57,8 +58,11 @@ import org.apache.maven.project.ProjectBuildingRequest;
 import org.apache.maven.shared.artifact.resolve.ArtifactResolver;
 import org.apache.maven.shared.artifact.resolve.ArtifactResolverException;
 import org.apache.maven.shared.artifact.resolve.ArtifactResult;
+import org.eclipse.aether.DefaultRepositorySystemSession;
 import org.eclipse.aether.RepositorySystem;
+import org.eclipse.aether.RepositorySystemSession;
 import org.eclipse.aether.repository.RemoteRepository;
+import org.eclipse.aether.resolution.ArtifactDescriptorException;
 import org.jboss.galleon.Constants;
 import org.jboss.galleon.Errors;
 import org.jboss.galleon.ProvisioningDescriptionException;
@@ -91,7 +95,6 @@ import static org.wildfly.galleon.maven.FeatureSpecGeneratorInvoker.MODULE_PATH_
 import static org.wildfly.galleon.maven.Util.mkdirs;
 import org.wildfly.galleon.maven.build.tasks.ResourcesTask;
 import org.wildfly.galleon.plugin.ArtifactCoords;
-import org.wildfly.galleon.plugin.Utils;
 import org.wildfly.galleon.plugin.WfConstants;
 
 /**
@@ -107,11 +110,17 @@ import org.wildfly.galleon.plugin.WfConstants;
  */
 public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
 
+    static final String ARTIFACT_LIST_CLASSIFIER = "artifact-list";
+    static final String ARTIFACT_LIST_EXTENSION = "txt";
+
     static boolean isProvided(String module) {
         return module.startsWith("java.")
                 || module.startsWith("jdk.")
                 || module.equals("org.jboss.modules");
     }
+
+    @Parameter(defaultValue = "${repositorySystemSession}", readonly = true)
+    protected RepositorySystemSession repoSession;
 
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
     protected MavenProject project;
@@ -265,8 +274,13 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         } catch (IOException e) {
             throw new MojoExecutionException("Failed to store artifact versions", e);
         }
-
-        buildAllArtifacts(buildConfig, resourcesWildFly.resolve(WfConstants.ALL_ARTIFACTS_PROPS));
+        // Build a maven artifact resolver that looks into the local maven repo, not in the project
+        // built artifacts.
+        DefaultRepositorySystemSession noWorkspaceSession = new DefaultRepositorySystemSession(repoSession);
+        noWorkspaceSession.setWorkspaceReader(null);
+        ArtifactListBuilder builder = new ArtifactListBuilder(new MavenArtifactRepositoryManager(repoSystem,
+                noWorkspaceSession), repoSession.getLocalRepository().getBasedir().toPath());
+        buildArtifactList(builder);
 
         addConfigPackages(resourcesDir.resolve(Constants.PACKAGES), fpDir.resolve(Constants.PACKAGES), fpBuilder);
         Util.copyIfExists(resourcesDir, fpDir, Constants.LAYERS);
@@ -322,6 +336,11 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                                 ZipUtils.zip(versionDir, target);
                                 debug("Attaching feature-pack %s as a project artifact", target);
                                 projectHelper.attachArtifact(project, "zip", target.toFile());
+                                final Path offLinerTarget = Paths.get(project.getBuild().getDirectory()).resolve(artifactId + '-'
+                                        + versionDir.getFileName() + "-" + ARTIFACT_LIST_CLASSIFIER + "." + ARTIFACT_LIST_EXTENSION);
+                                debug("Attaching feature-pack artifact list %s as a project artifact", offLinerTarget);
+                                Files.write(offLinerTarget, builder.build().getBytes());
+                                projectHelper.attachArtifact(project, ARTIFACT_LIST_EXTENSION, ARTIFACT_LIST_CLASSIFIER, offLinerTarget.toFile());
                             }
                         }
                     }
@@ -568,42 +587,19 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         }
     }
 
-    private void buildAllArtifacts(WildFlyFeaturePackBuild buildConfig, Path target) throws MojoExecutionException {
+    private void buildArtifactList(ArtifactListBuilder builder) throws MojoExecutionException {
         try {
             final MavenProjectArtifactVersions projectArtifacts = MavenProjectArtifactVersions.getInstance(project);
             Map<String, String> allArtifacts = new TreeMap<>();
-            processFeaturePackDeps(buildConfig, projectArtifacts, allArtifacts);
             addHardCodedArtifacts(allArtifacts);
             allArtifacts.putAll(projectArtifacts.getArtifacts());
-            MavenProjectArtifactVersions.store(allArtifacts, target);
-        } catch (IOException | ProvisioningDescriptionException ex) {
-            throw new MojoExecutionException(ex.getMessage(), ex);
-        }
-    }
-
-    private void processFeaturePackDeps(WildFlyFeaturePackBuild buildConfig, MavenProjectArtifactVersions allArtifacts, Map<String, String> all)
-            throws MojoExecutionException, IOException, ProvisioningDescriptionException {
-        final Map<ArtifactCoords.Gav, FeaturePackDependencySpec> fpDeps = buildConfig.getDependencies();
-        if (fpDeps.isEmpty()) {
-            return;
-        }
-        ProvisioningLayout<FeaturePackLayout> layout = createLayout(buildConfig, allArtifacts);
-        try {
-            for (FeaturePackLayout fp : layout.getOrderedFeaturePacks()) {
-                Path allFile = fp.getResource("wildfly/" + WfConstants.ARTIFACT_VERSIONS_PROPS);
-                if (Files.exists(allFile)) {
-                    final Map<String, String> props;
-                    try {
-                        props = Utils.readProperties(allFile);
-                    } catch (ProvisioningException e) {
-                        throw new MojoExecutionException("Failed to read all artifacts file " + allFile + " from " + fp.getFPID(), e);
-                    }
-                    all.putAll(props);
-                }
+            // Generate the offliner file for dependencies and hardcoded.
+            for (Entry<String, String> entry : allArtifacts.entrySet()) {
+                ArtifactCoords coords = ArtifactCoordsUtil.fromJBossModules(entry.getValue(), null);
+                builder.add(coords);
             }
-        } finally {
-            layout.close();
-            layout.getFactory().close();
+        } catch (ProvisioningException | IOException | ArtifactDescriptorException ex) {
+            throw new MojoExecutionException(ex.getMessage(), ex);
         }
     }
 

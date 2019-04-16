@@ -71,7 +71,7 @@ public class MavenRepoBuilder {
             Files.copy(artifactLocalPath, pathInZipfile,
                     StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException ex) {
-            throw new RuntimeException("Can't add " + artifactLocalPath + " to zip file", ex);
+            throw new RuntimeException("Can't add " + artifactLocalPath + " to directory", ex);
         }
     }
 
