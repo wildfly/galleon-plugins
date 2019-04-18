@@ -27,7 +27,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.TreeMap;
-import javax.xml.bind.DatatypeConverter;
+import org.apache.commons.codec.binary.Hex;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.Parent;
 import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
@@ -84,7 +84,7 @@ public class ArtifactListBuilder {
         }
 
         byte[] hash = md.digest();
-        return DatatypeConverter.printHexBinary(hash).toLowerCase();
+        return Hex.encodeHexString(hash);
     }
 
     public Path add(ArtifactCoords coords) throws ProvisioningException, ArtifactDescriptorException, IOException {
