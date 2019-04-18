@@ -351,19 +351,23 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         }
     }
 
-    private static void addConfigPackages(final Path configDir, final Path packagesDir, final FeaturePackDescription.Builder fpBuilder) throws MojoExecutionException {
+    private void addConfigPackages(final Path configDir, final Path packagesDir, final FeaturePackDescription.Builder fpBuilder) throws MojoExecutionException {
         if (!Files.exists(configDir)) {
             return;
         }
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(configDir)) {
             for (Path configPackage : stream) {
                 final Path packageDir = packagesDir.resolve(configPackage.getFileName());
+                final Path packageFile = packageDir.resolve(Constants.PACKAGE_XML);
+                final Path packageXml = configPackage.resolve(Constants.PACKAGE_XML);
+                if (Files.exists(packageFile) && Files.exists(packageXml)) {
+                    warn("File " + packageFile + " already exists, replacing with " + packageXml);
+                }
                 if (!Files.exists(packageDir)) {
                     Util.mkdirs(packageDir);
                 }
                 IoUtils.copy(configPackage, packageDir);
 
-                final Path packageXml = configPackage.resolve(Constants.PACKAGE_XML);
                 if (Files.exists(packageXml)) {
                     final PackageSpec pkgSpec;
                     try (BufferedReader reader = Files.newBufferedReader(packageXml)) {
@@ -373,7 +377,6 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                             throw new MojoExecutionException("Failed to parse " + packageXml, e);
                         }
                     }
-                    IoUtils.copy(packageXml, packageDir.resolve(Constants.PACKAGE_XML));
                     fpBuilder.addPackage(pkgSpec);
                 }
             }
@@ -584,6 +587,12 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     protected void debug(String msg, Object... args) {
         if (getLog().isDebugEnabled()) {
             getLog().debug(String.format(msg, args));
+        }
+    }
+
+    protected void warn(String msg, Object... args) {
+        if (getLog().isWarnEnabled()) {
+            getLog().warn(String.format(msg, args));
         }
     }
 
