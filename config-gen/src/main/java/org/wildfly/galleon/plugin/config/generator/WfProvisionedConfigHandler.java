@@ -573,7 +573,7 @@ public class WfProvisionedConfigHandler implements ProvisionedConfigHandler, Aut
                 embeddedArgs.add(prop.getValue());
             }
             if(!explicitlyNamed) {
-                explicitlyNamed = prop.getValue().equals(configNameProp);
+                explicitlyNamed = prop.getKey().equals(configNameProp);
             }
         }
         if(!explicitlyNamed) {
