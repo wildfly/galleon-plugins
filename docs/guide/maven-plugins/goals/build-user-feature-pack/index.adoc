@@ -1,0 +1,1 @@
+include::../../../../../maven-plugin/target/generated-sources/plugin/build-user-feature-pack-mojo.adoc[]

@@ -41,8 +41,6 @@ import java.util.Set;
 import java.util.TreeMap;
 import javax.xml.stream.XMLStreamException;
 import nu.xom.ParsingException;
-import org.apache.maven.artifact.Artifact;
-
 import org.apache.maven.artifact.DefaultArtifact;
 import org.apache.maven.artifact.handler.DefaultArtifactHandler;
 import org.apache.maven.execution.MavenSession;
@@ -69,21 +67,14 @@ import org.jboss.galleon.ProvisioningDescriptionException;
 import org.jboss.galleon.ProvisioningException;
 import org.jboss.galleon.config.ConfigModel;
 import org.jboss.galleon.config.FeaturePackConfig;
-import org.jboss.galleon.config.ProvisioningConfig;
 import org.jboss.galleon.layout.FeaturePackDescriber;
 import org.jboss.galleon.layout.FeaturePackDescription;
-import org.jboss.galleon.layout.FeaturePackLayout;
-import org.jboss.galleon.layout.ProvisioningLayout;
-import org.jboss.galleon.layout.ProvisioningLayoutFactory;
 import org.jboss.galleon.maven.plugin.FpMavenErrors;
 import org.jboss.galleon.maven.plugin.util.MavenArtifactRepositoryManager;
 import org.jboss.galleon.spec.FeaturePackPlugin;
 import org.jboss.galleon.spec.FeaturePackSpec;
 import org.jboss.galleon.spec.PackageDependencySpec;
 import org.jboss.galleon.spec.PackageSpec;
-import org.jboss.galleon.universe.FeaturePackLocation;
-import org.jboss.galleon.universe.UniverseFactoryLoader;
-import org.jboss.galleon.universe.UniverseResolver;
 import org.jboss.galleon.util.CollectionUtils;
 import org.jboss.galleon.util.IoUtils;
 import org.jboss.galleon.util.StringUtils;
@@ -653,76 +644,5 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                 return FileVisitResult.CONTINUE;
             }
         });
-    }
-
-    private ProvisioningLayout<FeaturePackLayout> createLayout(WildFlyFeaturePackBuild buildConfig, MavenProjectArtifactVersions artifactVersions) throws MojoExecutionException {
-
-        final MavenArtifactRepositoryManager mvnRepo = new MavenArtifactRepositoryManager(repoSystem, session.getRepositorySession(), repositories);
-        final UniverseFactoryLoader ufl = UniverseFactoryLoader.getInstance().addArtifactResolver(mvnRepo);
-
-        try {
-            ProvisioningLayoutFactory layoutFactory = ProvisioningLayoutFactory.getInstance(UniverseResolver.builder(ufl).build());
-            final ProvisioningConfig.Builder configBuilder = ProvisioningConfig.builder();
-            for (Map.Entry<ArtifactCoords.Gav, FeaturePackDependencySpec> entry : buildConfig.getDependencies().entrySet()) {
-                ArtifactCoords depCoords = entry.getKey().toArtifactCoords();
-                String ext = "zip";
-                if (depCoords.getVersion() == null) {
-                    final String coordsStr = artifactVersions
-                            .getVersion(depCoords.getGroupId() + ':' + depCoords.getArtifactId());
-                    if (coordsStr == null) {
-                        throw new MojoExecutionException("Failed resolve artifact version for " + depCoords);
-                    }
-                    depCoords = ArtifactCoordsUtil.fromJBossModules(coordsStr, ext);
-                    if (!depCoords.getExtension().equals("pom")) {
-                        ext = depCoords.getExtension();
-                    }
-                }
-                final ArtifactItem artifact = new ArtifactItem();
-                artifact.setGroupId(depCoords.getGroupId());
-                artifact.setArtifactId(depCoords.getArtifactId());
-                artifact.setVersion(depCoords.getVersion());
-                artifact.setType(ext);
-                final Artifact resolved = findArtifact(artifact);
-                if (resolved == null) {
-                    throw new MojoExecutionException("Failed to resolve feature-pack artifact " + artifact);
-                }
-                final Path p = resolved.getFile().toPath();
-                if (p == null) {
-                    throw new MojoExecutionException("Failed to resolve feature-pack artifact path " + artifact);
-                }
-                final FeaturePackLocation fpl = layoutFactory.addLocal(p, false);
-                final FeaturePackConfig depConfig = entry.getValue().getTarget();
-                configBuilder.addFeaturePackDep(
-                        depConfig.isTransitive() ? FeaturePackConfig.transitiveBuilder(fpl).init(depConfig).build()
-                                : FeaturePackConfig.builder(fpl).init(depConfig).build());
-            }
-            return layoutFactory.newConfigLayout(configBuilder.build());
-        } catch (ProvisioningException e) {
-            throw new MojoExecutionException("Failed to initialize provisioning layout for the feature-pack dependencies", e);
-        }
-    }
-
-    private Artifact findArtifact(ArtifactItem artifact) throws MojoExecutionException {
-        resolveVersion(artifact);
-        try {
-            ProjectBuildingRequest buildingRequest
-                    = new DefaultProjectBuildingRequest(session.getProjectBuildingRequest());
-            buildingRequest.setLocalRepository(session.getLocalRepository());
-            buildingRequest.setRemoteRepositories(project.getRemoteArtifactRepositories());
-            debug("Resolving artifact %s:%s:%s", artifact.getGroupId(), artifact.getArtifactId(), artifact.getVersion());
-            final ArtifactResult result = artifactResolver.resolveArtifact(buildingRequest, artifact);
-            return result == null ? null : result.getArtifact();
-        } catch (ArtifactResolverException e) {
-            throw new MojoExecutionException("Couldn't resolve artifact: " + e.getMessage(), e);
-        }
-    }
-
-    private void resolveVersion(ArtifactItem artifact) {
-        if (artifact.getVersion() == null) {
-            Artifact managedArtifact = this.project.getManagedVersionMap().get(artifact.getGroupId() + ':' + artifact.getArtifactId() + ':' + artifact.getType());
-            if (managedArtifact != null) {
-                artifact.setVersion(managedArtifact.getVersion());
-            }
-        }
     }
 }

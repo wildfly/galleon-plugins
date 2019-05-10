@@ -57,9 +57,9 @@ import static org.wildfly.galleon.maven.AbstractFeaturePackBuildMojo.ARTIFACT_LI
 import static org.wildfly.galleon.maven.AbstractFeaturePackBuildMojo.ARTIFACT_LIST_EXTENSION;
 
 /**
- * Aggregate all artifact lists (offliners) of a a feature-pack dependencies. In
+ * Aggregate all artifact lists (offliners) of a feature-pack dependencies. In
  * addition adds to the list the feature-pack itself and universe artifacts. The
- * list is deployed to maven at install time.
+ * resulting list is attached as an artifact to the current project.
  *
  * @author jdenise@redhat.com
  */
@@ -121,7 +121,7 @@ public class AllArtifactListGeneratorMojo extends AbstractMojo {
             try (ProvisioningLayoutFactory layoutFactory = ProvisioningLayoutFactory.getInstance(UniverseResolver.builder(ufl).build())) {
                 final FeaturePackLocation fpl = layoutFactory.addLocal(localPath, false);
                 ProvisioningConfig config = ProvisioningConfig.builder().addFeaturePackDep(fpl).build();
-                try (ProvisioningLayout layout = layoutFactory.newConfigLayout(config)) {
+                try (ProvisioningLayout<?> layout = layoutFactory.newConfigLayout(config)) {
                     FeaturePackLayout fpLayout = layout.getFeaturePack(fpl.getProducer());
                     for (FeaturePackConfig cfg : fpLayout.getSpec().getTransitiveDeps()) {
                         addFeaturePackContent(cfg.getLocation(), ufl, builder);
@@ -158,7 +158,7 @@ public class AllArtifactListGeneratorMojo extends AbstractMojo {
             coords = new ArtifactCoords(fpCoords.getGroupId(), fpCoords.getArtifactId(),
                     fpl.getBuild(), ARTIFACT_LIST_CLASSIFIER, ARTIFACT_LIST_EXTENSION);
         } else {
-            Universe u = ufl.getUniverse(fpl.getUniverse());
+            Universe<?> u = ufl.getUniverse(fpl.getUniverse());
             if (u instanceof MavenUniverse) {
                 MavenUniverse mu = (MavenUniverse) u;
                 MavenChannel channel = mu.getProducer(fpl.getProducerName()).getChannel(fpl.getChannelName());
@@ -173,7 +173,7 @@ public class AllArtifactListGeneratorMojo extends AbstractMojo {
 
     private void addUniverseArtifacts(FeaturePackLocation fpl, UniverseFactoryLoader ufl, ArtifactListMerger builder) throws ProvisioningException, ArtifactDescriptorException, IOException {
         if (fpl.hasUniverse()) {
-            Universe u = ufl.getUniverse(fpl.getUniverse());
+            Universe<?> u = ufl.getUniverse(fpl.getUniverse());
             if (u instanceof MavenUniverse) {
                 MavenUniverse mu = (MavenUniverse) u;
                 MavenArtifact universeArtifact = mu.getArtifact();

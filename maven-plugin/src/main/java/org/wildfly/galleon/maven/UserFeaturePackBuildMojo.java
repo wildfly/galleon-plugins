@@ -50,8 +50,8 @@ import org.wildfly.galleon.plugin.ArtifactCoords;
 import org.wildfly.galleon.plugin.WfConstants;
 
 /**
- * This Maven Mojo is entended to build feature-packs to be installed on top of
- * WildFly installation. This Maven mojo creates a WildFly style feature-pack
+ * This Maven Mojo is intended to be used to build feature-packs that depend on
+ * one of the WildFly feature-packs. This Maven mojo creates a WildFly style feature-pack
  * archive from the provided resources according to the feature-pack build
  * configuration file and attaches it to the current Maven project as an
  * artifact. If no feature-pack build configuration is provided, some defaults

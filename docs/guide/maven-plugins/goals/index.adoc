@@ -2,7 +2,14 @@
 
 [options="autowidth"]
 |===
-|<<_build_feature_pack>> |Creates a feature-pack archive from the provided resources in the WildFly fashion.
+|<<_generate_all_artifacts_list>> |Generates a list of all the artifacts required to install the full version of a feature-pack.
+|<<_build_user_feature_pack>> |Creates feature-packs intended to be built on top WildFly feature-packs.
+|<<_build_feature_pack>> |Creates a feature-pack archive from the provided resources in the WildFly fashion (used for official WildFly feature-packs).
 |===
 
+include::generate-all-artifacts-list/index.adoc[]
+
+include::build-user-feature-pack/index.adoc[]
+
 include::build-feature-pack/index.adoc[]
+
