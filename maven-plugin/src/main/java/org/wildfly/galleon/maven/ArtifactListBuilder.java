@@ -19,7 +19,10 @@ package org.wildfly.galleon.maven;
 import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.FileInputStream;
+import java.io.FileReader;
 import java.io.IOException;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -27,6 +30,9 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.TreeMap;
+import javax.xml.stream.XMLInputFactory;
+import javax.xml.stream.XMLStreamException;
+import javax.xml.stream.XMLStreamReader;
 import org.apache.commons.codec.binary.Hex;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.Parent;
@@ -43,6 +49,8 @@ import org.wildfly.galleon.plugin.ArtifactCoords;
  * @author jdenise@redhat.com
  */
 public class ArtifactListBuilder {
+
+    private static final XMLInputFactory XML_INPUT_FACTORY = XMLInputFactory.newInstance();
 
     private final Path localMvnRepoPath;
     private final Map<String, String> map = new TreeMap<>();
@@ -91,7 +99,12 @@ public class ArtifactListBuilder {
         Path artifactLocalPath = resolveArtifact(coords);
         ArtifactCoords pomFileCoords = new ArtifactCoords(coords.getGroupId(), coords.getArtifactId(), coords.getVersion(), null, "pom");
         Path pomFile = resolveArtifact(pomFileCoords);
-        Model model = readModel(pomFile);
+        Model model = null;
+        try {
+            model = readModel(pomFile);
+        } catch(Throwable ex) {
+            throw new ProvisioningException("Exception while reading model for " + coords + ". Resolved pom file " + pomFile, ex);
+        }
         Parent artifactParent = model.getParent();
         if (artifactParent != null) {
             ArtifactCoords parentCoords = new ArtifactCoords(artifactParent.getGroupId(), artifactParent.getArtifactId(), artifactParent.getVersion(), null, "pom");
@@ -104,7 +117,7 @@ public class ArtifactListBuilder {
     }
 
     private static Model readModel(final Path pomXml) throws IOException {
-        try (BufferedReader reader = Files.newBufferedReader(pomXml)) {
+        try (BufferedReader reader = Files.newBufferedReader(pomXml, getEncoding(pomXml))) {
             final MavenXpp3Reader xpp3Reader = new MavenXpp3Reader();
             final Model model = xpp3Reader.read(reader);
             model.setPomFile(pomXml.toFile());
@@ -112,6 +125,24 @@ public class ArtifactListBuilder {
         } catch (org.codehaus.plexus.util.xml.pull.XmlPullParserException ex) {
             throw new IOException("Failed to parse artifact POM model", ex);
         }
+    }
+
+    private static Charset getEncoding(Path pomXml) throws IOException {
+        Charset charset = StandardCharsets.UTF_8;
+        try (FileReader fileReader = new FileReader(pomXml.toFile())) {
+            XMLStreamReader xmlReader = XML_INPUT_FACTORY.createXMLStreamReader(fileReader);
+            try {
+                String encoding = xmlReader.getCharacterEncodingScheme();
+                if (encoding != null) {
+                    charset = Charset.forName(encoding);
+                }
+            } finally {
+                xmlReader.close();
+            }
+        } catch (XMLStreamException ex) {
+            throw new IOException("Failed to retrieve encoding for " + pomXml, ex);
+        }
+        return charset;
     }
 
     public String build() {
