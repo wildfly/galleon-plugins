@@ -93,12 +93,16 @@ public class AllArtifactListGeneratorMojo extends AbstractMojo {
     @Parameter(alias = "feature-pack-version", required = false)
     private String fpVersion;
 
+    @Parameter(alias = "offline", defaultValue = "false")
+    private boolean offline;
+
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
         final MavenProjectArtifactVersions projectArtifacts = MavenProjectArtifactVersions.getInstance(project);
         DefaultRepositorySystemSession noWorkspaceSession = new DefaultRepositorySystemSession(repoSession);
         noWorkspaceSession.setWorkspaceReader(null);
-        MavenArtifactRepositoryManager artifactResolver = new MavenArtifactRepositoryManager(repoSystem, noWorkspaceSession, repositories);
+        MavenArtifactRepositoryManager artifactResolver = offline ? new MavenArtifactRepositoryManager(repoSystem, noWorkspaceSession)
+                : new MavenArtifactRepositoryManager(repoSystem, noWorkspaceSession, repositories);
         ArtifactListMerger builder = new ArtifactListMerger(artifactResolver, repoSession.getLocalRepository().getBasedir().toPath());
         final UniverseFactoryLoader ufl = UniverseFactoryLoader.getInstance().addArtifactResolver(artifactResolver);
         try {
