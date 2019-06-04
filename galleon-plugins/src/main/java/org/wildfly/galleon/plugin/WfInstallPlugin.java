@@ -18,11 +18,13 @@ package org.wildfly.galleon.plugin;
 
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.UncheckedIOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -38,6 +40,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -93,6 +96,7 @@ import org.wildfly.galleon.plugin.config.CopyArtifact;
 import org.wildfly.galleon.plugin.config.CopyPath;
 import org.wildfly.galleon.plugin.config.DeletePath;
 import org.wildfly.galleon.plugin.config.ExampleFpConfigs;
+import org.wildfly.galleon.plugin.config.FileFilter;
 import org.wildfly.galleon.plugin.config.XslTransform;
 import org.wildfly.galleon.plugin.server.CliScriptRunner;
 
@@ -448,6 +452,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 if (pkgTasks.hasMkDirs()) {
                     mkdirs(pkgTasks, this.runtime.getStagedDir());
                 }
+
+                changeLineEndings(pkgTasks, this.runtime.getStagedDir());
             }
             pkgProgressTracker.processed(pkg);
         }
@@ -843,6 +849,66 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             } catch (IOException e) {
                 throw new ProvisioningException(Errors.mkdirs(installDir.resolve(dirName)));
             }
+        }
+    }
+
+    private static void changeLineEndings(final WildFlyPackageTasks tasks, final Path installDir) throws ProvisioningException {
+        // If not line end filters are present no need to walk the directory
+        if (tasks.getUnixLineEndFilters().isEmpty() && tasks.getWindowsLineEndFilters().isEmpty()) {
+            return;
+        }
+        try {
+            Files.walkFileTree(installDir, new SimpleFileVisitor<Path>() {
+                @Override
+                public FileVisitResult visitFile(final Path file, final BasicFileAttributes attrs) {
+                    final String relative = installDir.relativize(file).toString();
+                    for (FileFilter filter : tasks.getUnixLineEndFilters()) {
+                        if (filter.matches(relative)) {
+                            try {
+                                changeLineEndings(file, false);
+                            } catch (IOException e) {
+                                throw new UncheckedIOException(String.format("Failed to convert %s to Unix line endings.", file), e);
+                            }
+                        }
+                    }
+                    for (FileFilter filter : tasks.getWindowsLineEndFilters()) {
+                        if (filter.matches(relative)) {
+                            try {
+                                changeLineEndings(file, true);
+                            } catch (IOException e) {
+                                throw new UncheckedIOException(String.format("Failed to convert %s to Windows line endings.", file), e);
+                            }
+                        }
+                    }
+                    return FileVisitResult.CONTINUE;
+                }
+            });
+        } catch (UncheckedIOException e) {
+            throw new ProvisioningException(e.getMessage(), e.getCause());
+        } catch (IOException e) {
+            throw new ProvisioningException(String.format("Failed to process %s for files that require line ending changes.", installDir), e);
+        }
+    }
+
+    private static void changeLineEndings(final Path file, final boolean isWindows) throws IOException {
+        final String eol = (isWindows ? "\r\n" : "\n");
+        final Path temp = Files.createTempFile(file.getFileName().toString(), ".tmp");
+        // Copy the original file to the temporary file, replacing it and copying the attributes. Note that the order of
+        // REPLACE_EXISTING and COPY_ATTRIBUTES is important.
+        Files.copy(file, temp, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
+        try (
+                BufferedReader reader = Files.newBufferedReader(temp, StandardCharsets.UTF_8);
+                BufferedWriter writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8, StandardOpenOption.TRUNCATE_EXISTING)
+        ) {
+            // Process each line and write a eol string
+            String line;
+            while ((line = reader.readLine()) != null) {
+                writer.write(line);
+                writer.write(eol);
+            }
+
+        } finally {
+            Files.delete(temp);
         }
     }
 }
