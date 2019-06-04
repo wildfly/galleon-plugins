@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Red Hat, Inc. and/or its affiliates
+ * Copyright 2016-2019 Red Hat, Inc. and/or its affiliates
  * and other contributors as indicated by the @author tags.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -356,7 +356,7 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
                             parseLineEnding(reader, builder, true);
                             break;
                         case UNIX:
-                            parseLineEnding(reader, builder, true);
+                            parseLineEnding(reader, builder, false);
                             break;
                         default:
                             throw ParsingUtils.unexpectedContent(reader);
