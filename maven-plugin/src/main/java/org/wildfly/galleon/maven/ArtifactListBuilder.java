@@ -108,8 +108,7 @@ public class ArtifactListBuilder {
         Parent artifactParent = model.getParent();
         if (artifactParent != null) {
             ArtifactCoords parentCoords = new ArtifactCoords(artifactParent.getGroupId(), artifactParent.getArtifactId(), artifactParent.getVersion(), null, "pom");
-            Path parentFile = resolveArtifact(parentCoords);
-            addArtifact(parentFile);
+            add(parentCoords);
         }
         addArtifact(artifactLocalPath);
         addArtifact(pomFile);
@@ -161,9 +160,9 @@ public class ArtifactListBuilder {
     private void addArtifact(Path artifactLocalPath) {
         Path relativized = localMvnRepoPath.relativize(artifactLocalPath);
         try {
-            map.put(relativized.toString(), checksum(artifactLocalPath.toString()));
+            map.put("/" + relativized.toString(), checksum(artifactLocalPath.toString()));
         } catch (IOException ex) {
-            throw new RuntimeException("Can't add " + artifactLocalPath + " to zip file", ex);
+            throw new RuntimeException("Can't add " + artifactLocalPath + " to offliner file", ex);
         }
     }
 }
