@@ -27,6 +27,7 @@ public interface WfConstants {
     String WF_CONFIG_GEN = "wildfly-config-gen";
     String WF_GALLEON_PLUGINS = "wildfly-galleon-plugins";
 
+    String ADD_ONS = "add-ons";
     String ARTIFACT_VERSIONS_PROPS = "artifact-versions.properties";
     String BASE = "base";
     String CONFIG = "config";

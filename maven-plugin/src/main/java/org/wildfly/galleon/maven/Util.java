@@ -91,6 +91,10 @@ class Util {
         Files.walkFileTree(modulesDir, new FileVisitor<Path>() {
             @Override
             public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+                // Skip system sub directory, it is handled when handling layers and add-ons
+                if (dir.getFileName().toString().equals(WfConstants.SYSTEM) && dir.getParent().equals(modulesDir)) {
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
                 final Path moduleXml = dir.resolve(WfConstants.MODULE_XML);
                 if (!Files.exists(moduleXml)) {
                     return FileVisitResult.CONTINUE;
