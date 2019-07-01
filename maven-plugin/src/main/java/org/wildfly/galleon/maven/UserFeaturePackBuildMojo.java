@@ -145,13 +145,10 @@ public class UserFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
     }
 
     private void addModulePackages(final Path srcModulesDir, final FeaturePackDescription.Builder fpBuilder, final Path targetResources) throws MojoExecutionException {
-        final Map<String, Path> moduleXmlByPkgName = new HashMap<>();
-        try {
-            Util.findModules(srcModulesDir, moduleXmlByPkgName);
-            packageModules(fpBuilder, targetResources, moduleXmlByPkgName, null);
-        } catch (IOException e) {
-            throw new MojoExecutionException("Failed to process modules content", e);
-        }
+        debug("UserFeaturePackBuildMojo adding module packages");
+        handleLayers(srcModulesDir, fpBuilder, targetResources, null);
+        handleAddOns(srcModulesDir, fpBuilder, targetResources, null);
+        handleModules(srcModulesDir, fpBuilder, targetResources, null);
     }
 
     private WildFlyFeaturePackBuild getBuildConfig() throws MojoExecutionException {

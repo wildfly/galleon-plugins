@@ -29,14 +29,9 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Stream;
-
-import javax.xml.stream.XMLStreamException;
 
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
@@ -54,7 +49,6 @@ import org.jboss.galleon.universe.FeaturePackLocation;
 import org.jboss.galleon.util.IoUtils;
 import org.jboss.galleon.util.CollectionUtils;
 import org.jboss.galleon.util.PathFilter;
-import org.jboss.galleon.xml.PackageXmlWriter;
 import org.wildfly.galleon.plugin.WfConstants;
 
 /**
@@ -245,14 +239,6 @@ public class WfFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
         buildFeaturePack(fpBuilder, buildConfig);
     }
 
-    private PackageSpec addPackage(final Path fpPackagesDir, final FeaturePackDescription.Builder fpBuilder,
-            final PackageSpec.Builder pkgBuilder) throws MojoExecutionException {
-        final PackageSpec pkg = pkgBuilder.build();
-        fpBuilder.addPackage(pkg);
-        writeXml(pkg, fpPackagesDir.resolve(pkg.getName()));
-        return pkg;
-    }
-
     private PackageSpec.Builder getExtendedPackage(String name, boolean create) {
         PackageSpec.Builder pkgBuilder = extendedPackages.get(name);
         if(pkgBuilder == null) {
@@ -270,35 +256,8 @@ public class WfFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
         final Path layersDir = srcModulesDir.resolve(WfConstants.SYSTEM).resolve(WfConstants.LAYERS);
         if (Files.exists(layersDir)) {
             final PackageSpec.Builder modulesAll = getExtendedPackage(WfConstants.MODULES_ALL, true);
-            try (Stream<Path> layers = Files.list(layersDir)) {
-                final Map<String, Path> moduleXmlByPkgName = new HashMap<>();
-                final Iterator<Path> i = layers.iterator();
-                while (i.hasNext()) {
-                    final Path layerDir = i.next();
-                    Util.findModules(layerDir, moduleXmlByPkgName);
-                    if (moduleXmlByPkgName.isEmpty()) {
-                        throw new MojoExecutionException("Modules not found in " + layerDir);
-                    }
-                }
-                packageModules(fpBuilder, targetResources, moduleXmlByPkgName, modulesAll);
-            } catch (IOException e) {
-                throw new MojoExecutionException("Failed to process modules content", e);
-            }
+            handleLayers(srcModulesDir, fpBuilder, targetResources, modulesAll);
         }
-        final Path layersConf = srcModulesDir.resolve(WfConstants.LAYERS_CONF);
-        if(!Files.exists(layersConf)) {
-            return;
-        }
-        final Path targetPath = getPackagesDir().resolve(WfConstants.LAYERS_CONF).resolve(Constants.CONTENT).resolve(WfConstants.MODULES).resolve(WfConstants.LAYERS_CONF);
-        try {
-            Files.createDirectories(targetPath.getParent());
-            IoUtils.copy(layersConf, targetPath);
-        } catch (IOException e) {
-            throw new MojoExecutionException(Errors.copyFile(layersConf, targetPath), e);
-        }
-        final PackageSpec.Builder pkgBuilder = PackageSpec.builder(WfConstants.LAYERS_CONF);
-        addPackage(getPackagesDir(), fpBuilder, pkgBuilder);
-        fpBuilder.getSpecBuilder().addDefaultPackage(WfConstants.LAYERS_CONF);
     }
 
     private void addDocsSchemas(final Path fpPackagesDir, final FeaturePackDescription.Builder fpBuilder)
@@ -424,15 +383,6 @@ public class WfFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
                     ensureLineEndings(pkgContentDir);
                 }
             }
-        }
-    }
-
-    private void writeXml(PackageSpec pkgSpec, Path dir) throws MojoExecutionException {
-        try {
-            Util.mkdirs(dir);
-            PackageXmlWriter.getInstance().write(pkgSpec, dir.resolve(Constants.PACKAGE_XML));
-        } catch (XMLStreamException | IOException e) {
-            throw new MojoExecutionException(Errors.writeFile(dir.resolve(Constants.PACKAGE_XML)), e);
         }
     }
 

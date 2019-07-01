@@ -31,6 +31,8 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,6 +41,7 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.stream.Stream;
 import javax.xml.stream.XMLStreamException;
 import nu.xom.ParsingException;
 import org.apache.maven.artifact.DefaultArtifact;
@@ -477,7 +480,91 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         }
     }
 
-    protected void packageModules(FeaturePackDescription.Builder fpBuilder,
+    protected void handleLayers(final Path srcModulesDir, final FeaturePackDescription.Builder fpBuilder,
+            final Path targetResources, final PackageSpec.Builder modulesAll) throws MojoExecutionException {
+        final Path layersDir = srcModulesDir.resolve(WfConstants.SYSTEM).resolve(WfConstants.LAYERS);
+        if (Files.exists(layersDir)) {
+            try (Stream<Path> layers = Files.list(layersDir)) {
+                final Map<String, Path> moduleXmlByPkgName = new HashMap<>();
+                final Iterator<Path> i = layers.iterator();
+                while (i.hasNext()) {
+                    final Path layerDir = i.next();
+                    Util.findModules(layerDir, moduleXmlByPkgName);
+                    if (moduleXmlByPkgName.isEmpty()) {
+                        throw new MojoExecutionException("Modules not found in " + layerDir);
+                    }
+                }
+                packageModules(fpBuilder, targetResources, moduleXmlByPkgName, modulesAll);
+            } catch (IOException e) {
+                throw new MojoExecutionException("Failed to process modules content", e);
+            }
+        }
+        final Path layersConf = srcModulesDir.resolve(WfConstants.LAYERS_CONF);
+        if (!Files.exists(layersConf)) {
+            return;
+        }
+        final Path targetPath = getPackagesDir().resolve(WfConstants.LAYERS_CONF).resolve(Constants.CONTENT).resolve(WfConstants.MODULES).resolve(WfConstants.LAYERS_CONF);
+        try {
+            Files.createDirectories(targetPath.getParent());
+            IoUtils.copy(layersConf, targetPath);
+        } catch (IOException e) {
+            throw new MojoExecutionException(Errors.copyFile(layersConf, targetPath), e);
+        }
+        final PackageSpec.Builder pkgBuilder = PackageSpec.builder(WfConstants.LAYERS_CONF);
+        addPackage(getPackagesDir(), fpBuilder, pkgBuilder);
+        fpBuilder.getSpecBuilder().addDefaultPackage(WfConstants.LAYERS_CONF);
+    }
+
+    protected void handleAddOns(final Path srcModulesDir, final FeaturePackDescription.Builder fpBuilder,
+            final Path targetResources, final PackageSpec.Builder modulesAll) throws MojoExecutionException {
+        final Map<String, Path> moduleXmlByPkgName = new HashMap<>();
+        final Path addOnsDir = srcModulesDir.resolve(WfConstants.SYSTEM).resolve(WfConstants.ADD_ONS);
+        if (Files.exists(addOnsDir)) {
+            try (Stream<Path> addOn = Files.list(addOnsDir)) {
+                final Iterator<Path> i = addOn.iterator();
+                while (i.hasNext()) {
+                    final Path addOnDir = i.next();
+                    Util.findModules(addOnDir, moduleXmlByPkgName);
+                    if (moduleXmlByPkgName.isEmpty()) {
+                        throw new MojoExecutionException("Modules not found in " + addOnDir);
+                    }
+                }
+                packageModules(fpBuilder, targetResources, moduleXmlByPkgName, modulesAll);
+            } catch (IOException e) {
+                throw new MojoExecutionException("Failed to process modules content", e);
+            }
+        }
+    }
+
+    protected void handleModules(final Path srcModulesDir, final FeaturePackDescription.Builder fpBuilder,
+            final Path targetResources, final PackageSpec.Builder modulesAll) throws MojoExecutionException {
+        try {
+            final Map<String, Path> moduleXmlByPkgName = new HashMap<>();
+            Util.findModules(srcModulesDir, moduleXmlByPkgName);
+            packageModules(fpBuilder, targetResources, moduleXmlByPkgName, modulesAll);
+        } catch (IOException e) {
+            throw new MojoExecutionException("Failed to process modules content", e);
+        }
+    }
+
+    protected PackageSpec addPackage(final Path fpPackagesDir, final FeaturePackDescription.Builder fpBuilder,
+            final PackageSpec.Builder pkgBuilder) throws MojoExecutionException {
+        final PackageSpec pkg = pkgBuilder.build();
+        fpBuilder.addPackage(pkg);
+        writeXml(pkg, fpPackagesDir.resolve(pkg.getName()));
+        return pkg;
+    }
+
+    private void writeXml(PackageSpec pkgSpec, Path dir) throws MojoExecutionException {
+        try {
+            Util.mkdirs(dir);
+            PackageXmlWriter.getInstance().write(pkgSpec, dir.resolve(Constants.PACKAGE_XML));
+        } catch (XMLStreamException | IOException e) {
+            throw new MojoExecutionException(Errors.writeFile(dir.resolve(Constants.PACKAGE_XML)), e);
+        }
+    }
+
+    private void packageModules(FeaturePackDescription.Builder fpBuilder,
             Path resourcesDir, Map<String, Path> moduleXmlByPkgName, PackageSpec.Builder modulesAll)
             throws IOException, MojoExecutionException {
 
