@@ -29,7 +29,7 @@ For example, here is an excerpt from a `module.xml` template:
         <!-- skipped content -->
 ----
 
-It looks pretty much like the final `module.xml` except that the artifact name is an epression which should be replaced with either the complete artifact coordinates in case of a thin distribution, e.g.
+It looks pretty much like the final `module.xml` except that the artifact name is an expression which should be replaced with either the complete artifact coordinates in case of a thin distribution, e.g.
 [source,xml]
 ----
 <module name="org.jboss.as.jmx" xmlns="urn:jboss:module:1.8">

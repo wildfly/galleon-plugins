@@ -59,7 +59,7 @@ import org.wildfly.galleon.plugin.WfConstants;
  *
  * The content of the future feature-pack archive is first created in the
  * directory called `feature-pack-layout` under the module's build directory
- * which is then * ZIPped to create the feature-pack artifact.
+ * which is then ZIPped to create the feature-pack artifact.
  *
  * @author Jean-Francois Denise
  */

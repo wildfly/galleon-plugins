@@ -1,0 +1,32 @@
+##### Galleon Layers
+
+You can define your own layers (eg: drivers, datasources, customized subsystem) 
+that can be then assembled with WildFly built-in layers to compose a configuration.
+
+The directory `src/main/resources/layers` contains the layers definitions. 
+
+Layers are defined for a given model of configuration. Configuration model can be one of `standalone`, `host` or `domain`. 
+The layers defined for a given configuration model are located inside a directory named with the configuration model: 
+`layers/<config model name>/<layer name>/layer-spec.xml`
+
+Example of a layer that defines the configuration for a mysql driver and include the driver package (a JBoss module) named `com.mysql.jdbc`.
+
+[source,xml]
+----
+<?xml version="1.0" ?>
+<layer-spec xmlns="urn:jboss:galleon:layer-spec:1.0" name="mysql-driver">
+    <feature spec="subsystem.datasources">
+        <feature spec="subsystem.datasources.jdbc-driver">
+            <param name="driver-name" value="mysql"/>
+            <param name="jdbc-driver" value="mysql"/>
+            <param name="driver-xa-datasource-class-name" value="com.mysql.jdbc.jdbc2.optional.MysqlXADataSource"/>
+            <param name="driver-module-name" value="com.mysql.jdbc"/>
+        </feature>
+    </feature>
+    <packages>
+        <package name="com.mysql.jdbc"/>
+    </packages>
+</layer-spec>
+----
+
+Documentation to help you define layers can be found link:https://docs.wildfly.org/galleon/#_layers[here].

@@ -1,0 +1,21 @@
+##### Galleon feature-groups
+
+You can define your own feature-groups that can then be re-used when defining configurations. 
+
+The directory `src/main/resources/feature_groups` contains the feature-groups definitions. A feature-group is defined inside the file `<feature-group name>.xml`
+
+For example:
+
+[source,xml]
+----
+<?xml version="1.0" encoding="UTF-8"?>
+<feature-group-spec name="my-feature-group" xmlns="urn:jboss:galleon:feature-group:1.0">
+    <feature-group name="another-feature-group"/>
+    <feature spec="interface">
+        <param name="interface" value="my-interface"/>
+        <param name="inet-address" value="192.168.1.1"/>
+    </feature>
+</feature-group-spec>
+----
+
+Documentation to help you define feature-groups can be found link:https://docs.wildfly.org/galleon/#_feature_groups[here].

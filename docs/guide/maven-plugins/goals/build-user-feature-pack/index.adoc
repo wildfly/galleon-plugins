@@ -1,1 +1,16 @@
 include::../../../../../maven-plugin/target/generated-sources/plugin/build-user-feature-pack-mojo.adoc[]
+
+#### Plugin configuration
+include::user-fp-build-xml/index.adoc[]
+
+#### Galleon feature-pack content that can be defined with the mojo
+
+include::jboss-module-packages/index.adoc[]
+
+include::packages/index.adoc[]
+
+include::layers/index.adoc[]
+
+include::feature-groups/index.adoc[]
+
+include::configs/index.adoc[]
