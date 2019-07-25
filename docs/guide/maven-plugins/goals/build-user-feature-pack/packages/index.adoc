@@ -1,0 +1,6 @@
+##### Galleon packages
+
+The directory `src/main/resources/packages/` contains galleon packages. Packages contain content (other than JBoss modules)
+you want to see provisioned along with a layer and/or configuration.
+
+Documentation to help you define packages can be found link:https://docs.wildfly.org/galleon/#_feature_pack_packages[here].

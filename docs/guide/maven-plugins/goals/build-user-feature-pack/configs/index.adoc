@@ -1,0 +1,19 @@
+##### Galleon default configurations
+
+You can define default configurations to be provisioned by galleon. Default configurations are defined in
+ `src/main/resources/configs/<config model>/<config name>/config.xml` file. Configuration model can be one of `standalone`, `host` or `domain`.
+
+For example:
+
+[source,xml]
+----
+<config xmlns="urn:jboss:galleon:config:1.0" name="standalone.xml" model="standalone">
+    <layers>
+        <include name="cloud-profile"/>
+        <include name="my-layer"/>
+    </layers>
+    <feature-group name="my-feature-group"/>
+</config>
+----
+
+Documentation to help you define default configurations can be found link:https://docs.wildfly.org/galleon/#_provisioned_installation_configuration[here].

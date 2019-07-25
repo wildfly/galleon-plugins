@@ -1,3 +1,4 @@
+[[Feature-pack-build-config-file]]
 ### Feature-pack build config file (wildfly-feature-pack-build.xml)
 
 Feature-pack building starts with this file. The file describes the feature-pack in terms of its dependencies on other

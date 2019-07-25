@@ -1,0 +1,45 @@
+###### Dependency on WildFly
+
+The pom.xml of the project that makes use of this plugin must express a dependency on the WildFly feature-pack it is depending upon.
+
+##### Feature-pack configuration
+
+For typical user feature-packs construct (eg: package JBoss modules and define galleon layers), 
+there is no need to define a feature-pack build configuration file. Everything can be configured from 
+the plugin configuration element inside the pom.xml file.
+
+For more advanced configuration, a file named _wildfly-user-feature-pack-build.xml_ can be defined in the project root dir.
+This file complies with the _wildfly-feature-pack-build.xml_ link:#Feature-pack-build-config-file[file syntax] 
+but only supports a subset of it.
+
+The following items can be defined:
+
+* Feature Pack Location of the feature-pack.
+* Dependencies (transitives or directs) on other feature-packs.
+* Default packages.
+
+For example:
+
+[source,xml]
+----
+<feature-pack xmlns="urn:jboss:galleon:feature-pack:2.0" location="org.foo:my-galleon-pack:1.0.0.Final">
+    <transitive>
+        <dependency location="wildfly-core@maven(org.jboss.universe:community-universe):current#9.0.1.Final">
+            <origin>org.wildfly.core:wildfly-core-galleon-pack</origin>
+        </dependency>
+        <dependency location="wildfly-servlet@maven(org.jboss.universe:community-universe):current#17.0.0.Final">
+            <origin>org.wildfly:wildfly-servlet-galleon-pack</origin>
+        </dependency>
+    </transitive>
+    <dependencies>
+        <dependency location="wildfly@maven(org.jboss.universe:community-universe):current#17.0.0.Final">
+            <origin>org.wildfly:wildfly-galleon-pack</origin>
+            <default-configs inherit="false"/>
+            <packages inherit="false"/>
+        </dependency>
+    </dependencies>
+   <default-packages>
+        <package name="my.package1"/>
+    </default-packages>
+</feature-pack>
+----

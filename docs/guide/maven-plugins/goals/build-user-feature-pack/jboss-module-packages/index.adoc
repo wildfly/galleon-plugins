@@ -1,0 +1,69 @@
+##### JBoss module packages
+
+The directory `src/main/resources/modules` contains JBoss modules to be turned into feature-pack packages. A package is created per JBoss module. JBoss module dependencies are reflected in the corresponding package dependencies.
+
+A module can contain the binaries it wants to see installed or rely on the 'module.xml template' capability of the mojo.
+For example, here is an excerpt from a `module.xml` template:
+
+[source,xml]
+----
+<?xml version="1.0" encoding="UTF-8"?>
+<module name="org.postgresql.jdbc" xmlns="urn:jboss:module:1.8">
+    <resources>
+        <artifact name="${org.postgresql:postgresql}"/>
+    </resources>
+    <dependencies>
+        <module name="javax.api"/>
+        <module name="javax.transaction.api"/>
+    </dependencies>
+</module>
+----
+
+It looks pretty much like the final `module.xml` except that the artifact name is an expression which should be replaced with either the complete artifact coordinates in case of a thin distribution, e.g.
+[source,xml]
+----
+<?xml version="1.0" encoding="UTF-8"?>
+<module name="org.postgresql.jdbc" xmlns="urn:jboss:module:1.8">
+    <resources>
+        <artifact name="org.postgresql:postgresql:9.4.1211"/>
+    </resources>
+    <dependencies>
+        <module name="javax.api"/>
+        <module name="javax.transaction.api"/>
+    </dependencies>
+</module>
+----
+or the `resource-root` element in case of a fat distribution, e.g.
+
+[source,xml]
+----
+<module name="org.postgresql.jdbc" xmlns="urn:jboss:module:1.8">
+
+    <resources>
+        <resource-root path="postgresql-9.4.1211.jar"/>
+    </resources>
+
+    <dependencies>
+        <module name="javax.api"/>
+        <module name="javax.transaction.api"/>
+    </dependencies>
+----
+
+`module.xml` template processing is happening at provisioning time and depends on the kind of distribution being provisioned.
+That is controlled by the plugin option `jboss-maven-dist=true|false`. `true` to provision a thin installation, `false` to provision a fat installation.
+
+NOTE: If you are packaging JBoss module using the "module.xml template" you must express the dependencies on the 
+actual artifacts you want to see provisioned in the pom.xml file.
+
+
+NOTE: It is possible that a module depends on another module which is not found in the current feature-pack. In that case, the feature-pack that contains the package representing the module from the dependency must be declared as the dependency of the current feature-pack in the feature-pack build config file. If the dependency could not be resolved locally (among the modules included in the current feature-pack), the module will be looked up in the dependencies of the current feature-pack (in the order the dependencies are specified in the feature-pack build config file).
+
+In case a module dependency could not be resolved neither locally nor in the feature-pack dependencies, an error will be thrown with the corresponding message.
+
+NOTE: The package generated for a JBoss module can still be customized by, e.g., adding `pm/wildfly/tasks.xml` to it in `src/main/resources/packages`. In this case the package dir in `src/main/resources/packages` has to include only the content that the generated package is missing. It doesn't have to include `package.xml` unless the generated one has to be replaced with a custom one.
+
+###### Custom, add-ons and layers types of JBoss modules
+
+* Custom modules are defined directly under `modules` directory.
+* `add-ons` are defined under `modules/system/add-ons/<add-on name>` directory.
+* `layers` are defined under `modules/system/layers/<layer name>` directory. You must also define the file `layers.conf` under `modules` directory.
