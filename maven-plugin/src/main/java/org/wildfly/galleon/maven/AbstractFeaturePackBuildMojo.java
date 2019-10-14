@@ -36,11 +36,10 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
-import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.stream.Stream;
 import javax.xml.stream.XMLStreamException;
 import nu.xom.ParsingException;
@@ -677,12 +676,12 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     private void buildArtifactList(ArtifactListBuilder builder) throws MojoExecutionException {
         try {
             final MavenProjectArtifactVersions projectArtifacts = MavenProjectArtifactVersions.getInstance(project);
-            Map<String, String> allArtifacts = new TreeMap<>();
+            Set<String> allArtifacts = new TreeSet<>();
             addHardCodedArtifacts(allArtifacts);
-            allArtifacts.putAll(projectArtifacts.getArtifacts());
+            allArtifacts.addAll(projectArtifacts.getArtifacts().values());
             // Generate the offliner file for dependencies and hardcoded.
-            for (Entry<String, String> entry : allArtifacts.entrySet()) {
-                ArtifactCoords coords = ArtifactCoordsUtil.fromJBossModules(entry.getValue(), null);
+            for (String artifact : allArtifacts) {
+                ArtifactCoords coords = ArtifactCoordsUtil.fromJBossModules(artifact, null);
                 builder.add(coords);
             }
         } catch (ProvisioningException | IOException | ArtifactDescriptorException ex) {
@@ -690,7 +689,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         }
     }
 
-    private void addHardCodedArtifacts(Map<String, String> all) throws IOException {
+    private void addHardCodedArtifacts(Set<String> all) throws IOException {
         Path packages = resourcesDir.resolve(Constants.PACKAGES);
         if (Files.exists(packages)) {
             processPackages(fpDir, all);
@@ -701,7 +700,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         }
     }
 
-    private void processPackages(Path fpDirectory, Map<String, String> all) throws IOException {
+    private void processPackages(Path fpDirectory, Set<String> all) throws IOException {
         Files.walkFileTree(fpDirectory, new SimpleFileVisitor<Path>() {
             @Override
             public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
@@ -714,7 +713,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         });
     }
 
-    private void addHardCodedArtifacts(final Path source, Map<String, String> all) throws IOException {
+    private void addHardCodedArtifacts(final Path source, Set<String> all) throws IOException {
         Files.walkFileTree(source, EnumSet.of(FileVisitOption.FOLLOW_LINKS), Integer.MAX_VALUE,
                 new SimpleFileVisitor<Path>() {
             @Override

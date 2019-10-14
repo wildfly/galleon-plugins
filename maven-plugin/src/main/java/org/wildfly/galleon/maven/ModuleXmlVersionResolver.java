@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.StringJoiner;
 
 import javax.xml.stream.XMLEventFactory;
@@ -180,13 +181,13 @@ public class ModuleXmlVersionResolver {
         return artifactCoords;
     }
 
-    public static void addHardCodedArtifacts(final Path file,  Map<String, String> hardcodedArtifacts) throws IOException, XMLStreamException {
+    static void addHardCodedArtifacts(final Path file,  Set<String> hardcodedArtifacts) throws IOException, XMLStreamException {
         try (Reader is = Files.newBufferedReader(file, Charsets.UTF_8)) {
             addHardCodedArtifacts(getXmlInputFactory().createXMLEventReader(is), hardcodedArtifacts);
         }
     }
 
-    private static void addHardCodedArtifacts(final XMLEventReader r,  Map<String, String> hardcodedArtifacts) throws IOException, XMLStreamException {
+    private static void addHardCodedArtifacts(final XMLEventReader r,  Set<String> hardcodedArtifacts) throws IOException, XMLStreamException {
         while (r.hasNext()) {
             XMLEvent event = r.nextEvent();
             switch (event.getEventType()) {
@@ -200,7 +201,7 @@ public class ModuleXmlVersionResolver {
         }
     }
 
-    private static void addHardCodedArtifacts(StartElement artifactElement, Map<String, String> hardcodedArtifacts) {
+    private static void addHardCodedArtifacts(StartElement artifactElement, Set<String> hardcodedArtifacts) {
         Iterator<?> iter = artifactElement.getAttributes();
         while (iter.hasNext()) {
             Attribute attribute = (Attribute) iter.next();
@@ -209,9 +210,14 @@ public class ModuleXmlVersionResolver {
                 String artifactCoords = getArtifactCoordinates(artifactName);
                 if (artifactCoords == null) {
                     final ArtifactCoords coords = ArtifactCoords.fromString(artifactName);
-                    MavenProjectArtifactVersions.put(hardcodedArtifacts, coords.getGroupId(),
-                            coords.getArtifactId(),  coords.getClassifier(), coords.getVersion(),
-                            coords.getExtension());
+                    final StringBuilder buf = new StringBuilder(coords.getGroupId()).append(':').
+                            append(coords.getArtifactId()).append(':').append(coords.getVersion()).append(':');
+                    String classifier = coords.getClassifier();
+                    if (classifier != null && !classifier.isEmpty()) {
+                        buf.append(classifier);
+                    }
+                    buf.append(':').append(coords.getExtension());
+                    hardcodedArtifacts.add(buf.toString());
                 }
             }
         }

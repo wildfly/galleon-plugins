@@ -82,11 +82,6 @@ class MavenProjectArtifactVersions {
     }
 
     private void put(final String groupId, final String artifactId, final String classifier, final String version, final String type) {
-        put(versions, groupId, artifactId, classifier, version, type);
-    }
-
-    static void put(Map<String, String> map, final String groupId, final String artifactId,
-            final String classifier, final String version, final String type) {
         final StringBuilder buf = new StringBuilder(groupId).append(':').
                 append(artifactId);
         final StringBuilder versionClassifier = new StringBuilder(buf);
@@ -95,7 +90,7 @@ class MavenProjectArtifactVersions {
             buf.append("::").append(classifier);
             versionClassifier.append(classifier);
         }
-        map.put(buf.toString(), versionClassifier.append(':').append(type).toString());
+        versions.put(buf.toString(), versionClassifier.append(':').append(type).toString());
     }
 
     void remove(String groupId, String artifactId) {
