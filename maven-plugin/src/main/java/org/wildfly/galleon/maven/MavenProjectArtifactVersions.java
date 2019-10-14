@@ -82,17 +82,45 @@ class MavenProjectArtifactVersions {
     }
 
     private void put(final String groupId, final String artifactId, final String classifier, final String version, final String type) {
-        put(versions, groupId, artifactId, classifier, version, type);
+        put(versions, groupId, artifactId, classifier, version, type, false);
     }
 
+    /**
+     * Store a key value pair mapping a key to a string value containing a maven groupId:artifactId:version:[classifier:]type.
+     * The key will be one of the following depending on whether the {@code versionedKeys} parameter is {@code true}
+     * and whether {@code classifier} is {@code null} or an empty string:
+     *
+     * <ul>
+     *     <li>groupId:artifactId</li>
+     *     <li>groupId:artifactId::classifier</li>
+     *     <li>groupId:artifactId:version</li>
+     *     <li>groupId:artifactId:version:classifier</li>
+     * </ul>
+     *
+     * @param map the map into which the entry should be stored
+     * @param groupId the maven groupId. Cannot be {@code null}
+     * @param artifactId the maven artifactId. Cannot be {@code null}
+     * @param classifier the maven artifact classifier. May be {@code null}
+     * @param version the maven artifact version. Cannot be {@code null}
+     * @param type the maven artifact type. Cannot be {@code null}
+     * @param versionedKeys {@code true} if the key should include the version; {@code false} if it should be omitted
+     */
     static void put(Map<String, String> map, final String groupId, final String artifactId,
-            final String classifier, final String version, final String type) {
+            final String classifier, final String version, final String type, final boolean versionedKeys) {
         final StringBuilder buf = new StringBuilder(groupId).append(':').
                 append(artifactId);
         final StringBuilder versionClassifier = new StringBuilder(buf);
         versionClassifier.append(':').append(version).append(':');
+
+        if (versionedKeys) {
+            buf.append(":").append(version);
+        }
         if(classifier != null && !classifier.isEmpty()) {
-            buf.append("::").append(classifier);
+            if (!versionedKeys) {
+                // Add the empty spot for the version
+                buf.append(":");
+            }
+            buf.append(":").append(classifier);
             versionClassifier.append(classifier);
         }
         map.put(buf.toString(), versionClassifier.append(':').append(type).toString());

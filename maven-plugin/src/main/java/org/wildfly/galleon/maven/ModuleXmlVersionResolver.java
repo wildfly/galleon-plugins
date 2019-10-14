@@ -209,9 +209,13 @@ public class ModuleXmlVersionResolver {
                 String artifactCoords = getArtifactCoordinates(artifactName);
                 if (artifactCoords == null) {
                     final ArtifactCoords coords = ArtifactCoords.fromString(artifactName);
+                    // Use the MavenProjectArtifactVersions util method to store this, but
+                    // use the version in the key in order to avoid it being overwritten
+                    // by another entry. A hard coded artifact may well have a different version
+                    // from another artifact in the f-p, as handling that is one reason to hard code
                     MavenProjectArtifactVersions.put(hardcodedArtifacts, coords.getGroupId(),
                             coords.getArtifactId(),  coords.getClassifier(), coords.getVersion(),
-                            coords.getExtension());
+                            coords.getExtension(), true);
                 }
             }
         }
