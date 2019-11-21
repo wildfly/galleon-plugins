@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import org.apache.maven.plugin.logging.Log;
 import org.jboss.galleon.ProvisioningException;
 import org.jboss.galleon.maven.plugin.util.MavenArtifactRepositoryManager;
 import org.wildfly.galleon.plugin.ArtifactCoords;
@@ -31,8 +32,8 @@ import org.wildfly.galleon.plugin.ArtifactCoords;
  */
 public class ArtifactListMerger extends ArtifactListBuilder {
 
-    public ArtifactListMerger(MavenArtifactRepositoryManager artifactResolver, Path localMvnRepoPath) {
-        super(artifactResolver, localMvnRepoPath);
+    public ArtifactListMerger(MavenArtifactRepositoryManager artifactResolver, Path localMvnRepoPath, Log log) {
+        super(artifactResolver, localMvnRepoPath, log);
     }
 
     void addOffliner(ArtifactCoords coords) throws ProvisioningException, IOException {

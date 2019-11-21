@@ -37,6 +37,7 @@ import org.apache.commons.codec.binary.Hex;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.Parent;
 import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
+import org.apache.maven.plugin.logging.Log;
 import org.eclipse.aether.resolution.ArtifactDescriptorException;
 import org.jboss.galleon.ProvisioningException;
 import org.jboss.galleon.maven.plugin.util.MavenArtifactRepositoryManager;
@@ -57,13 +58,16 @@ public class ArtifactListBuilder {
     private final MessageDigest md;
 
     private final MavenArtifactRepositoryManager artifactResolver;
+
+    private final Log log;
     /**
      * Create an Artifact list builder.
      *
      */
-    public ArtifactListBuilder(MavenArtifactRepositoryManager artifactResolver, Path localMvnRepoPath) {
+    public ArtifactListBuilder(MavenArtifactRepositoryManager artifactResolver, Path localMvnRepoPath, Log log) {
         this.localMvnRepoPath = localMvnRepoPath;
         this.artifactResolver = artifactResolver;
+        this.log = log;
         try {
             md = MessageDigest.getInstance("SHA-256");
         } catch (NoSuchAlgorithmException ex) {
@@ -96,6 +100,7 @@ public class ArtifactListBuilder {
     }
 
     public Path add(ArtifactCoords coords) throws ProvisioningException, ArtifactDescriptorException, IOException {
+        debug("Add artifact %s:%s:%s", coords.getGroupId(), coords.getArtifactId(), coords.getVersion());
         Path artifactLocalPath = resolveArtifact(coords);
         ArtifactCoords pomFileCoords = new ArtifactCoords(coords.getGroupId(), coords.getArtifactId(), coords.getVersion(), null, "pom");
         Path pomFile = resolveArtifact(pomFileCoords);
@@ -163,6 +168,12 @@ public class ArtifactListBuilder {
             map.put("/" + relativized.toString(), checksum(artifactLocalPath.toString()));
         } catch (IOException ex) {
             throw new RuntimeException("Can't add " + artifactLocalPath + " to offliner file", ex);
+        }
+    }
+
+    private void debug(String msg, Object... args) {
+        if (log.isDebugEnabled()) {
+            log.debug(String.format(msg, args));
         }
     }
 }
