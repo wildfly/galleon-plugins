@@ -14,7 +14,7 @@ Here is an example from WildFly Servlet feature-pack build config file
 
 [source,xml]
 ----
-<build xmlns="urn:wildfly:feature-pack-build:2.0" producer="wildfly-servlet@maven(org.jboss.universe:community-universe):current">
+<build xmlns="urn:wildfly:feature-pack-build:3.0" producer="wildfly-servlet@maven(org.jboss.universe:community-universe):current">
     <dependencies>
         <dependency group-id="org.wildfly.core" artifact-id="wildfly-core-galleon-pack">
             <name>org.wildfly.core:wildfly-core-galleon-pack</name>

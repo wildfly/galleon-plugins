@@ -22,24 +22,15 @@ For example:
 
 [source,xml]
 ----
-<feature-pack xmlns="urn:jboss:galleon:feature-pack:2.0" location="org.foo:my-galleon-pack:1.0.0.Final">
-    <transitive>
-        <dependency location="wildfly-core@maven(org.jboss.universe:community-universe):current#9.0.1.Final">
-            <origin>org.wildfly.core:wildfly-core-galleon-pack</origin>
-        </dependency>
-        <dependency location="wildfly-servlet@maven(org.jboss.universe:community-universe):current#17.0.0.Final">
-            <origin>org.wildfly:wildfly-servlet-galleon-pack</origin>
-        </dependency>
-    </transitive>
+<build xmlns="urn:wildfly:feature-pack-build:3.0" producer="org.foo:my-galleon-pack:1.0.0.Final">
     <dependencies>
         <dependency location="wildfly@maven(org.jboss.universe:community-universe):current#17.0.0.Final">
-            <origin>org.wildfly:wildfly-galleon-pack</origin>
             <default-configs inherit="false"/>
             <packages inherit="false"/>
         </dependency>
     </dependencies>
-   <default-packages>
+    <default-packages>
         <package name="my.package1"/>
     </default-packages>
-</feature-pack>
+</build>
 ----
