@@ -35,8 +35,16 @@ import org.apache.maven.project.MavenProjectHelper;
 import org.eclipse.aether.DefaultRepositorySystemSession;
 import org.eclipse.aether.RepositorySystem;
 import org.eclipse.aether.RepositorySystemSession;
+import org.eclipse.aether.artifact.Artifact;
+import org.eclipse.aether.artifact.DefaultArtifact;
+import org.eclipse.aether.collection.CollectRequest;
+import org.eclipse.aether.collection.CollectResult;
+import org.eclipse.aether.collection.DependencyCollectionException;
+import org.eclipse.aether.graph.Dependency;
+import org.eclipse.aether.graph.DependencyNode;
 import org.eclipse.aether.repository.RemoteRepository;
 import org.eclipse.aether.resolution.ArtifactDescriptorException;
+import org.eclipse.aether.util.artifact.JavaScopes;
 import org.jboss.galleon.ProvisioningException;
 import org.jboss.galleon.config.FeaturePackConfig;
 import org.jboss.galleon.config.ProvisioningConfig;
@@ -96,6 +104,9 @@ public class AllArtifactListGeneratorMojo extends AbstractMojo {
     @Parameter(alias = "offline", defaultValue = "false")
     private boolean offline;
 
+    @Parameter(alias = "extra-artifacts", readonly = false, required = false)
+    protected List<ArtifactItem> extraArtifacts;
+
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
         final MavenProjectArtifactVersions projectArtifacts = MavenProjectArtifactVersions.getInstance(project);
@@ -103,7 +114,7 @@ public class AllArtifactListGeneratorMojo extends AbstractMojo {
         noWorkspaceSession.setWorkspaceReader(null);
         MavenArtifactRepositoryManager artifactResolver = offline ? new MavenArtifactRepositoryManager(repoSystem, noWorkspaceSession)
                 : new MavenArtifactRepositoryManager(repoSystem, noWorkspaceSession, repositories);
-        ArtifactListMerger builder = new ArtifactListMerger(artifactResolver, repoSession.getLocalRepository().getBasedir().toPath());
+        ArtifactListMerger builder = new ArtifactListMerger(artifactResolver, repoSession.getLocalRepository().getBasedir().toPath(), getLog());
         final UniverseFactoryLoader ufl = UniverseFactoryLoader.getInstance().addArtifactResolver(artifactResolver);
         try {
             // Add top level feature-pack itself to offliner.
@@ -122,7 +133,9 @@ public class AllArtifactListGeneratorMojo extends AbstractMojo {
             ArtifactCoords coords = new ArtifactCoords(fpGroupId, fpArtifactId, fpVersion, null, "zip");
             Path localPath = builder.add(coords);
 
-            try (ProvisioningLayoutFactory layoutFactory = ProvisioningLayoutFactory.getInstance(UniverseResolver.builder(ufl).build())) {
+            addExtraArtifacts(builder, projectArtifacts);
+
+            try ( ProvisioningLayoutFactory layoutFactory = ProvisioningLayoutFactory.getInstance(UniverseResolver.builder(ufl).build())) {
                 final FeaturePackLocation fpl = layoutFactory.addLocal(localPath, false);
                 ProvisioningConfig config = ProvisioningConfig.builder().addFeaturePackDep(fpl).build();
                 try (ProvisioningLayout<?> layout = layoutFactory.newConfigLayout(config)) {
@@ -146,6 +159,57 @@ public class AllArtifactListGeneratorMojo extends AbstractMojo {
             projectHelper.attachArtifact(project, ARTIFACT_LIST_EXTENSION, ARTIFACT_LIST_CLASSIFIER, target.toFile());
         } catch (IOException | ArtifactDescriptorException | ProvisioningException ex) {
             throw new MojoExecutionException(ex.getMessage(), ex);
+        }
+    }
+
+    private void addExtraArtifacts(ArtifactListMerger builder, MavenProjectArtifactVersions projectArtifacts) throws MojoExecutionException {
+        for (ArtifactItem art : extraArtifacts) {
+            if (art.getGroupId() == null) {
+                throw new MojoExecutionException("GroupId can't be null");
+            }
+            if (art.getArtifactId() == null) {
+                throw new MojoExecutionException("ArtifactId can't be null");
+            }
+            String ext = art.getType() == null ? "jar" : art.getType();
+            String version = art.getVersion();
+            if (version == null) {
+                String coords = projectArtifacts.getVersion(art.getGroupId() + ":" + art.getArtifactId());
+                if (coords != null) {
+                    ArtifactCoords c = ArtifactCoordsUtil.fromJBossModules(coords, null);
+                    if (c != null) {
+                        version = c.getVersion();
+                    }
+                }
+            }
+            if (version == null) {
+                throw new MojoExecutionException("Version for " + art.getGroupId() + ":" + art.getArtifactId() + " has not been found.");
+            }
+            try {
+                addArtifact(builder, new ArtifactCoords(art.getGroupId(), art.getArtifactId(), version, art.getClassifier(), ext));
+            } catch (Exception ex) {
+                throw new MojoExecutionException(ex.getMessage(), ex);
+            }
+
+        }
+    }
+
+    private void addArtifact(ArtifactListMerger builder, ArtifactCoords coords) throws ProvisioningException,
+            ArtifactDescriptorException, IOException, DependencyCollectionException {
+        CollectRequest request = new CollectRequest();
+        request.setRoot(new Dependency(new DefaultArtifact(coords.getGroupId(), coords.getArtifactId(), coords.getExtension(), coords.getVersion()), JavaScopes.RUNTIME));
+        CollectResult res = repoSystem.collectDependencies(repoSession, request);
+        addDepNode(builder, res.getRoot());
+    }
+
+    private void addDepNode(ArtifactListMerger builder, DependencyNode n) throws ProvisioningException, ArtifactDescriptorException, IOException {
+        Dependency d = n.getDependency();
+        Artifact a = d.getArtifact();
+        if (!("provided".equals(d.getScope())) && !("test".equals(d.getScope())) && !("system".equals(d.getScope()))) {
+            builder.add(new ArtifactCoords(a.getGroupId(), a.getArtifactId(),
+                    a.getVersion(), a.getClassifier(), a.getExtension()));
+            for (DependencyNode dn : n.getChildren()) {
+                addDepNode(builder, dn);
+            }
         }
     }
 
