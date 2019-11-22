@@ -47,6 +47,7 @@
     <module>config-gen</module>
     <module>maven-plugin</module>
     <module>feature-spec-gen</module>
+    <module>docs</module>
   </modules>
 
   <properties>
