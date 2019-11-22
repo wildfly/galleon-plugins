@@ -1,0 +1,30 @@
+= Steps to release galleon-plugins project
+
+== STEP 1: Prepare and perform the release
+
+First, make sure you don't have pending changes in your master branch.
+
+* `cd galleon-plugins`
+* `git checkout master`
+* `pull --rebase upstream master`
+* Update docs/* content to reference the new released version. 
+* Commit the changes with message: `Update doc to X.X.X.Final`
+* `mvn release:prepare`
+* `mvn release perform`
+* Update docs/* content to reference the new SNAPSHOT version. 
+* Commit the changes with message: `Update doc to X.X.X.Final-SNAPSHOT`
+* `push upstream master`
+
+== STEP 2: Release in Nexus
+
+* Log to `https://repository.jboss.org/nexus`
+* Close the staging repository.
+* Release the closed repository.
+
+== STEP 3: Release in JIRA
+
+* Log to `https://issues.jboss.org/projects/WFGP`
+* Click on `Releases`
+* Select Release you just released, Click on `Actions/Release`
+* Set the date.
+* Click on `Manage Versions` and add the next version.
