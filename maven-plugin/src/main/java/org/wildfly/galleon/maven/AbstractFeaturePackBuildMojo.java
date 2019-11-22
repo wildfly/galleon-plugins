@@ -272,7 +272,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         DefaultRepositorySystemSession noWorkspaceSession = new DefaultRepositorySystemSession(repoSession);
         noWorkspaceSession.setWorkspaceReader(null);
         ArtifactListBuilder builder = new ArtifactListBuilder(new MavenArtifactRepositoryManager(repoSystem,
-                noWorkspaceSession), repoSession.getLocalRepository().getBasedir().toPath());
+                noWorkspaceSession), repoSession.getLocalRepository().getBasedir().toPath(), getLog());
         buildArtifactList(builder);
 
         addConfigPackages(resourcesDir.resolve(Constants.PACKAGES), fpDir.resolve(Constants.PACKAGES), fpBuilder);
