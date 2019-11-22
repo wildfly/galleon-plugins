@@ -93,6 +93,8 @@
     <license.failIfMissing>true</license.failIfMissing>
     <license.failIfUnknown>true</license.failIfUnknown>
 
+    <galleon-plugins.repo.scm.connection>git@github.com:wildfly/galleon-plugins.git</galleon-plugins.repo.scm.connection>
+    <galleon-plugins.repo.scm.url>https://github.com/wildfly/galleon-plugins</galleon-plugins.repo.scm.url>   
   </properties>
 
   <repositories>
@@ -447,5 +449,10 @@
       </plugin>
     </plugins>
   </build>
-
+  <scm>
+    <connection>scm:git:${galleon-plugins.repo.scm.connection}</connection>
+    <developerConnection>scm:git:${galleon-plugins.repo.scm.connection}</developerConnection>
+    <url>${galleon-plugins.repo.scm.url}</url>
+    <tag>HEAD</tag>
+  </scm>
 </project>
