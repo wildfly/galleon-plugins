@@ -295,11 +295,11 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
         List<Path> configPaths = new ArrayList<>();
         final ProvisioningConfig.Builder configBuilder = ProvisioningConfig.builder();
-        for(FeaturePackRuntime fpRt : runtime.getFeaturePacks()) {
-            final FeaturePackConfig.Builder fpBuilder = FeaturePackConfig.builder(fpRt.getFPID().getLocation())
+        for(Map.Entry<FPID, ExampleFpConfigs> example : exampleConfigs.entrySet()) {
+            final FeaturePackConfig.Builder fpBuilder = FeaturePackConfig.builder(example.getKey().getLocation())
                     .setInheritConfigs(false)
                     .setInheritPackages(false);
-            final ExampleFpConfigs fpExampleConfigs = exampleConfigs.get(fpRt.getFPID());
+            final ExampleFpConfigs fpExampleConfigs = example.getValue();
             if(fpExampleConfigs != null) {
                 for(Map.Entry<ConfigId, ConfigModel> config : fpExampleConfigs.getConfigs().entrySet()) {
                     final ConfigId configId = config.getKey();
@@ -332,6 +332,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             }
             configBuilder.addFeaturePackDep(fpBuilder.build());
         }
+
         try {
             log.verbose("Generating example configs");
             ProvisioningConfig config = configBuilder.build();
