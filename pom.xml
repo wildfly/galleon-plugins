@@ -76,6 +76,7 @@
     <version.org.jboss.dmr>1.5.0.Final</version.org.jboss.dmr>
     <version.org.jboss.jandex>2.0.3.Final</version.org.jboss.jandex>
     <version.org.wildfly.core.wildfly-core>9.0.2.Final</version.org.wildfly.core.wildfly-core>
+    <version.org.wildfly.maven.plugins>2.0.0.Final</version.org.wildfly.maven.plugins>
     <version.org.jboss.logging>3.3.1.Final</version.org.jboss.logging>
     <version.org.jboss.logmanager>2.0.6.Final</version.org.jboss.logmanager>
     <version.com.io7m.xom>1.2.10</version.com.io7m.xom>
@@ -326,6 +327,19 @@
         <version>${version.junit}</version>
         <scope>test</scope>
       </dependency>
+
+      <dependency>
+        <groupId>org.apache.maven</groupId>
+        <artifactId>maven-model-builder</artifactId>
+        <version>${version.org.apache.maven}</version>
+      </dependency>
+      
+      <dependency>
+        <groupId>org.wildfly.maven.plugins</groupId>
+        <artifactId>licenses-plugin</artifactId>
+        <version>${version.org.wildfly.maven.plugins}</version>
+      </dependency>
+
     </dependencies>
   </dependencyManagement>
   <dependencies>
