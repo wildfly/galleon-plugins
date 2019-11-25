@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Collections;
 import java.util.List;
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.plugin.AbstractMojo;
@@ -105,7 +106,7 @@ public class AllArtifactListGeneratorMojo extends AbstractMojo {
     private boolean offline;
 
     @Parameter(alias = "extra-artifacts", readonly = false, required = false)
-    protected List<ArtifactItem> extraArtifacts;
+    private List<ArtifactItem> extraArtifacts = Collections.emptyList();
 
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
