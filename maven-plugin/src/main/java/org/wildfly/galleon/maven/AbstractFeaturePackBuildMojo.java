@@ -77,6 +77,7 @@ import org.jboss.galleon.spec.FeaturePackPlugin;
 import org.jboss.galleon.spec.FeaturePackSpec;
 import org.jboss.galleon.spec.PackageDependencySpec;
 import org.jboss.galleon.spec.PackageSpec;
+import org.jboss.galleon.universe.FeaturePackLocation;
 import org.jboss.galleon.util.CollectionUtils;
 import org.jboss.galleon.util.IoUtils;
 import org.jboss.galleon.util.StringUtils;
@@ -458,7 +459,19 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             final FeaturePackConfig depConfig = depSpec.getTarget();
 
             final FeaturePackDescription fpDescr = FeaturePackDescriber.describeFeaturePackZip(depZip);
-            fpBuilder.addFeaturePackDep(depSpec.getName(), FeaturePackConfig.builder(fpDescr.getFPID().getLocation()).init(depConfig).build());
+
+            // here we need to determine which format to use to persist the dependency location:
+            // Maven coordinates or the FPL. The format is actually set in the feature-pack build parser.
+            // However, the parser can't set the actual FPL value, since it does not have enough information.
+            // So here we check whether the parser used the Galleon 1 FPL format and if so, replace it with
+            // the proper FPL.
+            FeaturePackLocation fpl = depEntry.getValue().getTarget().getLocation();
+            if(!fpl.isMavenCoordinates()) {
+                fpl = fpDescr.getFPID().getLocation();
+            } else if(org.apache.commons.lang3.StringUtils.isEmpty(fpl.getBuild())) {
+                fpl = fpl.replaceBuild(depCoords.getVersion());
+            }
+            fpBuilder.addFeaturePackDep(depSpec.getName(), FeaturePackConfig.builder(fpl).init(depConfig).build());
             fpDependencies.put(depSpec.getName(), fpDescr);
         }
     }
