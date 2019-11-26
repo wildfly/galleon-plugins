@@ -16,13 +16,18 @@
  */
 package org.wildfly.galleon.maven;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.TransformerException;
 import org.apache.maven.execution.MavenSession;
+import org.apache.maven.model.License;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
@@ -33,6 +38,10 @@ import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
 import org.apache.maven.project.MavenProjectHelper;
+import org.apache.maven.project.ProjectBuilder;
+import org.apache.maven.project.ProjectBuildingException;
+import org.apache.maven.project.ProjectBuildingRequest;
+import org.apache.maven.project.ProjectBuildingResult;
 import org.eclipse.aether.DefaultRepositorySystemSession;
 import org.eclipse.aether.RepositorySystem;
 import org.eclipse.aether.RepositorySystemSession;
@@ -64,16 +73,24 @@ import org.jboss.galleon.universe.maven.MavenUniverse;
 import org.wildfly.galleon.plugin.ArtifactCoords;
 import static org.wildfly.galleon.maven.AbstractFeaturePackBuildMojo.ARTIFACT_LIST_CLASSIFIER;
 import static org.wildfly.galleon.maven.AbstractFeaturePackBuildMojo.ARTIFACT_LIST_EXTENSION;
+import org.wildfly.maven.plugins.licenses.LicensesFileWriter;
+import org.wildfly.maven.plugins.licenses.model.ProjectLicenseInfo;
 
 /**
  * Aggregate all artifact lists (offliners) of a feature-pack dependencies. In
  * addition adds to the list the feature-pack itself and universe artifacts. The
  * resulting list is attached as an artifact to the current project.
  *
+ * If output-licenses-file is set, a license file for the contained artifacts is
+ * generated.
+ *
  * @author jdenise@redhat.com
  */
 @Mojo(name = "generate-all-artifacts-list", requiresDependencyResolution = ResolutionScope.RUNTIME, defaultPhase = LifecyclePhase.COMPILE)
 public class AllArtifactListGeneratorMojo extends AbstractMojo {
+
+    @Component
+    private ProjectBuilder mavenProjectBuilder;
 
     @Component
     private MavenProjectHelper projectHelper;
@@ -107,6 +124,12 @@ public class AllArtifactListGeneratorMojo extends AbstractMojo {
 
     @Parameter(alias = "extra-artifacts", readonly = false, required = false)
     private List<ArtifactItem> extraArtifacts = Collections.emptyList();
+
+    @Parameter(alias = "output-licenses-file", readonly = false, required = false)
+    private String licensesFile;
+
+    @Parameter(alias = "excluded-licenses-versions", readonly = false, required = false)
+    private String excludedVersions;
 
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
@@ -157,10 +180,66 @@ public class AllArtifactListGeneratorMojo extends AbstractMojo {
             final Path target = targetDir.resolve(fpArtifactId + '-'
                     + fpVersion + "-all-artifacts-list." + ARTIFACT_LIST_EXTENSION);
             Files.write(target, builder.build().getBytes());
+
+            generateLicenses(builder);
+
             projectHelper.attachArtifact(project, ARTIFACT_LIST_EXTENSION, ARTIFACT_LIST_CLASSIFIER, target.toFile());
         } catch (IOException | ArtifactDescriptorException | ProvisioningException ex) {
             throw new MojoExecutionException(ex.getMessage(), ex);
         }
+    }
+
+    private void generateLicenses(ArtifactListBuilder builder) throws MojoExecutionException, ProvisioningException {
+        if (licensesFile == null) {
+            return;
+        }
+        List<ProjectLicenseInfo> dependencies = new ArrayList<>();
+        for (String p : builder.getMap().keySet()) {
+            if (p.endsWith(".pom")) {
+                ArtifactCoords coords = toCoords(Paths.get(p), "pom");
+                if (excludedVersions == null || !coords.getVersion().matches(excludedVersions)) {
+                    ProjectBuildingRequest req = session.getProjectBuildingRequest();
+                    Path resolvedPath = builder.resolveArtifact(coords);
+                    ProjectBuildingResult res;
+                    try {
+                        res = mavenProjectBuilder.build(resolvedPath.toFile(), req);
+                    } catch (ProjectBuildingException ex) {
+                        getLog().warn("Exception building project for " + p + ", skipping license generation", ex);
+                        continue;
+                    }
+                    dependencies.add(createDependencyProject(res.getProject()));
+                }
+            }
+        }
+        LicensesFileWriter fw = new LicensesFileWriter();
+        try {
+            fw.writeLicenseSummary(dependencies, new File(licensesFile));
+        } catch (TransformerException | ParserConfigurationException ex) {
+            throw new MojoExecutionException(ex.getMessage(), ex);
+        }
+    }
+
+    private static ArtifactCoords toCoords(Path path, String extension) {
+        Path version = path.getParent();
+        Path artifactId = version.getParent();
+        Path groupId = artifactId.getParent();
+        String grpId = groupId.toString().startsWith("/") ? groupId.toString().substring(1) : groupId.toString();
+        ArtifactCoords coords = new ArtifactCoords(grpId.replaceAll("/", "."),
+                artifactId.getFileName().toString(), version.getFileName().toString(), null, extension);
+        return coords;
+    }
+
+    private ProjectLicenseInfo createDependencyProject(MavenProject depMavenProject) {
+        ProjectLicenseInfo dependencyProject
+                = new ProjectLicenseInfo(depMavenProject.getGroupId(), depMavenProject.getArtifactId(),
+                        depMavenProject.getVersion());
+        List<?> licenses = depMavenProject.getLicenses();
+        getLog().debug("Adding licenses for " + depMavenProject.getGroupId() + ":"
+                + depMavenProject.getArtifactId() + ":" + depMavenProject.getVersion());
+        for (Object license : licenses) {
+            dependencyProject.addLicense((License) license);
+        }
+        return dependencyProject;
     }
 
     private void addExtraArtifacts(ArtifactListMerger builder, MavenProjectArtifactVersions projectArtifacts) throws MojoExecutionException {
