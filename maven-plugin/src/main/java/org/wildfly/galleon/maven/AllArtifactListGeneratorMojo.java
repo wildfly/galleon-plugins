@@ -57,15 +57,12 @@ import org.eclipse.aether.resolution.ArtifactDescriptorException;
 import org.eclipse.aether.util.artifact.JavaScopes;
 import org.jboss.galleon.ProvisioningException;
 import org.jboss.galleon.config.FeaturePackConfig;
-import org.jboss.galleon.config.ProvisioningConfig;
-import org.jboss.galleon.layout.FeaturePackLayout;
-import org.jboss.galleon.layout.ProvisioningLayout;
-import org.jboss.galleon.layout.ProvisioningLayoutFactory;
+import org.jboss.galleon.layout.FeaturePackDescriber;
 import org.jboss.galleon.maven.plugin.util.MavenArtifactRepositoryManager;
+import org.jboss.galleon.spec.FeaturePackSpec;
 import org.jboss.galleon.universe.FeaturePackLocation;
 import org.jboss.galleon.universe.Universe;
 import org.jboss.galleon.universe.UniverseFactoryLoader;
-import org.jboss.galleon.universe.UniverseResolver;
 import org.jboss.galleon.universe.maven.MavenArtifact;
 import org.jboss.galleon.universe.maven.MavenChannel;
 import org.jboss.galleon.universe.maven.MavenProducer;
@@ -155,24 +152,19 @@ public class AllArtifactListGeneratorMojo extends AbstractMojo {
                 throw new MojoExecutionException("Version for feature-pack has not been found.");
             }
             ArtifactCoords coords = new ArtifactCoords(fpGroupId, fpArtifactId, fpVersion, null, "zip");
-            builder.add(coords);
+            Path path = builder.add(coords);
 
             addExtraArtifacts(builder, projectArtifacts);
 
-            try ( ProvisioningLayoutFactory layoutFactory = ProvisioningLayoutFactory.getInstance(UniverseResolver.builder(ufl).build())) {
-                final FeaturePackLocation fpl = FeaturePackLocation.fromString(fpGroupId + ":" + fpArtifactId + ":" + fpVersion);
-                ProvisioningConfig config = ProvisioningConfig.builder().addFeaturePackDep(fpl).build();
-                try (ProvisioningLayout<?> layout = layoutFactory.newConfigLayout(config)) {
-                    FeaturePackLayout fpLayout = layout.getFeaturePack(fpl.getProducer());
-                    for (FeaturePackConfig cfg : fpLayout.getSpec().getTransitiveDeps()) {
-                        addFeaturePackContent(cfg.getLocation(), ufl, builder);
-                    }
-                    for (FeaturePackConfig cfg : fpLayout.getSpec().getFeaturePackDeps()) {
-                        addFeaturePackContent(cfg.getLocation(), ufl, builder);
-                    }
-                }
-                addFeaturePackContent(fpl, ufl, builder);
+            final FeaturePackLocation fpl = FeaturePackLocation.fromString(fpGroupId + ":" + fpArtifactId + ":" + fpVersion);
+            FeaturePackSpec spec = FeaturePackDescriber.readSpec(path);
+            for (FeaturePackConfig cfg : spec.getTransitiveDeps()) {
+                addFeaturePackContent(cfg.getLocation(), ufl, builder);
             }
+            for (FeaturePackConfig cfg : spec.getFeaturePackDeps()) {
+                addFeaturePackContent(cfg.getLocation(), ufl, builder);
+            }
+            addFeaturePackContent(fpl, ufl, builder);
             Path targetDir = Paths.get(project.getBuild().getDirectory());
             if (!Files.exists(targetDir)) {
                 Files.createDirectories(targetDir);
