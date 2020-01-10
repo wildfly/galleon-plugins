@@ -41,10 +41,10 @@ import org.eclipse.aether.resolution.ArtifactDescriptorResult;
 import org.jboss.galleon.Constants;
 import org.jboss.galleon.ProvisioningException;
 import org.jboss.galleon.config.FeaturePackConfig;
+import org.jboss.galleon.layout.FeaturePackDescriber;
 import org.jboss.galleon.layout.FeaturePackDescription;
 import org.jboss.galleon.spec.FeaturePackSpec;
 import org.jboss.galleon.universe.FeaturePackLocation;
-import org.jboss.galleon.universe.galleon1.LegacyGalleon1Universe;
 import org.jboss.galleon.util.ZipUtils;
 import org.wildfly.galleon.plugin.ArtifactCoords;
 import org.wildfly.galleon.plugin.WfConstants;
@@ -102,6 +102,12 @@ public class UserFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
      */
     @Parameter(alias = "feature-pack-location", defaultValue = "${project.groupId}:${project.artifactId}:${project.version}", required = false)
     private String fpLocation;
+
+    /**
+     * By default generated build config dependencies are expressed using GAV, set this parameter to true to generate FPL.
+     */
+    @Parameter(alias = "translate-to-fpl", defaultValue = "false", required = false)
+    private Boolean translateToFpl;
 
     private WildFlyFeaturePackBuild buildConfig;
     private boolean generate;
@@ -236,11 +242,15 @@ public class UserFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
         FeaturePackLocation fpl = null;
         if (artifactId.startsWith(WILDFLY_GALLEON_PACK_PREFIX) && artifactId.endsWith(WILDFLY_GALLEON_PACK_SUFFIX)) {
             if (ext.equals("zip") && (!"test".equals(scope)) && (!"system".equals(scope))) {
-                try (FileSystem fs = ZipUtils.newFileSystem(resolveArtifact(new ArtifactCoords(groupId,
-                        artifactId, version, null, "zip")))) {
+                Path fp = resolveArtifact(new ArtifactCoords(groupId,
+                        artifactId, version, null, "zip"));
+                try (FileSystem fs = ZipUtils.newFileSystem(fp)) {
                     if (Files.exists(fs.getPath(Constants.FEATURE_PACK_XML))) {
-                        fpl = LegacyGalleon1Universe.toFpl(groupId,
-                                artifactId, null);
+                        if (translateToFpl) {
+                            fpl = FeaturePackDescriber.readSpec(fp).getFPID().getLocation();
+                        } else {
+                            fpl = FeaturePackLocation.fromString(groupId + ":" + artifactId + ":" + version);
+                        }
                     }
                 }
             }

@@ -155,12 +155,12 @@ public class AllArtifactListGeneratorMojo extends AbstractMojo {
                 throw new MojoExecutionException("Version for feature-pack has not been found.");
             }
             ArtifactCoords coords = new ArtifactCoords(fpGroupId, fpArtifactId, fpVersion, null, "zip");
-            Path localPath = builder.add(coords);
+            builder.add(coords);
 
             addExtraArtifacts(builder, projectArtifacts);
 
             try ( ProvisioningLayoutFactory layoutFactory = ProvisioningLayoutFactory.getInstance(UniverseResolver.builder(ufl).build())) {
-                final FeaturePackLocation fpl = layoutFactory.addLocal(localPath, false);
+                final FeaturePackLocation fpl = FeaturePackLocation.fromString(fpGroupId + ":" + fpArtifactId + ":" + fpVersion);
                 ProvisioningConfig config = ProvisioningConfig.builder().addFeaturePackDep(fpl).build();
                 try (ProvisioningLayout<?> layout = layoutFactory.newConfigLayout(config)) {
                     FeaturePackLayout fpLayout = layout.getFeaturePack(fpl.getProducer());
