@@ -26,7 +26,6 @@ import java.util.Map;
 import java.util.TreeMap;
 
 import org.apache.maven.artifact.Artifact;
-import org.apache.maven.model.Dependency;
 import org.apache.maven.project.MavenProject;
 
 /**
@@ -52,25 +51,6 @@ class MavenProjectArtifactVersions {
             }
             put(artifact.getGroupId(), artifact.getArtifactId(), artifact.getClassifier(), artifact.getVersion(), artifact.getType());
         }
-        if (project.getDependencyManagement() != null) {
-            for (Dependency dependency : project.getDependencyManagement().getDependencies()) {
-                if(TEST_JAR.equals(dependency.getType())) {
-                    continue;
-                }
-                final String gac = gac(dependency.getGroupId(), dependency.getArtifactId(), dependency.getClassifier());
-                if (versions.containsKey(gac)) {
-                    put(dependency.getGroupId(), dependency.getArtifactId(), dependency.getClassifier(), dependency.getVersion(), dependency.getType());
-                }
-            }
-        }
-    }
-
-    private static String gac(final String groupId, final String artifactId, final String classifier) {
-        final StringBuilder buf = new StringBuilder(groupId).append(':').append(artifactId);
-        if(classifier != null && !classifier.isEmpty()) {
-            buf.append("::").append(classifier);
-        }
-        return buf.toString();
     }
 
     String getVersion(String gac) {
