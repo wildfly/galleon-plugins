@@ -974,17 +974,17 @@ class FeatureSpecNode {
     }
 
     void buildSpecs() throws ProvisioningException {
+        mergeAllSpecs();
+        buildSpec();
+        buildChildSpecs();
+    }
+
+    private void mergeAllSpecs() throws ProvisioningException {
         mergeSpecs();
-        buildSpec(0);
-        buildChildSpecs(1);
+        mergeChildSpecs();
     }
 
     private void mergeSpecs() throws ProvisioningException {
-        mergeSpecs(0);
-        mergeChildSpecs(1);
-    }
-
-    private void mergeSpecs(int level) throws ProvisioningException {
         if(mergeCode == 0) {
             return;
         }
@@ -1034,28 +1034,27 @@ class FeatureSpecNode {
         }
     }
 
-    private void mergeChildSpecs(int level) throws ProvisioningException {
+    private void mergeChildSpecs() throws ProvisioningException {
         if(children.isEmpty()) {
             return;
         }
         for(FeatureSpecNode child : children.values()) {
-            child.mergeSpecs(level);
-            child.mergeChildSpecs(level + 1);
+            child.mergeSpecs();
+            child.mergeChildSpecs();
         }
     }
 
-    private void buildChildSpecs(int level) throws ProvisioningException {
+    private void buildChildSpecs() throws ProvisioningException {
         if(children.isEmpty()) {
             return;
         }
         for(FeatureSpecNode child : children.values()) {
-            child.buildSpec(level);
-            child.buildChildSpecs(level + 1);
+            child.buildSpec();
+            child.buildChildSpecs();
         }
     }
 
-    private void buildSpec(int level) throws ProvisioningException {
-
+    private void buildSpec() throws ProvisioningException {
         if(standaloneDescr != null && generateStandalone) {
             persistSpec(standaloneName, standaloneDescr, STANDALONE_MODEL);
         }
