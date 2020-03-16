@@ -395,6 +395,7 @@ class FeatureSpecNode {
                 final FeatureSpecNode targetSpec = gen.getSpec(featureRefName);
                 final FeatureSpec inheritedSpec = targetSpec.isGenerate(model) ? null : gen.getInheritedSpec(featureRefName);
                 if(inheritedSpec != null) {
+                    boolean newIdParams = false;
                     for(FeatureParameterSpec refParam : inheritedSpec.getIdParams()) {
                         boolean present = false;
                         for (ModelNode param : paramsDescr) {
@@ -404,7 +405,9 @@ class FeatureSpecNode {
                             }
                         }
                         if(!present) {
+                            newIdParams = true;
                             gen.debug("Adding ID parameter %s to %s to satisfy reference %s parameter mapping ", refParam.getName(), name, featureRefName);
+                            this.extendedIdParams= CollectionUtils.add(this.extendedIdParams, refParam.getName());
                             if(refParam.hasDefaultValue()) {
                                 builder.addParam(refParam);
                             } else {
@@ -414,6 +417,9 @@ class FeatureSpecNode {
                                 refBuilder.mapParam(refParam.getName(), refParam.getName());
                             }
                         }
+                    }
+                    if (newIdParams) {
+                        recursiveAddIdParam(name, extendedIdParams, model);
                     }
                 }
 
@@ -477,6 +483,26 @@ class FeatureSpecNode {
         gen.increaseSpecCount();
     }
 
+    /**
+     * Add id params from a spec to all its referencing descendants.
+     * @param specName the name of the spec.
+     * @param extendedIdParams the id parameters to be added if missing.
+     * @param model the model type being generated.
+     * @throws ProvisioningException
+     */
+    private void recursiveAddIdParam(String specName, Set<String> extendedIdParams, int model) throws ProvisioningException {
+        for (Map.Entry<String, FeatureSpecNode> referencingSpec : gen.getReferencingSpecs(specName).entrySet()) {
+            ModelNode referencingSpecDescr = referencingSpec.getValue().getDescr(model);
+            Map<String, ModelNode> params = new HashMap<>();
+            if (referencingSpecDescr.hasDefined("params")) {
+                for (ModelNode param : referencingSpecDescr.get("params").asList()) {
+                    params.put(param.get("name").asString(), param);
+                }
+            }
+            ensureIdParams(referencingSpec.getKey(),referencingSpecDescr, params, extendedIdParams, true);
+            recursiveAddIdParam(referencingSpec.getKey(), extendedIdParams, model);
+        }
+    }
     private void ensureIdParams(String specName, ModelNode descr, Map<String, ModelNode> descrParams, Set<String> extendedIdParams, boolean addAsIds) throws ProvisioningException {
         final ModelNode params = descr.get("params");
         ModelNode annotation = null;
@@ -948,17 +974,17 @@ class FeatureSpecNode {
     }
 
     void buildSpecs() throws ProvisioningException {
+        mergeAllSpecs();
+        buildSpec();
+        buildChildSpecs();
+    }
+
+    private void mergeAllSpecs() throws ProvisioningException {
         mergeSpecs();
-        buildSpec(0);
-        buildChildSpecs(1);
+        mergeChildSpecs();
     }
 
     private void mergeSpecs() throws ProvisioningException {
-        mergeSpecs(0);
-        mergeChildSpecs(1);
-    }
-
-    private void mergeSpecs(int level) throws ProvisioningException {
         if(mergeCode == 0) {
             return;
         }
@@ -1008,28 +1034,27 @@ class FeatureSpecNode {
         }
     }
 
-    private void mergeChildSpecs(int level) throws ProvisioningException {
+    private void mergeChildSpecs() throws ProvisioningException {
         if(children.isEmpty()) {
             return;
         }
         for(FeatureSpecNode child : children.values()) {
-            child.mergeSpecs(level);
-            child.mergeChildSpecs(level + 1);
+            child.mergeSpecs();
+            child.mergeChildSpecs();
         }
     }
 
-    private void buildChildSpecs(int level) throws ProvisioningException {
+    private void buildChildSpecs() throws ProvisioningException {
         if(children.isEmpty()) {
             return;
         }
         for(FeatureSpecNode child : children.values()) {
-            child.buildSpec(level);
-            child.buildChildSpecs(level + 1);
+            child.buildSpec();
+            child.buildChildSpecs();
         }
     }
 
-    private void buildSpec(int level) throws ProvisioningException {
-
+    private void buildSpec() throws ProvisioningException {
         if(standaloneDescr != null && generateStandalone) {
             persistSpec(standaloneName, standaloneDescr, STANDALONE_MODEL);
         }

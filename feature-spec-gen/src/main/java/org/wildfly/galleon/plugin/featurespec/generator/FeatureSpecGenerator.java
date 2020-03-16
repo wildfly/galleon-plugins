@@ -147,7 +147,7 @@ public class FeatureSpecGenerator implements ForkedEmbeddedUtil.ForkCallback {
     public int generateSpecs() throws ProvisioningException {
         final Map<Object, Object> originalProps = new HashMap<>(System.getProperties());
         try {
-            doGenerate(installation.toString());
+            doGenerate();
         } finally {
             final List<String> toClear = new ArrayList<>();
             for(Map.Entry<Object, Object> prop : System.getProperties().entrySet()) {
@@ -174,7 +174,7 @@ public class FeatureSpecGenerator implements ForkedEmbeddedUtil.ForkCallback {
         return specsGenerated;
     }
 
-    private void doGenerate(String installationHome) throws ProvisioningException {
+    private void doGenerate() throws ProvisioningException {
         final ModelNode standaloneFeatures;
         ModelNode domainRoots = null;
         if(fork) {
