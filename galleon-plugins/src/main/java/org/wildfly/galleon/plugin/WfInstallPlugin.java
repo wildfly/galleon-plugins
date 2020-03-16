@@ -20,6 +20,7 @@ package org.wildfly.galleon.plugin;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -51,6 +52,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Stream;
 
@@ -255,7 +257,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
 
         final Path layersConf = runtime.getStagedDir().resolve(WfConstants.MODULES).resolve(WfConstants.LAYERS_CONF);
-        if(Files.exists(layersConf)) {
+        if (Files.exists(layersConf)) {
             mergeLayerConfs(runtime);
         }
 
@@ -284,8 +286,37 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
     }
 
+    private void setupLayerDirectory(Path layersConf, Path layersDir) throws ProvisioningException {
+        log.verbose("Creating layers directories if needed.");
+        try (InputStream input = new FileInputStream(layersConf.toFile())) {
+            Properties props = new Properties();
+            props.load(input);
+            String layersProp = props.getProperty(WfConstants.LAYERS);
+            if (layersProp == null || (layersProp = layersProp.trim()).length() == 0) {
+                return;
+            }
+            final String[] layerNames = layersProp.split(",");
+            for (String layerName : layerNames) {
+                log.verbose("Found layer %s", layerName);
+                Path layerDir = layersDir.resolve(layerName);
+                if (!Files.exists(layerDir)) {
+                    log.verbose("Creating directory %s", layerDir);
+                    Files.createDirectories(layerDir);
+                }
+            }
+        } catch (IOException ex) {
+            throw new ProvisioningException("Failed to setup layers directory in " + layersDir, ex);
+        }
+    }
+
     private void mergeLayerConfs(ProvisioningRuntime runtime) throws ProvisioningException {
         final List<Path> layersConfs = Utils.collectLayersConf(runtime.getLayout());
+        // The list contains all layer confs, even the one that will be not provisioned.
+        // create directories for all of them.
+        for (Path p : layersConfs) {
+            setupLayerDirectory(p, runtime.getStagedDir().resolve(WfConstants.MODULES).
+                    resolve(WfConstants.SYSTEM).resolve(WfConstants.LAYERS));
+        }
         if(layersConfs.size() < 2) {
             return;
         }
