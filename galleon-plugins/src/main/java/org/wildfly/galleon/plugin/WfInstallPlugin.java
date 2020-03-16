@@ -38,6 +38,7 @@ import java.nio.file.FileVisitOption;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
@@ -117,6 +118,9 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private static final ProvisioningOption OPTION_FORK_EMBEDDED = ProvisioningOption.builder("jboss-fork-embedded")
             .setBooleanValueSet()
             .build();
+    private static final ProvisioningOption OPTION_MVN_REPO = ProvisioningOption.builder("jboss-maven-repo")
+            .setPersistent(false)
+            .build();
 
     private ProvisioningRuntime runtime;
     private MessageWriter log;
@@ -147,7 +151,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
     @Override
     protected List<ProvisioningOption> initPluginOptions() {
-        return Arrays.asList(OPTION_MVN_DIST, OPTION_DUMP_CONFIG_SCRIPTS, OPTION_FORK_EMBEDDED);
+        return Arrays.asList(OPTION_MVN_DIST, OPTION_DUMP_CONFIG_SCRIPTS, OPTION_FORK_EMBEDDED, OPTION_MVN_REPO);
     }
 
     public ProvisioningRuntime getRuntime() {
@@ -231,6 +235,11 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         if (!jbossModules.isEmpty()) {
             final ProgressTracker<PackageRuntime> modulesTracker = layoutFactory.getProgressTracker("JBMODULES");
             modulesTracker.starting(jbossModules.size());
+            if (runtime.isOptionSet(OPTION_MVN_REPO)) {
+                String path = runtime.getOptionValue(OPTION_MVN_REPO);
+                Path repo = Paths.get(path);
+                IoUtils.recursiveDelete(repo);
+            }
             for (Map.Entry<Path, PackageRuntime> entry : jbossModules.entrySet()) {
                 final PackageRuntime pkg = entry.getValue();
                 modulesTracker.processing(pkg);
@@ -665,6 +674,24 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                         buf.append(artifact.getClassifier());
                     }
                     attribute.setValue(buf.toString());
+                    if (runtime.isOptionSet(OPTION_MVN_REPO)) {
+                        MavenArtifact pomArtifact = new MavenArtifact();
+                        pomArtifact.setGroupId(artifact.getGroupId());
+                        pomArtifact.setArtifactId(artifact.getArtifactId());
+                        pomArtifact.setVersion(artifact.getVersion());
+                        pomArtifact.setExtension("pom");
+                        maven.resolve(pomArtifact);
+                        Path pomFile = pomArtifact.getPath();
+                        String path = runtime.getOptionValue(OPTION_MVN_REPO);
+                        Path repo = Paths.get(path);
+                        String grpid = artifact.getGroupId().replaceAll("\\.", File.separator);
+                        Path grpidPath = repo.resolve(grpid);
+                        Path artifactidPath = grpidPath.resolve(artifact.getArtifactId());
+                        Path versionPath = artifactidPath.resolve(artifact.getVersion());
+                        Files.createDirectories(versionPath);
+                        Files.copy(moduleArtifact, versionPath.resolve(moduleArtifact.getFileName().toString()), StandardCopyOption.REPLACE_EXISTING);
+                        Files.copy(pomFile, versionPath.resolve(pomFile.getFileName().toString()), StandardCopyOption.REPLACE_EXISTING);
+                    }
                 } else {
                     final Path targetDir = targetPath.getParent();
                     final String artifactFileName = moduleArtifact.getFileName().toString();
