@@ -583,8 +583,17 @@ public class FeatureSpecGeneratorInvoker {
 
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-                if(file.endsWith(TASKS_XML_PATH_END)) {
+                if (file.endsWith(TASKS_XML_PATH_END)) {
                     processPackageTasks(file, fpArtifacts);
+                } else {
+                    if (file.endsWith(WfConstants.LAYERS_CONF)) {
+                        layersConfs = CollectionUtils.add(layersConfs, file);
+                        try {
+                            Utils.mergeLayersConfs(layersConfs, wildflyHome);
+                        } catch (ProvisioningException e) {
+                            throw new RuntimeException("Failed to install layers.conf", e);
+                        }
+                    }
                 }
                 return FileVisitResult.CONTINUE;
             }
