@@ -262,6 +262,11 @@ public class WfFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
             final PackageSpec.Builder modulesAll = getExtendedPackage(WfConstants.MODULES_ALL, true);
             handleLayers(srcModulesDir, fpBuilder, targetResources, modulesAll);
         }
+        final Path addOnsDir = srcModulesDir.resolve(WfConstants.SYSTEM).resolve(WfConstants.ADD_ONS);
+        if (Files.exists(addOnsDir)) {
+            final PackageSpec.Builder modulesAll = getExtendedPackage(WfConstants.MODULES_ALL, true);
+            handleAddOns(srcModulesDir, fpBuilder, targetResources, modulesAll);
+        }
     }
 
     private void addDocsSchemas(final Path fpPackagesDir, final FeaturePackDescription.Builder fpBuilder)
