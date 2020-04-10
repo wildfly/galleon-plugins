@@ -342,6 +342,14 @@ public class FeatureSpecGeneratorInvoker {
             artifact = artifacts.get(artifactCoords);
         }
         if (artifact == null) {
+            String key = coords.getGroupId() + ":" + coords.getArtifactId();
+            if (coords.getClassifier() == null || coords.getClassifier().isEmpty()) {
+                artifact = artifacts.get(key);
+            } else {
+                artifact = artifacts.get(key + "::" + coords.getClassifier());
+            }
+        }
+        if (artifact == null) {
             final ArtifactItem item = new ArtifactItem();
             item.setGroupId(coords.getGroupId());
             item.setArtifactId(coords.getArtifactId());
