@@ -20,7 +20,6 @@ package org.wildfly.galleon.plugin;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -288,9 +287,9 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
     private void setupLayerDirectory(Path layersConf, Path layersDir) throws ProvisioningException {
         log.verbose("Creating layers directories if needed.");
-        try (InputStream input = new FileInputStream(layersConf.toFile())) {
+        try (BufferedReader reader = Files.newBufferedReader(layersConf)) {
             Properties props = new Properties();
-            props.load(input);
+            props.load(reader);
             String layersProp = props.getProperty(WfConstants.LAYERS);
             if (layersProp == null || (layersProp = layersProp.trim()).length() == 0) {
                 return;
