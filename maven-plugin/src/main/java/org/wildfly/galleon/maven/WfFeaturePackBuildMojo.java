@@ -323,6 +323,7 @@ public class WfFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
                     final Path binAppClientPkgDir = packagesDir.resolve("bin.appclient").resolve(Constants.CONTENT).resolve(pkgName);
                     final Path binWsToolsPkgDir = packagesDir.resolve("bin.wstools").resolve(Constants.CONTENT).resolve(pkgName);
                     final Path binVaultToolsPkgDir = packagesDir.resolve("bin.vaulttools").resolve(Constants.CONTENT).resolve(pkgName);
+                    final Path binJdrToolsPkgDir = packagesDir.resolve("bin.jdrtools").resolve(Constants.CONTENT).resolve(pkgName);
                     final Path toolsBinPkgDir = packagesDir.resolve("tools").resolve(Constants.CONTENT).resolve(pkgName);
                     try (DirectoryStream<Path> binStream = Files.newDirectoryStream(p)) {
                         for (Path binPath : binStream) {
@@ -339,6 +340,8 @@ public class WfFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
                                 IoUtils.copy(binPath, binWsToolsPkgDir.resolve(fileName));
                             } else if(fileName.startsWith("vault")) {
                                 IoUtils.copy(binPath, binVaultToolsPkgDir.resolve(fileName));
+                            } else if(fileName.startsWith("jdr")) {
+                                IoUtils.copy(binPath, binJdrToolsPkgDir.resolve(fileName));
                             } else {
                                 IoUtils.copy(binPath, toolsBinPkgDir.resolve(fileName));
                             }
@@ -383,6 +386,13 @@ public class WfFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
                         getExtendedPackage("bin.vaulttools", true).addPackageDep("bin.common");
                         if(toolsBuilder != null) {
                             toolsBuilder.addPackageDep(PackageDependencySpec.optional("bin.vaulttools"));
+                        }
+                    }
+                    if(Files.exists(binJdrToolsPkgDir)) {
+                        ensureLineEndings(binJdrToolsPkgDir);
+                        getExtendedPackage("bin.jdrtools", true).addPackageDep("bin.common");
+                        if(toolsBuilder != null) {
+                            toolsBuilder.addPackageDep(PackageDependencySpec.optional("bin.jdrtools"));
                         }
                     }
                 } else {
