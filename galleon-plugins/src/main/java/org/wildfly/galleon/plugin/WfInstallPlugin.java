@@ -16,7 +16,6 @@
  */
 package org.wildfly.galleon.plugin;
 
-
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
@@ -101,7 +100,8 @@ import org.wildfly.galleon.plugin.config.ExampleFpConfigs;
 import org.wildfly.galleon.plugin.config.FileFilter;
 import org.wildfly.galleon.plugin.config.XslTransform;
 import org.wildfly.galleon.plugin.server.CliScriptRunner;
-
+import org.wildfly.galleon.plugin.transformer.JakartaTransformer;
+import org.wildfly.galleon.plugin.transformer.TransformedArtifact;
 /**
  *
  * @author Alexey Loubyansky
@@ -122,7 +122,10 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private static final ProvisioningOption OPTION_MVN_REPO = ProvisioningOption.builder("jboss-maven-repo")
             .setPersistent(false)
             .build();
-
+    private static final ProvisioningOption OPTION_TRANSFORM_JAKARTA_VERBOSE = ProvisioningOption.builder("jboss-jakarta-transform-verbose")
+            .setPersistent(false)
+            .setBooleanValueSet()
+            .build();
     private ProvisioningRuntime runtime;
     private MessageWriter log;
 
@@ -133,6 +136,10 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private PropertyResolver mergedTaskPropsResolver;
 
     private boolean thinServer;
+    private boolean jakartaTransformVerbose;
+    private boolean jakartaTransform;
+    private JakartaTransformer.LogHandler logHandler;
+
     private Set<String> schemaGroups = Collections.emptySet();
 
     private List<WildFlyPackageTask> finalizingTasks = Collections.emptyList();
@@ -152,7 +159,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
     @Override
     protected List<ProvisioningOption> initPluginOptions() {
-        return Arrays.asList(OPTION_MVN_DIST, OPTION_DUMP_CONFIG_SCRIPTS, OPTION_FORK_EMBEDDED, OPTION_MVN_REPO);
+        return Arrays.asList(OPTION_MVN_DIST, OPTION_DUMP_CONFIG_SCRIPTS, OPTION_FORK_EMBEDDED,
+                OPTION_MVN_REPO, OPTION_TRANSFORM_JAKARTA_VERBOSE);
     }
 
     public ProvisioningRuntime getRuntime() {
@@ -184,6 +192,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         log.verbose("WildFly Galleon Installation Plugin");
 
         thinServer = runtime.isOptionSet(OPTION_MVN_DIST);
+        jakartaTransformVerbose = Boolean.valueOf(runtime.getOptionValue(OPTION_TRANSFORM_JAKARTA_VERBOSE, "false"));
         maven = (MavenRepoManager) runtime.getArtifactResolver(MavenRepoManager.REPOSITORY_ID);
 
         for(FeaturePackRuntime fp : runtime.getFeaturePacks()) {
@@ -241,6 +250,22 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 Path repo = Paths.get(path);
                 IoUtils.recursiveDelete(repo);
             }
+            jakartaTransform = Boolean.valueOf(mergedTaskProps.getOrDefault(JakartaTransformer.TRANSFORM_ARTIFACTS, "false"));
+            if (jakartaTransform) {
+                if (thinServer && !runtime.isOptionSet(OPTION_MVN_REPO)) {
+                    // This trace is printed when generating example config. Make it verbose.
+                    log.verbose("WARNING: EE9 transformation disabled for thin server");
+                } else {
+                    log.print("EE9 transforming server jar artifacts");
+                    logHandler = new JakartaTransformer.LogHandler() {
+                        @Override
+                        public void print(String format, Object... args) {
+                            log.print(format, args);
+                        }
+                    };
+                }
+            }
+
             for (Map.Entry<Path, PackageRuntime> entry : jbossModules.entrySet()) {
                 final PackageRuntime pkg = entry.getValue();
                 modulesTracker.processing(pkg);
@@ -280,7 +305,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             provisionExampleConfigs();
         }
 
-        if(startTime > 0) {
+        if (startTime > 0) {
             log.print(Errors.tookTime("Overall WildFly Galleon Plugin", startTime));
         }
     }
@@ -382,6 +407,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 options = tmp;
                 options.put(OPTION_MVN_DIST.getName(), null);
             }
+
             pm.provision(config, options);
         } catch(ProvisioningException e) {
             throw new ProvisioningException("Failed to generate example configs", e);
@@ -681,7 +707,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 } catch (ProvisioningException e) {
                     throw new IOException("Failed to resolve full coordinates for " + coordsStr, e);
                 }
-                final Path moduleArtifact;
+                Path moduleArtifact;
 
                 log.verbose("Resolving %s", artifact);
                 try {
@@ -690,7 +716,6 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                     throw new IOException("Failed to resolve artifact " + artifact, e);
                 }
                 moduleArtifact = artifact.getPath();
-
                 if (thinServer) {
                     // ignore jandex variable, just resolve coordinates to a string
                     final StringBuilder buf = new StringBuilder();
@@ -719,7 +744,11 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                         Path artifactidPath = grpidPath.resolve(artifact.getArtifactId());
                         Path versionPath = artifactidPath.resolve(artifact.getVersion());
                         Files.createDirectories(versionPath);
-                        Files.copy(moduleArtifact, versionPath.resolve(moduleArtifact.getFileName().toString()), StandardCopyOption.REPLACE_EXISTING);
+                        if (jakartaTransform) {
+                            transform(artifact, versionPath);
+                        } else {
+                            Files.copy(moduleArtifact, versionPath.resolve(moduleArtifact.getFileName().toString()), StandardCopyOption.REPLACE_EXISTING);
+                        }
                         Files.copy(pomFile, versionPath.resolve(pomFile.getFileName().toString()), StandardCopyOption.REPLACE_EXISTING);
                     }
                 } else {
@@ -736,7 +765,11 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                         finalFileName = target.getName();
                     } else {
                         finalFileName = artifactFileName;
-                        Files.copy(moduleArtifact, targetDir.resolve(artifactFileName), StandardCopyOption.REPLACE_EXISTING);
+                        if (jakartaTransform) {
+                            transform(artifact, targetPath.getParent());
+                        } else {
+                            Files.copy(moduleArtifact, targetDir.resolve(artifactFileName), StandardCopyOption.REPLACE_EXISTING);
+                        }
                     }
                     element.setLocalName("resource-root");
                     attribute.setLocalName("path");
@@ -759,6 +792,12 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             }
             throw t;
         }
+    }
+
+
+    private Path transform(MavenArtifact artifact, Path targetDir) throws IOException {
+        TransformedArtifact a = JakartaTransformer.transform(artifact.getPath(), targetDir, jakartaTransformVerbose, logHandler);
+        return a.getTarget();
     }
 
     public void addExampleConfigs(FeaturePackRuntime fp, ExampleFpConfigs exampleConfigs) throws ProvisioningException {
