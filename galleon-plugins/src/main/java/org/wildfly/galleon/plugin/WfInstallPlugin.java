@@ -89,6 +89,7 @@ import org.jboss.galleon.runtime.ProvisioningRuntime;
 import org.jboss.galleon.universe.FeaturePackLocation.FPID;
 import org.jboss.galleon.universe.FeaturePackLocation.ProducerSpec;
 import org.jboss.galleon.universe.maven.MavenArtifact;
+import org.jboss.galleon.universe.maven.MavenUniverseException;
 import org.jboss.galleon.universe.maven.repo.MavenRepoManager;
 import org.jboss.galleon.util.IoUtils;
 import org.jboss.galleon.util.CollectionUtils;
@@ -111,6 +112,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private static final String CONFIG_GEN_METHOD = "generate";
     private static final String CONFIG_GEN_PATH = "wildfly/wildfly-config-gen.jar";
     private static final String CONFIG_GEN_CLASS = "org.wildfly.galleon.plugin.config.generator.WfConfigGenerator";
+    private static final String MAVEN_REPO_LOCAL = "maven.repo.local";
 
     private static final ProvisioningOption OPTION_MVN_DIST = ProvisioningOption.builder("jboss-maven-dist")
             .setBooleanValueSet()
@@ -156,6 +158,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private MavenRepoManager maven;
 
     private Map<Path, PackageRuntime> jbossModules = new LinkedHashMap<>();
+
+    private Path transformationMavenRepo;
 
     @Override
     protected List<ProvisioningOption> initPluginOptions() {
@@ -245,14 +249,15 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         if (!jbossModules.isEmpty()) {
             final ProgressTracker<PackageRuntime> modulesTracker = layoutFactory.getProgressTracker("JBMODULES");
             modulesTracker.starting(jbossModules.size());
+            Path optionMavenRepo = null;
             if (runtime.isOptionSet(OPTION_MVN_REPO)) {
                 String path = runtime.getOptionValue(OPTION_MVN_REPO);
-                Path repo = Paths.get(path);
-                IoUtils.recursiveDelete(repo);
+                optionMavenRepo = Paths.get(path);
+                IoUtils.recursiveDelete(optionMavenRepo);
             }
             jakartaTransform = Boolean.valueOf(mergedTaskProps.getOrDefault(JakartaTransformer.TRANSFORM_ARTIFACTS, "false"));
             if (jakartaTransform) {
-                if (thinServer && !runtime.isOptionSet(OPTION_MVN_REPO)) {
+                if (thinServer && optionMavenRepo == null) {
                     // This trace is printed when generating example config. Make it verbose.
                     log.verbose("WARNING: EE9 transformation disabled for thin server");
                 } else {
@@ -263,6 +268,12 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                             log.print(format, args);
                         }
                     };
+
+                    if (!exampleConfigs.isEmpty()) {
+                        // Track where we store transformed artifacts so we can configure the embedded
+                        // server to point there when we generate example configs
+                        transformationMavenRepo = optionMavenRepo != null ? optionMavenRepo : runtime.getTmpPath("jakarta-transform-repo");
+                    }
                 }
             }
 
@@ -396,21 +407,37 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             }
             configBuilder.addFeaturePackDep(fpBuilder.build());
         }
-
+        String originalMavenRepoLocal = System.getProperty(MAVEN_REPO_LOCAL);
+        if (transformationMavenRepo != null) {
+            // We're about to provision a thin server and use it to generate a config.
+            // Have the thin server resolve against the transformed artifacts in transformationMavenRepo
+            System.setProperty(MAVEN_REPO_LOCAL, transformationMavenRepo.toAbsolutePath().toString());
+        }
         try {
             log.verbose("Generating example configs");
             ProvisioningConfig config = configBuilder.build();
             Map<String, String> options = runtime.getLayout().getOptions();
-            if(!options.containsKey(OPTION_MVN_DIST.getName())) {
+            if(!options.containsKey(OPTION_MVN_DIST.getName()) || options.containsKey(OPTION_MVN_REPO.getName())) {
                 final Map<String, String> tmp = new HashMap<>(options.size() + 1);
                 tmp.putAll(options);
                 options = tmp;
                 options.put(OPTION_MVN_DIST.getName(), null);
+                // Remove OPTION_MVN_REPO so we don't waste time populating it again
+                // as it was already populated by the main postInstall provisioning.
+                // It would be a waste of time regardless, but if jakartaTransform is true,
+                // trying to populate it again will fail provisioning
+                options.remove(OPTION_MVN_REPO.getName());
             }
 
             pm.provision(config, options);
         } catch(ProvisioningException e) {
             throw new ProvisioningException("Failed to generate example configs", e);
+        } finally {
+            if (originalMavenRepoLocal == null) {
+                System.clearProperty(MAVEN_REPO_LOCAL);
+            } else {
+                System.setProperty(MAVEN_REPO_LOCAL, originalMavenRepoLocal);
+            }
         }
 
         final Path exampleConfigsDir = runtime.getStagedDir().resolve(WfConstants.DOCS).resolve("examples").resolve("configs");
@@ -730,25 +757,15 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                     }
                     attribute.setValue(buf.toString());
                     if (runtime.isOptionSet(OPTION_MVN_REPO)) {
-                        MavenArtifact pomArtifact = new MavenArtifact();
-                        pomArtifact.setGroupId(artifact.getGroupId());
-                        pomArtifact.setArtifactId(artifact.getArtifactId());
-                        pomArtifact.setVersion(artifact.getVersion());
-                        pomArtifact.setExtension("pom");
-                        maven.resolve(pomArtifact);
-                        Path pomFile = pomArtifact.getPath();
                         String path = runtime.getOptionValue(OPTION_MVN_REPO);
                         Path repo = Paths.get(path);
-                        String grpid = artifact.getGroupId().replaceAll("\\.", File.separator);
-                        Path grpidPath = repo.resolve(grpid);
-                        Path artifactidPath = grpidPath.resolve(artifact.getArtifactId());
-                        Path versionPath = artifactidPath.resolve(artifact.getVersion());
-                        Files.createDirectories(versionPath);
+                        Path versionPath = getLocalRepoPath(artifact, repo);
                         if (jakartaTransform) {
                             transform(artifact, versionPath);
                         } else {
                             Files.copy(moduleArtifact, versionPath.resolve(moduleArtifact.getFileName().toString()), StandardCopyOption.REPLACE_EXISTING);
                         }
+                        Path pomFile = getPomArtifactPath(artifact);
                         Files.copy(pomFile, versionPath.resolve(pomFile.getFileName().toString()), StandardCopyOption.REPLACE_EXISTING);
                     }
                 } else {
@@ -766,7 +783,14 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                     } else {
                         finalFileName = artifactFileName;
                         if (jakartaTransform) {
-                            transform(artifact, targetPath.getParent());
+                            transform(artifact, targetDir);
+                            if (transformationMavenRepo != null) {
+                                // Copy to the transformationMavenRepo for future use
+                                Path versionPath = getLocalRepoPath(artifact, transformationMavenRepo);
+                                Path pomFile = getPomArtifactPath(artifact);
+                                Files.copy(pomFile, versionPath.resolve(pomFile.getFileName().toString()), StandardCopyOption.REPLACE_EXISTING);
+                                Files.copy(targetDir.resolve(artifactFileName), versionPath.resolve(artifactFileName), StandardCopyOption.REPLACE_EXISTING);
+                            }
                         } else {
                             Files.copy(moduleArtifact, targetDir.resolve(artifactFileName), StandardCopyOption.REPLACE_EXISTING);
                         }
@@ -1007,6 +1031,25 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         } finally {
             Files.delete(temp);
         }
+    }
+
+    private Path getPomArtifactPath(MavenArtifact artifact) throws MavenUniverseException {
+        MavenArtifact pomArtifact = new MavenArtifact();
+        pomArtifact.setGroupId(artifact.getGroupId());
+        pomArtifact.setArtifactId(artifact.getArtifactId());
+        pomArtifact.setVersion(artifact.getVersion());
+        pomArtifact.setExtension("pom");
+        maven.resolve(pomArtifact);
+        return pomArtifact.getPath();
+    }
+
+    private Path getLocalRepoPath(MavenArtifact artifact, Path repo) throws IOException {
+        String grpid = artifact.getGroupId().replaceAll("\\.", File.separator);
+        Path grpidPath = repo.resolve(grpid);
+        Path artifactidPath = grpidPath.resolve(artifact.getArtifactId());
+        Path versionPath = artifactidPath.resolve(artifact.getVersion());
+        Files.createDirectories(versionPath);
+        return versionPath;
     }
 
 }
