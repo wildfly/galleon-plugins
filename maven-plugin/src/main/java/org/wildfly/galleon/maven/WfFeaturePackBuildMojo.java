@@ -140,6 +140,24 @@ public class WfFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
     @Parameter(alias = "feature-specs-output", defaultValue = "${project.build.directory}/resources/features", required = true)
     protected File featureSpecsOutput;
 
+    /**
+     * Whether to transform artifacts from javax.* to jakarta.* before generating feature specs.
+     */
+    @Parameter(alias = "jakarta-transform", required = false)
+    protected boolean jakartaTransform;
+
+    /**
+     * If jakarta-transform is true, whether to produce verbose log output of the transformation work.
+     */
+    @Parameter(alias = "jakarta-transform-verbose", required = false)
+    protected boolean jakartaTransformVerbose;
+
+    /**
+     * The directory where a generated local maven repo containing Jakarta-transformed artifacts are stored.
+     */
+    @Parameter(alias = "jakarta-transform-maven-repo", defaultValue = "${project.build.directory}/jakarta-transform-maven-repo", required = true)
+    protected File jakartaTransformRepo;
+
     private WildFlyFeaturePackBuild buildConfig;
     private Map<String, PackageSpec.Builder> extendedPackages = Collections.emptyMap();
 
