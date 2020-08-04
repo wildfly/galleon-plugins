@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2019 Red Hat, Inc. and/or its affiliates
+ * Copyright 2016-2020 Red Hat, Inc. and/or its affiliates
  * and other contributors as indicated by the @author tags.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -159,6 +159,14 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         return runtime;
     }
 
+    private boolean isThinServer() throws ProvisioningException {
+        if(!runtime.isOptionSet(OPTION_MVN_DIST)) {
+            return false;
+        }
+        final String value = runtime.getOptionValue(OPTION_MVN_DIST);
+        return value == null ? true : Boolean.parseBoolean(value);
+    }
+
     @Override
     public void preInstall(ProvisioningRuntime runtime) throws ProvisioningException {
         final FsDiff fsDiff = runtime.getFsDiff();
@@ -183,7 +191,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         log = runtime.getMessageWriter();
         log.verbose("WildFly Galleon Installation Plugin");
 
-        thinServer = runtime.isOptionSet(OPTION_MVN_DIST);
+        thinServer = isThinServer();
         maven = (MavenRepoManager) runtime.getArtifactResolver(MavenRepoManager.REPOSITORY_ID);
 
         for(FeaturePackRuntime fp : runtime.getFeaturePacks()) {
