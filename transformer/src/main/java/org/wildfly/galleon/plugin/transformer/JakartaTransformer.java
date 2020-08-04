@@ -64,7 +64,7 @@ public class JakartaTransformer {
 
     // POC entry point to use galleon-plugins to transform artifacts offline.
     public static void main(String[] args) throws Exception {
-        EclipseTransformer.transform(args, false);
+        BataviaTransformer.transform(args[0], args[1], false);
     }
 
     public static InputStream transform(InputStream in, String name, boolean verbose, LogHandler log) throws IOException {
@@ -86,7 +86,7 @@ public class JakartaTransformer {
             out.write(buffer, 0, size);
         }
         out.close();
-        EclipseTransformer.transform(src, target, verbose, log);
+        BataviaTransformer.transform(src, target, verbose, log);
         return new WrappedInputStream(target.toFile(), dir);
     }
 
@@ -132,7 +132,7 @@ public class JakartaTransformer {
             throw new IOException("Transformation target " + actualTarget + " already exist");
         }
         try {
-            return EclipseTransformer.transform(src, actualTarget, verbose, log);
+            return BataviaTransformer.transform(src, actualTarget, verbose, log);
         } catch (Throwable ex) {
             failed = true;
             if (ex instanceof IOException) {
