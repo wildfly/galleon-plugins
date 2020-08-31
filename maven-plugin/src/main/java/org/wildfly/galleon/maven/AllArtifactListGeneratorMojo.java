@@ -268,7 +268,7 @@ public class AllArtifactListGeneratorMojo extends AbstractMojo {
     private void addArtifact(ArtifactListMerger builder, ArtifactCoords coords) throws ProvisioningException,
             ArtifactDescriptorException, IOException, DependencyCollectionException {
         CollectRequest request = new CollectRequest();
-        request.setRoot(new Dependency(new DefaultArtifact(coords.getGroupId(), coords.getArtifactId(), coords.getExtension(), coords.getVersion()), JavaScopes.RUNTIME));
+        request.setRoot(new Dependency(new DefaultArtifact(coords.getGroupId(), coords.getArtifactId(), coords.getClassifier(), coords.getExtension(), coords.getVersion()), JavaScopes.RUNTIME));
         CollectResult res = repoSystem.collectDependencies(repoSession, request);
         addDepNode(builder, res.getRoot());
     }
