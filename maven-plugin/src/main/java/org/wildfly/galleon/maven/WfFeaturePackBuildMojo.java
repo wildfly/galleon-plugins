@@ -147,6 +147,12 @@ public class WfFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
     protected boolean jakartaTransform;
 
     /**
+     * Directory where external user provided transformation configs are located (turns of default transformation rules).
+     */
+    @Parameter(alias = "jakarta-transform-configs-dir", required = false)
+    protected File jakartaTransformConfigsDir;
+
+    /**
      * If jakarta-transform is true, whether to produce verbose log output of the transformation work.
      */
     @Parameter(alias = "jakarta-transform-verbose", required = false)

@@ -54,6 +54,8 @@ public class JakartaTransformer {
     }
 
     public static final String TRANSFORM_ARTIFACTS = "jakarta.transform.artifacts";
+    public static final String TRANSFORM_CONFIGS_DIR = "jakarta.transform.configs.dir";
+    public static final String TRANSFORM_VERBOSE = "jakarta.transform.verbose";
 
     private static final LogHandler DEFAULT_LOG_HANDLER = new LogHandler() {
         @Override
@@ -62,12 +64,19 @@ public class JakartaTransformer {
         }
     };
 
+    private static final String CONFIGS_DIR_PARAM = "--configs-dir=";
+
     // POC entry point to use galleon-plugins to transform artifacts offline.
     public static void main(String[] args) throws Exception {
-        BataviaTransformer.transform(args[0], args[1], false);
+        if (args.length == 3) {
+            if (!args[0].startsWith(CONFIGS_DIR_PARAM)) {
+                throw new Exception("First parameter must be: " + CONFIGS_DIR_PARAM + "<dir> when three parameters are provided");
+            }
+        }
+        BataviaTransformer.transform(args.length == 3 ? args[0].substring(CONFIGS_DIR_PARAM.length()) : null, args[0], args[1], false);
     }
 
-    public static InputStream transform(InputStream in, String name, boolean verbose, LogHandler log) throws IOException {
+    public static InputStream transform(Path configsDir, InputStream in, String name, boolean verbose, LogHandler log) throws IOException {
         if (log == null) {
             log = DEFAULT_LOG_HANDLER;
         }
@@ -86,11 +95,11 @@ public class JakartaTransformer {
             out.write(buffer, 0, size);
         }
         out.close();
-        BataviaTransformer.transform(src, target, verbose, log);
+        BataviaTransformer.transform(configsDir, src, target, verbose, log);
         return new WrappedInputStream(target.toFile(), dir);
     }
 
-    public static TransformedArtifact transform(Path src, Path target, boolean verbose, LogHandler log) throws IOException {
+    public static TransformedArtifact transform(Path configsDir, Path src, Path target, boolean verbose, LogHandler log) throws IOException {
         if (log == null) {
             log = DEFAULT_LOG_HANDLER;
         }
@@ -132,7 +141,7 @@ public class JakartaTransformer {
             throw new IOException("Transformation target " + actualTarget + " already exist");
         }
         try {
-            return BataviaTransformer.transform(src, actualTarget, verbose, log);
+            return BataviaTransformer.transform(configsDir, src, actualTarget, verbose, log);
         } catch (Throwable ex) {
             failed = true;
             if (ex instanceof IOException) {

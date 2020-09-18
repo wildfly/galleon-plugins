@@ -125,10 +125,6 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private static final ProvisioningOption OPTION_MVN_REPO = ProvisioningOption.builder("jboss-maven-repo")
             .setPersistent(false)
             .build();
-    private static final ProvisioningOption OPTION_TRANSFORM_JAKARTA_VERBOSE = ProvisioningOption.builder("jboss-jakarta-transform-verbose")
-            .setPersistent(false)
-            .setBooleanValueSet()
-            .build();
     private ProvisioningRuntime runtime;
     private MessageWriter log;
 
@@ -139,6 +135,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private PropertyResolver mergedTaskPropsResolver;
 
     private boolean thinServer;
+    private Path jakartaTransformConfigsDir;
     private boolean jakartaTransformVerbose;
     private boolean jakartaTransform;
     private JakartaTransformer.LogHandler logHandler;
@@ -164,8 +161,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
     @Override
     protected List<ProvisioningOption> initPluginOptions() {
-        return Arrays.asList(OPTION_MVN_DIST, OPTION_DUMP_CONFIG_SCRIPTS, OPTION_FORK_EMBEDDED,
-                OPTION_MVN_REPO, OPTION_TRANSFORM_JAKARTA_VERBOSE);
+        return Arrays.asList(OPTION_MVN_DIST, OPTION_DUMP_CONFIG_SCRIPTS, OPTION_FORK_EMBEDDED, OPTION_MVN_REPO);
     }
 
     public ProvisioningRuntime getRuntime() {
@@ -205,7 +201,6 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         log.verbose("WildFly Galleon Installation Plugin");
 
         thinServer = isThinServer();
-        jakartaTransformVerbose = Boolean.valueOf(runtime.getOptionValue(OPTION_TRANSFORM_JAKARTA_VERBOSE, "false"));
         maven = (MavenRepoManager) runtime.getArtifactResolver(MavenRepoManager.REPOSITORY_ID);
 
         for(FeaturePackRuntime fp : runtime.getFeaturePacks()) {
@@ -264,7 +259,14 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 optionMavenRepo = Paths.get(path);
                 IoUtils.recursiveDelete(optionMavenRepo);
             }
+            // initialize jakarta transformation properties
             jakartaTransform = Boolean.valueOf(mergedTaskProps.getOrDefault(JakartaTransformer.TRANSFORM_ARTIFACTS, "false"));
+            jakartaTransformVerbose = Boolean.valueOf(mergedTaskProps.getOrDefault(JakartaTransformer.TRANSFORM_VERBOSE, "false"));
+            final String jakartaConfigsDir = mergedTaskProps.get(JakartaTransformer.TRANSFORM_CONFIGS_DIR);
+            if (jakartaConfigsDir != null) {
+                jakartaTransformConfigsDir = Paths.get(jakartaConfigsDir);
+            }
+            // continue
             if (jakartaTransform) {
                 if (thinServer && optionMavenRepo == null) {
                     // This trace is printed when generating example config. Make it verbose.
@@ -829,7 +831,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
 
     private Path transform(MavenArtifact artifact, Path targetDir) throws IOException {
-        TransformedArtifact a = JakartaTransformer.transform(artifact.getPath(), targetDir, jakartaTransformVerbose, logHandler);
+        TransformedArtifact a = JakartaTransformer.transform(jakartaTransformConfigsDir, artifact.getPath(), targetDir, jakartaTransformVerbose, logHandler);
         return a.getTarget();
     }
 
