@@ -121,6 +121,7 @@ public class FeatureSpecGeneratorInvoker {
 
     private final boolean jakartaTransform;
     private final boolean jakartaTransformVerbose;
+    private final Path jakartaTransformConfigsDir;
     private final Path jakartaTransformMavenRepo;
 
     private Map<String, Path> inheritedFeatureSpecs = Collections.emptyMap();
@@ -146,6 +147,7 @@ public class FeatureSpecGeneratorInvoker {
         this.moduleTemplatesDir = mojo.moduleTemplatesDir.toPath();
         this.log = mojo.getLog();
         this.jakartaTransform = mojo.jakartaTransform;
+        this.jakartaTransformConfigsDir = mojo.jakartaTransformConfigsDir != null ? mojo.jakartaTransformConfigsDir.toPath() : null;
         this.jakartaTransformVerbose = mojo.jakartaTransformVerbose;
         this.jakartaTransformMavenRepo = mojo.jakartaTransformRepo.toPath();
     }
@@ -252,7 +254,7 @@ public class FeatureSpecGeneratorInvoker {
                 if (jakartaTransform) {
                     for (Artifact toTransform : entry.getValue().values()) {
                         if (transformed.add(toTransform)) {
-                            transformArtifact(toTransform, logHandler);
+                            transformArtifact(jakartaTransformConfigsDir, toTransform, logHandler);
                         }
                     }
                 }
@@ -304,7 +306,7 @@ public class FeatureSpecGeneratorInvoker {
         }
     }
 
-    private void transformArtifact(Artifact artifact, JakartaTransformer.LogHandler logHandler) throws IOException, MojoExecutionException {
+    private void transformArtifact(Path configsDir, Artifact artifact, JakartaTransformer.LogHandler logHandler) throws IOException, MojoExecutionException {
         if (!artifact.isResolved()) {
             artifact = findArtifact(new ArtifactItem(artifact));
         }
@@ -313,7 +315,7 @@ public class FeatureSpecGeneratorInvoker {
         Path artifactidPath = grpidPath.resolve(artifact.getArtifactId());
         Path versionPath = artifactidPath.resolve(artifact.getVersion());
         Files.createDirectories(versionPath);
-        JakartaTransformer.transform(artifact.getFile().toPath(), versionPath, jakartaTransformVerbose, logHandler);
+        JakartaTransformer.transform(configsDir, artifact.getFile().toPath(), versionPath, jakartaTransformVerbose, logHandler);
     }
 
     private void addBasicConfigs() throws IOException {
@@ -729,7 +731,7 @@ public class FeatureSpecGeneratorInvoker {
             ArtifactResult result = artifactResolver.resolveArtifact(buildingRequest, artifact);
             Artifact retVal = result != null ? result.getArtifact() : artifact;
             if (jakartaTransform && transformedArtifacts.add(retVal)) {
-                transformArtifact(retVal, logHandler);
+                transformArtifact(jakartaTransformConfigsDir, retVal, logHandler);
             }
             return retVal;
         } catch (ArtifactResolverException | IOException e) {

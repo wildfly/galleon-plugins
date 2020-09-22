@@ -81,9 +81,6 @@
     <version.org.jboss.logging>3.3.1.Final</version.org.jboss.logging>
     <version.org.jboss.logmanager>2.0.6.Final</version.org.jboss.logmanager>
     <version.com.io7m.xom>1.2.10</version.com.io7m.xom>
-
-    <!-- eclipse transformer -->
-    <version.eclipse.transformer>0.2.0-SNAPSHOT</version.eclipse.transformer>
     <!-- sfl4j is brought in by eclipse aether and version needs to be overridden. Currently only used in tool module -->
     <version.org.slf4j>1.7.21</version.org.slf4j>
     <version.org.jboss.logging.slf4j-jboss-logging>1.1.0.Final</version.org.jboss.logging.slf4j-jboss-logging>
@@ -91,6 +88,7 @@
     <!-- Checkstyle configuration -->
     <linkXRef>false</linkXRef>
     <version.org.wildfly.checkstyle-config>1.0.8.Final</version.org.wildfly.checkstyle-config>
+    <version.org.wildfly.extras.batavia>1.0.0.Alpha4</version.org.wildfly.extras.batavia>
     <version.org.jboss.staxmapper>1.1.0.Final</version.org.jboss.staxmapper>
 
     <!-- license-maven-plugin configuration -->
@@ -135,12 +133,6 @@
     <dependencies>
 
       <!-- Modules in this project -->
-
-      <dependency>
-        <groupId>org.eclipse.transformer</groupId>
-        <artifactId>org.eclipse.transformer</artifactId>
-        <version>${version.eclipse.transformer}</version>
-      </dependency>
 
       <dependency>
         <groupId>org.jboss.galleon</groupId>
@@ -328,6 +320,18 @@
         <groupId>org.wildfly.core</groupId>
         <artifactId>wildfly-launcher</artifactId>
         <version>${version.org.wildfly.core.wildfly-core}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.wildfly.extras.batavia</groupId>
+        <artifactId>transformer-api</artifactId>
+        <version>${version.org.wildfly.extras.batavia}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.wildfly.extras.batavia</groupId>
+        <artifactId>transformer-impl-eclipse</artifactId>
+        <version>${version.org.wildfly.extras.batavia}</version>
       </dependency>
 
       <dependency>
