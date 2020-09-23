@@ -88,7 +88,7 @@
     <!-- Checkstyle configuration -->
     <linkXRef>false</linkXRef>
     <version.org.wildfly.checkstyle-config>1.0.8.Final</version.org.wildfly.checkstyle-config>
-    <version.org.wildfly.extras.batavia>1.0.0.Alpha4</version.org.wildfly.extras.batavia>
+    <version.org.wildfly.extras.batavia>1.0.0.Alpha5</version.org.wildfly.extras.batavia>
     <version.org.jboss.staxmapper>1.1.0.Final</version.org.jboss.staxmapper>
 
     <!-- license-maven-plugin configuration -->
