@@ -24,6 +24,7 @@ import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.URLClassLoader;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.FileVisitOption;
@@ -34,6 +35,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -43,6 +45,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 
 import javax.xml.stream.XMLStreamException;
 
@@ -83,6 +86,7 @@ import org.wildfly.galleon.plugin.ArtifactCoords.Gav;
 import org.wildfly.galleon.plugin.config.CopyArtifact;
 import org.wildfly.galleon.plugin.config.WildFlyPackageTasksParser;
 import org.wildfly.galleon.plugin.transformer.JakartaTransformer;
+import org.wildfly.galleon.plugin.transformer.TransformedArtifact;
 
 /**
  *
@@ -133,6 +137,8 @@ public class FeatureSpecGeneratorInvoker {
     private WildFlyPackageTasksParser tasksParser;
     private ProvisioningLayoutFactory layoutFactory;
     private ProvisioningLayout<FeaturePackLayout> configLayout;
+    private final Path wildflyResourcesDir;
+    private final Set<String> transformExcluded = new TreeSet<>();
 
     FeatureSpecGeneratorInvoker(WfFeaturePackBuildMojo mojo) throws MojoExecutionException {
         this.project = mojo.project;
@@ -150,6 +156,7 @@ public class FeatureSpecGeneratorInvoker {
         this.jakartaTransformConfigsDir = mojo.jakartaTransformConfigsDir != null ? mojo.jakartaTransformConfigsDir.toPath() : null;
         this.jakartaTransformVerbose = mojo.jakartaTransformVerbose;
         this.jakartaTransformMavenRepo = mojo.jakartaTransformRepo.toPath();
+        this.wildflyResourcesDir = mojo.getWildFlyResourcesDir();
     }
 
     public void execute() throws MojoExecutionException, MojoFailureException {
@@ -177,6 +184,20 @@ public class FeatureSpecGeneratorInvoker {
                 final long totalTime = System.currentTimeMillis() - startTime;
                 final long secs = totalTime / 1000;
                 debug("Generated " + specsTotal + " feature specs in " + secs + "." + (totalTime - secs * 1000) + " secs");
+            }
+
+            if (!transformExcluded.isEmpty()) {
+                try {
+                    Path excludedFilePath = wildflyResourcesDir.resolve(WfConstants.WILDFLY_JAKARTA_TRANSFORM_EXCLUDES);
+                    Util.mkdirs(wildflyResourcesDir);
+                    StringBuilder builder = new StringBuilder();
+                    for (String s : transformExcluded) {
+                        builder.append(s).append(System.lineSeparator());
+                    }
+                    Files.write(excludedFilePath, builder.toString().getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE);
+                } catch (IOException ex) {
+                    throw new MojoExecutionException(ex.getMessage(), ex);
+                }
             }
         }
     }
@@ -315,7 +336,13 @@ public class FeatureSpecGeneratorInvoker {
         Path artifactidPath = grpidPath.resolve(artifact.getArtifactId());
         Path versionPath = artifactidPath.resolve(artifact.getVersion());
         Files.createDirectories(versionPath);
-        JakartaTransformer.transform(configsDir, artifact.getFile().toPath(), versionPath, jakartaTransformVerbose, logHandler);
+
+        TransformedArtifact a = JakartaTransformer.transform(configsDir,
+                artifact.getFile().toPath(), versionPath, jakartaTransformVerbose, logHandler);
+        if (!a.isTransformed()) {
+            transformExcluded.add(ArtifactCoords.newGav(artifact.getGroupId(),
+                    artifact.getArtifactId(), artifact.getVersion()).toString());
+        }
     }
 
     private void addBasicConfigs() throws IOException {
