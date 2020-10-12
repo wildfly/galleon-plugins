@@ -132,6 +132,9 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private static final ProvisioningOption OPTION_MVN_PROVISIONING_REPO = ProvisioningOption.builder("jboss-maven-provisioning-repo")
             .setPersistent(false)
             .build();
+    private static final ProvisioningOption OPTION_JAKARTA_TRANSFORM_ARTIFACTS_VERBOSE = ProvisioningOption.builder("jboss-jakarta-transform-artifacts-verbose")
+            .setBooleanValueSet()
+            .build();
     private ProvisioningRuntime runtime;
     private MessageWriter log;
 
@@ -173,7 +176,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     @Override
     protected List<ProvisioningOption> initPluginOptions() {
         return Arrays.asList(OPTION_MVN_DIST, OPTION_DUMP_CONFIG_SCRIPTS,
-                OPTION_FORK_EMBEDDED, OPTION_MVN_REPO, OPTION_JAKARTA_TRANSFORM_ARTIFACTS, OPTION_MVN_PROVISIONING_REPO);
+                OPTION_FORK_EMBEDDED, OPTION_MVN_REPO, OPTION_JAKARTA_TRANSFORM_ARTIFACTS,
+                OPTION_MVN_PROVISIONING_REPO, OPTION_JAKARTA_TRANSFORM_ARTIFACTS_VERBOSE);
     }
 
     public ProvisioningRuntime getRuntime() {
@@ -201,6 +205,14 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             return true;
         }
         final String value = runtime.getOptionValue(OPTION_JAKARTA_TRANSFORM_ARTIFACTS);
+        return value == null ? true : Boolean.parseBoolean(value);
+    }
+
+    private boolean isVerboseTransformation() throws ProvisioningException {
+        if (!runtime.isOptionSet(OPTION_JAKARTA_TRANSFORM_ARTIFACTS_VERBOSE)) {
+            return false;
+        }
+        final String value = runtime.getOptionValue(OPTION_JAKARTA_TRANSFORM_ARTIFACTS_VERBOSE);
         return value == null ? true : Boolean.parseBoolean(value);
     }
 
@@ -307,7 +319,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             // initialize jakarta transformation properties
 
             jakartaTransform = isTransformationEnabled() && Boolean.valueOf(mergedTaskProps.getOrDefault(JakartaTransformer.TRANSFORM_ARTIFACTS, "false"));
-            jakartaTransformVerbose = Boolean.valueOf(mergedTaskProps.getOrDefault(JakartaTransformer.TRANSFORM_VERBOSE, "false"));
+            jakartaTransformVerbose = isVerboseTransformation();
             final String jakartaConfigsDir = mergedTaskProps.get(JakartaTransformer.TRANSFORM_CONFIGS_DIR);
             if (jakartaConfigsDir != null) {
                 jakartaTransformConfigsDir = Paths.get(jakartaConfigsDir);
