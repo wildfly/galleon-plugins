@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 
 /**
  *
@@ -65,15 +66,66 @@ public class JakartaTransformer {
     };
 
     private static final String CONFIGS_DIR_PARAM = "--configs-dir=";
+    private static final String VERBOSE_PARAM = "--verbose";
+    private static final String HELP_PARAM = "--help";
 
     // POC entry point to use galleon-plugins to transform artifacts offline.
     public static void main(String[] args) throws Exception {
-        if (args.length == 3) {
-            if (!args[0].startsWith(CONFIGS_DIR_PARAM)) {
-                throw new Exception("First parameter must be: " + CONFIGS_DIR_PARAM + "<dir> when three parameters are provided");
+        String configsDir = null;
+        boolean verbose = false;
+        String source = null;
+        String target = null;
+        for (String arg : args) {
+            if (arg.equals(HELP_PARAM)) {
+                printHelp();
+                return;
+            } else if (arg.startsWith(CONFIGS_DIR_PARAM)) {
+                configsDir = arg.substring(CONFIGS_DIR_PARAM.length());
+            } else {
+                if (arg.equals(VERBOSE_PARAM)) {
+                    verbose = true;
+                } else {
+                    if (source == null) {
+                        source = arg;
+                        Path sourcePath = Paths.get(source);
+                        if (Files.notExists(sourcePath)) {
+                            throw new Exception("Source artifact " + source + " doesn't exist.");
+                        }
+                    } else if (target == null) {
+                        target = arg;
+                        Path targetPath = Paths.get(target);
+                        if (Files.exists(targetPath)) {
+                            Files.delete(targetPath);
+                        }
+                    } else {
+                        throw new Exception("Invalid argument " + arg);
+                    }
+                }
             }
         }
-        BataviaTransformer.transform(args.length == 3 ? args[0].substring(CONFIGS_DIR_PARAM.length()) : null, args[0], args[1], false);
+        if (source == null || target == null) {
+            throw new Exception("Source and target artifact must be set.");
+        }
+
+        boolean ret = BataviaTransformer.transform(configsDir, source, target, verbose);
+        if (ret) {
+            System.out.println("Artifact has been transformed.");
+        } else {
+            System.out.println("No transformation occured.");
+        }
+    }
+
+    private static void printHelp() {
+        StringBuilder builder = new StringBuilder();
+        builder.append("WildFly Galleon EE9 transformer usage:\n");
+        builder.append("java -jar <transformer jar> <source file> <target file> [ARGUMENTS]\n");
+        builder.append("If the target file already exists, it will be first deleted.");
+        builder.append("Arguments:\n");
+        builder.append("  --help : print this help\n");
+        builder.append("  --verbose : print transformation traces\n");
+        builder.append("  --configs-dir=<rules dir> : path to a directory containing transformation rules\n");
+        builder.append("To redirect traces into a file: java -jar <transformer jar> <source> <target> --verbose &> traces.txt\n");
+        System.out.println(builder.toString());
     }
 
     public static InputStream transform(Path configsDir, InputStream in, String name, boolean verbose, LogHandler log) throws IOException {
