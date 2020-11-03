@@ -329,12 +329,6 @@
       </dependency>
 
       <dependency>
-        <groupId>org.wildfly.extras.batavia</groupId>
-        <artifactId>transformer-impl-eclipse</artifactId>
-        <version>${version.org.wildfly.extras.batavia}</version>
-      </dependency>
-
-      <dependency>
         <groupId>junit</groupId>
         <artifactId>junit</artifactId>
         <version>${version.junit}</version>
