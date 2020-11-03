@@ -36,11 +36,7 @@
     <dependency>
       <groupId>org.wildfly.extras.batavia</groupId>
       <artifactId>transformer-api</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.wildfly.extras.batavia</groupId>
-      <artifactId>transformer-impl-eclipse</artifactId>
-      <scope>runtime</scope>
+      <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>junit</groupId>
@@ -48,50 +44,5 @@
       <scope>test</scope>
     </dependency>
   </dependencies>
-
-<!-- Added for the temporary SNAPSHOT release -->
-  <repositories> 
-    <repository>  
-      <id>sonatype</id>  
-      <name>sonatype</name>  
-      <url>https://oss.sonatype.org/content/repositories/snapshots</url>  
-      <layout>default</layout>  
-      <releases>  
-        <enabled>true</enabled>  
-        <updatePolicy>never</updatePolicy>  
-      </releases>  
-      <snapshots>  
-        <enabled>true</enabled>  
-        <updatePolicy>never</updatePolicy>  
-      </snapshots>  
-    </repository>
-  </repositories>
-  
-  <build>
-    <plugins>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-shade-plugin</artifactId>
-        <executions>
-          <execution>
-            <phase>package</phase>
-            <goals>
-              <goal>shade</goal>
-            </goals>
-            <configuration>
-              <transformers>
-                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                  <mainClass>org.wildfly.galleon.plugin.transformer.JakartaTransformer</mainClass>
-                  <manifestEntries>
-                    <Multi-Release>true</Multi-Release>
-                  </manifestEntries>
-                </transformer>
-              </transformers>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-    </plugins>
-  </build>
 
 </project>
