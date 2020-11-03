@@ -36,11 +36,12 @@
     <dependency>
       <groupId>org.wildfly.extras.batavia</groupId>
       <artifactId>transformer-api</artifactId>
+      <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>org.wildfly.extras.batavia</groupId>
       <artifactId>transformer-impl-eclipse</artifactId>
-      <scope>runtime</scope>
+      <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>junit</groupId>
@@ -69,6 +70,22 @@
   
   <build>
     <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>package-remote</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+            <configuration>
+              <classifier>standalone</classifier>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
