@@ -53,6 +53,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.stream.Stream;
 
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -1172,7 +1173,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     }
 
     private Path getLocalRepoPath(MavenArtifact artifact, Path repo) throws IOException {
-        String grpid = artifact.getGroupId().replaceAll("\\.", File.separator);
+        String grpid = artifact.getGroupId().replaceAll("\\.", Matcher.quoteReplacement(File.separator));
         Path grpidPath = repo.resolve(grpid);
         Path artifactidPath = grpidPath.resolve(artifact.getArtifactId());
         Path versionPath = artifactidPath.resolve(artifact.getVersion());
@@ -1184,7 +1185,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         if (provisioningMavenRepo == null) {
             maven.resolve(artifact);
         } else {
-            String grpid = artifact.getGroupId().replaceAll("\\.", File.separator);
+            String grpid = artifact.getGroupId().replaceAll("\\.", Matcher.quoteReplacement(File.separator));
             Path grpidPath = provisioningMavenRepo.resolve(grpid);
             Path artifactidPath = grpidPath.resolve(artifact.getArtifactId());
             Path versionPath = artifactidPath.resolve(artifact.getVersion());
