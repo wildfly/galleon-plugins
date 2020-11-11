@@ -46,6 +46,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.regex.Matcher;
 
 import javax.xml.stream.XMLStreamException;
 
@@ -331,7 +332,7 @@ public class FeatureSpecGeneratorInvoker {
         if (!artifact.isResolved()) {
             artifact = findArtifact(new ArtifactItem(artifact));
         }
-        String grpid = artifact.getGroupId().replaceAll("\\.", File.separator);
+        String grpid = artifact.getGroupId().replaceAll("\\.", Matcher.quoteReplacement(File.separator));
         Path grpidPath = jakartaTransformMavenRepo.resolve(grpid);
         Path artifactidPath = grpidPath.resolve(artifact.getArtifactId());
         Path versionPath = artifactidPath.resolve(artifact.getVersion());
