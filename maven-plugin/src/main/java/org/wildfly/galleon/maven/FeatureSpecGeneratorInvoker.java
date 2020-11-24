@@ -81,6 +81,7 @@ import org.jboss.galleon.util.IoUtils;
 import org.wildfly.galleon.plugin.ArtifactCoords;
 import org.wildfly.galleon.plugin.Utils;
 import org.wildfly.galleon.plugin.WfConstants;
+import org.wildfly.galleon.plugin.WfInstallPlugin;
 import org.wildfly.galleon.plugin.WildFlyPackageTask;
 import org.wildfly.galleon.plugin.WildFlyPackageTasks;
 import org.wildfly.galleon.plugin.ArtifactCoords.Gav;
@@ -140,7 +141,7 @@ public class FeatureSpecGeneratorInvoker {
     private ProvisioningLayout<FeaturePackLayout> configLayout;
     private final Path wildflyResourcesDir;
     private final Set<String> transformExcluded = new TreeSet<>();
-
+    private final String jakartaTransformSuffix;
     FeatureSpecGeneratorInvoker(WfFeaturePackBuildMojo mojo) throws MojoExecutionException {
         this.project = mojo.project;
         this.session = mojo.session;
@@ -158,6 +159,7 @@ public class FeatureSpecGeneratorInvoker {
         this.jakartaTransformVerbose = mojo.jakartaTransformVerbose;
         this.jakartaTransformMavenRepo = mojo.jakartaTransformRepo.toPath();
         this.wildflyResourcesDir = mojo.getWildFlyResourcesDir();
+        jakartaTransformSuffix = mojo.taskProps.get(WfInstallPlugin.JAKARTA_TRANSFORM_SUFFIX_KEY);
     }
 
     public void execute() throws MojoExecutionException, MojoFailureException {
@@ -343,6 +345,16 @@ public class FeatureSpecGeneratorInvoker {
         if (!a.isTransformed()) {
             transformExcluded.add(ArtifactCoords.newGav(artifact.getGroupId(),
                     artifact.getArtifactId(), artifact.getVersion()).toString());
+        } else {
+            if (jakartaTransformSuffix != null) {
+                // Copy a renamed version that will be used for future provisioning.
+                Path transformedVersionPath = artifactidPath.resolve(artifact.getVersion() + jakartaTransformSuffix);
+                Files.createDirectories(transformedVersionPath);
+                String fileName = WfInstallPlugin.getTransformedArtifactFileName(artifact.getVersion(),
+                        artifact.getFile().toPath().getFileName().toString(), jakartaTransformSuffix);
+                Files.copy(versionPath.resolve(artifact.getFile().toPath().getFileName()),
+                        transformedVersionPath.resolve(fileName), StandardCopyOption.REPLACE_EXISTING);
+            }
         }
     }
 

@@ -149,7 +149,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
      * from task-properties-file parameter, in case it's also set.<br/>
      */
     @Parameter(alias = "task-properties", required = false)
-    private Map<String, String> taskProps = Collections.emptyMap();
+    protected Map<String, String> taskProps = Collections.emptyMap();
 
     @Component
     protected RepositorySystem repoSystem;
