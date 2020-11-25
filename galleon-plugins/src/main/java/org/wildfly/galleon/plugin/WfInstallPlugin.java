@@ -116,6 +116,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private static final String CONFIG_GEN_PATH = "wildfly/wildfly-config-gen.jar";
     private static final String CONFIG_GEN_CLASS = "org.wildfly.galleon.plugin.config.generator.WfConfigGenerator";
     private static final String MAVEN_REPO_LOCAL = "maven.repo.local";
+    public static final String JAKARTA_TRANSFORM_SUFFIX_KEY = "jakarta.transform.artifacts.suffix";
 
     private static final ProvisioningOption OPTION_MVN_DIST = ProvisioningOption.builder("jboss-maven-dist")
             .setBooleanValueSet()
@@ -173,6 +174,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private Set<String> transformExcluded = new HashSet<>();
 
     private Path provisioningMavenRepo;
+
+    private String jakartaTransformSuffix;
 
     @Override
     protected List<ProvisioningOption> initPluginOptions() {
@@ -321,6 +324,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
             jakartaTransform = isTransformationEnabled() && Boolean.valueOf(mergedTaskProps.getOrDefault(JakartaTransformer.TRANSFORM_ARTIFACTS, "false"));
             jakartaTransformVerbose = isVerboseTransformation();
+            jakartaTransformSuffix = mergedTaskProps.getOrDefault(JAKARTA_TRANSFORM_SUFFIX_KEY, "");
             final String jakartaConfigsDir = mergedTaskProps.get(JakartaTransformer.TRANSFORM_CONFIGS_DIR);
             if (jakartaConfigsDir != null) {
                 jakartaTransformConfigsDir = Paths.get(jakartaConfigsDir);
@@ -857,11 +861,14 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 if (thinServer) {
                     // ignore jandex variable, just resolve coordinates to a string
                     final StringBuilder buf = new StringBuilder();
+                    // If we have a maven repo for provisioning, consider that we are in a transformation case
+                    // even if jakartaTransform is false.
+                    boolean requireSuffix = (jakartaTransform || provisioningMavenRepo != null) && !isExcludedFromTransformation(artifact);
                     buf.append(artifact.getGroupId());
                     buf.append(':');
                     buf.append(artifact.getArtifactId());
                     buf.append(':');
-                    buf.append(artifact.getVersion());
+                    buf.append(artifact.getVersion()).append(requireSuffix ? jakartaTransformSuffix : "");
                     if(!artifact.getClassifier().isEmpty()) {
                         buf.append(':');
                         buf.append(artifact.getClassifier());
@@ -870,24 +877,33 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                     if (runtime.isOptionSet(OPTION_MVN_REPO)) {
                         String path = runtime.getOptionValue(OPTION_MVN_REPO);
                         Path repo = Paths.get(path);
+                        String version = artifact.getVersion();
+                        if (requireSuffix) {
+                            // Copy to the maven repo with transformed suffix.
+                            artifact.setVersion(version + jakartaTransformSuffix);
+                        }
                         Path versionPath = getLocalRepoPath(artifact, repo);
                         Path actualTarget = versionPath.resolve(moduleArtifact.getFileName().toString());
                         if (jakartaTransform && !isExcludedFromTransformation(artifact)) {
                             // The artifact could already exist in case of redefined module as alias (eg: javax.security.jacc.api).
                             // The transformer doesn't accept existing target, so skip transformation.
-                            if (!Files.exists(actualTarget)) {
-                                transform(artifact, versionPath);
+                            String name = getTransformedArtifactFileName(version, moduleArtifact.getFileName().toString(), jakartaTransformSuffix);
+                            Path transformedTarget = actualTarget.getParent().resolve(name);
+                            if (!Files.exists(transformedTarget)) {
+                                transform(artifact, versionPath.resolve(name));
                             }
                         } else {
                             Files.copy(moduleArtifact, actualTarget, StandardCopyOption.REPLACE_EXISTING);
                         }
+                        // Resolve the original pom file.
+                        artifact.setVersion(version);
                         Path pomFile = getPomArtifactPath(artifact);
                         Files.copy(pomFile, versionPath.resolve(pomFile.getFileName().toString()), StandardCopyOption.REPLACE_EXISTING);
                     }
                 } else {
                     final Path targetDir = targetPath.getParent();
                     final String artifactFileName = moduleArtifact.getFileName().toString();
-                    final String finalFileName;
+                    String finalFileName;
 
                     if (jandex) {
                         final int lastDot = artifactFileName.lastIndexOf(".");
@@ -899,17 +915,26 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                     } else {
                         finalFileName = artifactFileName;
                         if (jakartaTransform) {
-                            if (!isExcludedFromTransformation(artifact)) {
-                                transform(artifact, targetDir);
+                            boolean toTransform = !isExcludedFromTransformation(artifact);
+                            if (toTransform) {
+                                finalFileName = getTransformedArtifactFileName(artifact.getVersion(), finalFileName, jakartaTransformSuffix);
+                                transform(artifact, targetDir.resolve(finalFileName));
                             } else {
                                 Files.copy(moduleArtifact, targetDir.resolve(artifactFileName), StandardCopyOption.REPLACE_EXISTING);
                             }
                             if (transformationMavenRepo != null) {
                                 // Copy to the transformationMavenRepo for future use
+                                String version = artifact.getVersion();
+                                // Copy to the maven repo with transformed suffix.
+                                if (toTransform) {
+                                    artifact.setVersion(version + jakartaTransformSuffix);
+                                }
                                 Path versionPath = getLocalRepoPath(artifact, transformationMavenRepo);
+                                // Resolve the original pom file.
+                                artifact.setVersion(version);
                                 Path pomFile = getPomArtifactPath(artifact);
                                 Files.copy(pomFile, versionPath.resolve(pomFile.getFileName().toString()), StandardCopyOption.REPLACE_EXISTING);
-                                Files.copy(targetDir.resolve(artifactFileName), versionPath.resolve(artifactFileName), StandardCopyOption.REPLACE_EXISTING);
+                                Files.copy(targetDir.resolve(finalFileName), versionPath.resolve(finalFileName), StandardCopyOption.REPLACE_EXISTING);
                             }
                         } else {
                             Files.copy(moduleArtifact, targetDir.resolve(artifactFileName), StandardCopyOption.REPLACE_EXISTING);
@@ -1188,10 +1213,11 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             String grpid = artifact.getGroupId().replaceAll("\\.", Matcher.quoteReplacement(File.separator));
             Path grpidPath = provisioningMavenRepo.resolve(grpid);
             Path artifactidPath = grpidPath.resolve(artifact.getArtifactId());
-            Path versionPath = artifactidPath.resolve(artifact.getVersion());
+            String version = getTransformedVersion(artifact);
+            Path versionPath = artifactidPath.resolve(version);
             String classifier = (artifact.getClassifier() == null || artifact.getClassifier().isEmpty()) ? null : artifact.getClassifier();
             Path localPath = versionPath.resolve(artifact.getArtifactId() + "-"
-                    + artifact.getVersion()
+                    + version
                     + (classifier == null ? "" : "-" + classifier)
                     + "." + artifact.getExtension());
 
@@ -1203,4 +1229,13 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
     }
 
+    private String getTransformedVersion(MavenArtifact artifact) {
+        boolean transformed = !isExcludedFromTransformation(artifact);
+        return artifact.getVersion() + (transformed ? jakartaTransformSuffix : "");
+    }
+
+    public static String getTransformedArtifactFileName(String version, String fileName, String suffix) {
+        final int endVersionIndex = fileName.lastIndexOf(version) + version.length();
+        return fileName.substring(0, endVersionIndex) + suffix + fileName.substring(endVersionIndex);
+    }
 }
