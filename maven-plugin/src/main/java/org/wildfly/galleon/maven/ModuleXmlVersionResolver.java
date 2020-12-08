@@ -45,6 +45,7 @@ import javax.xml.stream.events.XMLEvent;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.artifact.DefaultArtifact;
 import org.apache.maven.artifact.handler.DefaultArtifactHandler;
+import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.logging.Log;
 import org.wildfly.galleon.plugin.ArtifactCoords;
 
@@ -66,7 +67,7 @@ public class ModuleXmlVersionResolver {
         return XML_INPUT_FACTORY == null ? XML_INPUT_FACTORY = XMLInputFactory.newInstance() : XML_INPUT_FACTORY;
     }
 
-    public static void convertModule(final Path file, Path target, Map<String, Artifact> artifacts, List<Artifact> hardcodedArtifacts, Log log) throws IOException, XMLStreamException {
+    public static void convertModule(final Path file, Path target, Map<String, Artifact> artifacts, List<Artifact> hardcodedArtifacts, Log log) throws IOException, XMLStreamException, MojoExecutionException {
         Files.deleteIfExists(target);
         Files.createDirectories(target.getParent());
         try (Reader is = Files.newBufferedReader(file, Charsets.UTF_8);
@@ -75,7 +76,7 @@ public class ModuleXmlVersionResolver {
         }
     }
 
-    private static void convert(final XMLEventReader r, final XMLEventWriter w, Map<String, Artifact> artifacts, List<Artifact> hardcodedArtifacts, Log log) throws IOException, XMLStreamException {
+    private static void convert(final XMLEventReader r, final XMLEventWriter w, Map<String, Artifact> artifacts, List<Artifact> hardcodedArtifacts, Log log) throws IOException, XMLStreamException, MojoExecutionException {
         XMLEventFactory eventFactory = XMLEventFactory.newInstance();
         while (r.hasNext()) {
             XMLEvent event = r.nextEvent();
@@ -111,7 +112,7 @@ public class ModuleXmlVersionResolver {
         w.close();
     }
 
-    private static StartElement convertArtifactElement(XMLEventFactory eventFactory, StartElement artifactElement, Map<String, Artifact> artifacts, List<Artifact> hardcodedArtifacts, Log log) {
+    private static StartElement convertArtifactElement(XMLEventFactory eventFactory, StartElement artifactElement, Map<String, Artifact> artifacts, List<Artifact> hardcodedArtifacts, Log log) throws MojoExecutionException {
         List<Attribute> attributes = new ArrayList<>();
         Iterator<?> iter = artifactElement.getAttributes();
         while (iter.hasNext()) {
@@ -122,8 +123,7 @@ public class ModuleXmlVersionResolver {
                 if (artifactCoords != null) {
                     Artifact artifact = artifacts.get(artifactCoords);
                     if (artifact == null) {
-                        log.warn("Couldn't locate artifact in the dependencies " + artifactCoords);
-                        attributes.add(attribute);
+                        throw new MojoExecutionException("Couldn't locate artifact in the dependencies " + artifactCoords);
                     } else {
                         StringJoiner joiner = new StringJoiner(":");
                         joiner.add(artifact.getGroupId());
