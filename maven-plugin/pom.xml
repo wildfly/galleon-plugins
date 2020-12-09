@@ -23,7 +23,7 @@
   <parent>
     <groupId>org.wildfly.galleon-plugins</groupId>
     <artifactId>wildfly-provisioning-parent</artifactId>
-    <version>4.2.10.Final-SNAPSHOT</version>
+    <version>5.0.0.Beta4-SNAPSHOT</version>
   </parent>
 
   <artifactId>wildfly-galleon-maven-plugin</artifactId>
@@ -89,6 +89,11 @@
           <artifactId>aesh-readline</artifactId>
         </exclusion>
       </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>${project.groupId}</groupId>
+      <artifactId>transformer</artifactId>
+      <version>${project.version}</version>
     </dependency>
     <dependency>
       <groupId>org.jboss.galleon</groupId>
