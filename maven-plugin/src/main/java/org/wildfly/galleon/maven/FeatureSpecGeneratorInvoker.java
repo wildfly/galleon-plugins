@@ -272,7 +272,7 @@ public class FeatureSpecGeneratorInvoker {
             for(Map.Entry<String, Map<String, Artifact>> entry : moduleTemplates.entrySet()) {
                 try {
                     ModuleXmlVersionResolver.convertModule(moduleTemplatesDir.resolve(entry.getKey()), targetModules.resolve(entry.getKey()), entry.getValue(), hardcodedArtifacts, log);
-                } catch (XMLStreamException e) {
+                } catch (Exception e) {
                     throw new MojoExecutionException("Failed to process " + moduleTemplatesDir.resolve(entry.getKey()), e);
                 }
                 if (jakartaTransform) {
