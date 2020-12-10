@@ -63,6 +63,7 @@ public interface WfConstants {
     String VALUE = "value";
     String WILDFLY = "wildfly";
     String WILDFLY_TASKS_PROPS = "wildfly-tasks.properties";
+    String WILDFLY_JAKARTA_TRANSFORM_EXCLUDES = "wildfly-jakarta-transform-excludes.txt";
     String WILDFLY_TASKS_XML = "wildfly-tasks.xml";
 
     // Feature annotation names and elements

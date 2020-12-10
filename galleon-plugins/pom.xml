@@ -23,7 +23,7 @@
   <parent>
     <groupId>org.wildfly.galleon-plugins</groupId>
     <artifactId>wildfly-provisioning-parent</artifactId>
-    <version>4.2.10.Final-SNAPSHOT</version>
+    <version>5.0.0.Beta4-SNAPSHOT</version>
   </parent>
 
   <artifactId>wildfly-galleon-plugins</artifactId>
@@ -37,6 +37,11 @@
       <groupId>org.jboss</groupId>
       <artifactId>jboss-dmr</artifactId>
       <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>${project.groupId}</groupId>
+      <artifactId>transformer</artifactId>
+      <version>${project.version}</version>
     </dependency>
     <dependency>
       <groupId>org.jboss</groupId>

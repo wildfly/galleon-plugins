@@ -24,6 +24,7 @@ import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.URLClassLoader;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.FileVisitOption;
@@ -34,6 +35,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -43,6 +45,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
+import java.util.regex.Matcher;
 
 import javax.xml.stream.XMLStreamException;
 
@@ -77,11 +81,14 @@ import org.jboss.galleon.util.IoUtils;
 import org.wildfly.galleon.plugin.ArtifactCoords;
 import org.wildfly.galleon.plugin.Utils;
 import org.wildfly.galleon.plugin.WfConstants;
+import org.wildfly.galleon.plugin.WfInstallPlugin;
 import org.wildfly.galleon.plugin.WildFlyPackageTask;
 import org.wildfly.galleon.plugin.WildFlyPackageTasks;
 import org.wildfly.galleon.plugin.ArtifactCoords.Gav;
 import org.wildfly.galleon.plugin.config.CopyArtifact;
 import org.wildfly.galleon.plugin.config.WildFlyPackageTasksParser;
+import org.wildfly.galleon.plugin.transformer.JakartaTransformer;
+import org.wildfly.galleon.plugin.transformer.TransformedArtifact;
 
 /**
  *
@@ -118,6 +125,11 @@ public class FeatureSpecGeneratorInvoker {
     private Map<String, Artifact> mergedArtifacts = new HashMap<>();
     private Map<String, Map<String, Artifact>> moduleTemplates = new HashMap<>();
 
+    private final boolean jakartaTransform;
+    private final boolean jakartaTransformVerbose;
+    private final Path jakartaTransformConfigsDir;
+    private final Path jakartaTransformMavenRepo;
+
     private Map<String, Path> inheritedFeatureSpecs = Collections.emptyMap();
     private Set<String> standaloneExtensions = Collections.emptySet();
     private Set<String> domainExtensions = Collections.emptySet();
@@ -127,7 +139,9 @@ public class FeatureSpecGeneratorInvoker {
     private WildFlyPackageTasksParser tasksParser;
     private ProvisioningLayoutFactory layoutFactory;
     private ProvisioningLayout<FeaturePackLayout> configLayout;
-
+    private final Path wildflyResourcesDir;
+    private final Set<String> transformExcluded = new TreeSet<>();
+    private final String jakartaTransformSuffix;
     FeatureSpecGeneratorInvoker(WfFeaturePackBuildMojo mojo) throws MojoExecutionException {
         this.project = mojo.project;
         this.session = mojo.session;
@@ -140,6 +154,12 @@ public class FeatureSpecGeneratorInvoker {
         this.wildflyHome = mojo.wildflyHome.toPath();
         this.moduleTemplatesDir = mojo.moduleTemplatesDir.toPath();
         this.log = mojo.getLog();
+        this.jakartaTransform = mojo.jakartaTransform;
+        this.jakartaTransformConfigsDir = mojo.jakartaTransformConfigsDir != null ? mojo.jakartaTransformConfigsDir.toPath() : null;
+        this.jakartaTransformVerbose = mojo.jakartaTransformVerbose;
+        this.jakartaTransformMavenRepo = mojo.jakartaTransformRepo.toPath();
+        this.wildflyResourcesDir = mojo.getWildFlyResourcesDir();
+        jakartaTransformSuffix = mojo.taskProps.get(WfInstallPlugin.JAKARTA_TRANSFORM_SUFFIX_KEY);
     }
 
     public void execute() throws MojoExecutionException, MojoFailureException {
@@ -167,6 +187,20 @@ public class FeatureSpecGeneratorInvoker {
                 final long totalTime = System.currentTimeMillis() - startTime;
                 final long secs = totalTime / 1000;
                 debug("Generated " + specsTotal + " feature specs in " + secs + "." + (totalTime - secs * 1000) + " secs");
+            }
+
+            if (!transformExcluded.isEmpty()) {
+                try {
+                    Path excludedFilePath = wildflyResourcesDir.resolve(WfConstants.WILDFLY_JAKARTA_TRANSFORM_EXCLUDES);
+                    Util.mkdirs(wildflyResourcesDir);
+                    StringBuilder builder = new StringBuilder();
+                    for (String s : transformExcluded) {
+                        builder.append(s).append(System.lineSeparator());
+                    }
+                    Files.write(excludedFilePath, builder.toString().getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE);
+                } catch (IOException ex) {
+                    throw new MojoExecutionException(ex.getMessage(), ex);
+                }
             }
         }
     }
@@ -221,6 +255,18 @@ public class FeatureSpecGeneratorInvoker {
         }
 
         if(!moduleTemplates.isEmpty()) {
+            Set<Artifact> transformed = null;
+            JakartaTransformer.LogHandler logHandler = null;
+            if (jakartaTransform) {
+                transformed = new HashSet<>();
+                logHandler = new JakartaTransformer.LogHandler() {
+                    @Override
+                    public void print(String format, Object... args) {
+                        log.info(String.format(format, args));
+                    }
+                };
+                IoUtils.recursiveDelete(jakartaTransformMavenRepo);
+            }
             final List<Artifact> hardcodedArtifacts = new ArrayList<>(); // this one includes also the hardcoded artifact versions into module.xml
             final Path targetModules = wildflyHome.resolve(MODULES);
             for(Map.Entry<String, Map<String, Artifact>> entry : moduleTemplates.entrySet()) {
@@ -229,16 +275,24 @@ public class FeatureSpecGeneratorInvoker {
                 } catch (Exception e) {
                     throw new MojoExecutionException("Failed to process " + moduleTemplatesDir.resolve(entry.getKey()), e);
                 }
+                if (jakartaTransform) {
+                    for (Artifact toTransform : entry.getValue().values()) {
+                        if (transformed.add(toTransform)) {
+                            transformArtifact(jakartaTransformConfigsDir, toTransform, logHandler);
+                        }
+                    }
+                }
             }
             for (Artifact art : hardcodedArtifacts) {
-                findArtifact(art);
+                findArtifact(art, transformed, logHandler);
             }
         }
 
         addBasicConfigs();
 
         final String originalMavenRepoLocal = System.getProperty(MAVEN_REPO_LOCAL);
-        System.setProperty(MAVEN_REPO_LOCAL, session.getSettings().getLocalRepository());
+        System.setProperty(MAVEN_REPO_LOCAL,
+                jakartaTransform ? jakartaTransformMavenRepo.toAbsolutePath().toString() : session.getSettings().getLocalRepository());
         debug("Generating feature specs using local maven repo %s", System.getProperty(MAVEN_REPO_LOCAL));
         final ClassLoader originalCl = Thread.currentThread().getContextClassLoader();
         URLClassLoader newCl = null;
@@ -272,6 +326,34 @@ public class FeatureSpecGeneratorInvoker {
                 System.clearProperty(MAVEN_REPO_LOCAL);
             } else {
                 System.setProperty(MAVEN_REPO_LOCAL, originalMavenRepoLocal);
+            }
+        }
+    }
+
+    private void transformArtifact(Path configsDir, Artifact artifact, JakartaTransformer.LogHandler logHandler) throws IOException, MojoExecutionException {
+        if (!artifact.isResolved()) {
+            artifact = findArtifact(new ArtifactItem(artifact));
+        }
+        String grpid = artifact.getGroupId().replaceAll("\\.", Matcher.quoteReplacement(File.separator));
+        Path grpidPath = jakartaTransformMavenRepo.resolve(grpid);
+        Path artifactidPath = grpidPath.resolve(artifact.getArtifactId());
+        Path versionPath = artifactidPath.resolve(artifact.getVersion());
+        Files.createDirectories(versionPath);
+
+        TransformedArtifact a = JakartaTransformer.transform(configsDir,
+                artifact.getFile().toPath(), versionPath, jakartaTransformVerbose, logHandler);
+        if (!a.isTransformed()) {
+            transformExcluded.add(ArtifactCoords.newGav(artifact.getGroupId(),
+                    artifact.getArtifactId(), artifact.getVersion()).toString());
+        } else {
+            if (jakartaTransformSuffix != null) {
+                // Copy a renamed version that will be used for future provisioning.
+                Path transformedVersionPath = artifactidPath.resolve(artifact.getVersion() + jakartaTransformSuffix);
+                Files.createDirectories(transformedVersionPath);
+                String fileName = WfInstallPlugin.getTransformedArtifactFileName(artifact.getVersion(),
+                        artifact.getFile().toPath().getFileName().toString(), jakartaTransformSuffix);
+                Files.copy(versionPath.resolve(artifact.getFile().toPath().getFileName()),
+                        transformedVersionPath.resolve(fileName), StandardCopyOption.REPLACE_EXISTING);
             }
         }
     }
@@ -679,7 +761,7 @@ public class FeatureSpecGeneratorInvoker {
         }
     }
 
-    private Artifact findArtifact(Artifact artifact) throws MojoExecutionException {
+    private Artifact findArtifact(Artifact artifact, Set<Artifact> transformedArtifacts, JakartaTransformer.LogHandler logHandler) throws MojoExecutionException {
         try {
             ProjectBuildingRequest buildingRequest
                     = new DefaultProjectBuildingRequest(session.getProjectBuildingRequest());
@@ -687,11 +769,12 @@ public class FeatureSpecGeneratorInvoker {
             buildingRequest.setRemoteRepositories(project.getRemoteArtifactRepositories());
             debug("Resolving artifact %s:%s:%s", artifact.getGroupId(), artifact.getArtifactId(), artifact.getVersion());
             ArtifactResult result = artifactResolver.resolveArtifact(buildingRequest, artifact);
-            if (result != null) {
-                return result.getArtifact();
+            Artifact retVal = result != null ? result.getArtifact() : artifact;
+            if (jakartaTransform && transformedArtifacts.add(retVal)) {
+                transformArtifact(jakartaTransformConfigsDir, retVal, logHandler);
             }
-            return artifact;
-        } catch (ArtifactResolverException e) {
+            return retVal;
+        } catch (ArtifactResolverException | IOException e) {
             throw new MojoExecutionException("Couldn't resolve artifact: " + e.getMessage(), e);
         }
     }

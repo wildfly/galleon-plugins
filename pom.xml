@@ -28,7 +28,7 @@
 
   <groupId>org.wildfly.galleon-plugins</groupId>
   <artifactId>wildfly-provisioning-parent</artifactId>
-  <version>4.2.10.Final-SNAPSHOT</version>
+  <version>5.0.0.Beta4-SNAPSHOT</version>
   <packaging>pom</packaging>
 
   <name>WildFly Galleon Plugins Parent</name>
@@ -42,6 +42,7 @@
   </licenses>
 
   <modules>
+    <module>transformer</module>
     <module>galleon-plugins</module>
     <module>config-gen</module>
     <module>maven-plugin</module>
@@ -80,7 +81,6 @@
     <version.org.jboss.logging>3.3.1.Final</version.org.jboss.logging>
     <version.org.jboss.logmanager>2.0.6.Final</version.org.jboss.logmanager>
     <version.com.io7m.xom>1.2.10</version.com.io7m.xom>
-
     <!-- sfl4j is brought in by eclipse aether and version needs to be overridden. Currently only used in tool module -->
     <version.org.slf4j>1.7.21</version.org.slf4j>
     <version.org.jboss.logging.slf4j-jboss-logging>1.1.0.Final</version.org.jboss.logging.slf4j-jboss-logging>
@@ -88,6 +88,7 @@
     <!-- Checkstyle configuration -->
     <linkXRef>false</linkXRef>
     <version.org.wildfly.checkstyle-config>1.0.8.Final</version.org.wildfly.checkstyle-config>
+    <version.org.wildfly.extras.batavia>1.0.4.Final</version.org.wildfly.extras.batavia>
     <version.org.jboss.staxmapper>1.1.0.Final</version.org.jboss.staxmapper>
 
     <!-- license-maven-plugin configuration -->
@@ -319,6 +320,18 @@
         <groupId>org.wildfly.core</groupId>
         <artifactId>wildfly-launcher</artifactId>
         <version>${version.org.wildfly.core.wildfly-core}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.wildfly.extras.batavia</groupId>
+        <artifactId>transformer-api</artifactId>
+        <version>${version.org.wildfly.extras.batavia}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.wildfly.extras.batavia</groupId>
+        <artifactId>transformer-impl-eclipse</artifactId>
+        <version>${version.org.wildfly.extras.batavia}</version>
       </dependency>
 
       <dependency>
