@@ -349,6 +349,7 @@ public class WfFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
                     final Path binVaultToolsPkgDir = packagesDir.resolve("bin.vaulttools").resolve(Constants.CONTENT).resolve(pkgName);
                     final Path binJdrToolsPkgDir = packagesDir.resolve("bin.jdrtools").resolve(Constants.CONTENT).resolve(pkgName);
                     final Path toolsBinPkgDir = packagesDir.resolve("tools").resolve(Constants.CONTENT).resolve(pkgName);
+                    final Path coreToolsBinPkgDir = packagesDir.resolve("core-tools").resolve(Constants.CONTENT).resolve(pkgName);
                     try (DirectoryStream<Path> binStream = Files.newDirectoryStream(p)) {
                         for (Path binPath : binStream) {
                             final String fileName = binPath.getFileName().toString();
@@ -366,23 +367,41 @@ public class WfFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
                                 IoUtils.copy(binPath, binVaultToolsPkgDir.resolve(fileName));
                             } else if(fileName.startsWith("jdr")) {
                                 IoUtils.copy(binPath, binJdrToolsPkgDir.resolve(fileName));
-                            } else {
+                            } else if (fileName.startsWith("client") || fileName.startsWith("jconsole")) {
                                 IoUtils.copy(binPath, toolsBinPkgDir.resolve(fileName));
+                            } else {
+                                IoUtils.copy(binPath, coreToolsBinPkgDir.resolve(fileName));
                             }
                         }
                     }
                     PackageSpec.Builder toolsBuilder = null;
-                    if(Files.exists(toolsBinPkgDir)) {
+                    if (Files.exists(toolsBinPkgDir)) {
                         pkgBuilder.addPackageDep("tools");
                         toolsBuilder = getExtendedPackage("tools", true);
                     }
-                    if(Files.exists(binCommonPkgDir)) {
+                    PackageSpec.Builder coreToolsBuilder = null;
+                    if (Files.exists(coreToolsBinPkgDir)) {
+                        ensureLineEndings(coreToolsBinPkgDir);
+                        coreToolsBuilder = getExtendedPackage("core-tools", true);
+                        // We want the tools package to depend on core-tools.
+                        if (toolsBuilder == null) {
+                            pkgBuilder.addPackageDep("tools");
+                            toolsBuilder = getExtendedPackage("tools", true);
+                        }
+                        toolsBuilder.addPackageDep(PackageDependencySpec.optional("core-tools"));
+                    }
+
+                    if (Files.exists(binCommonPkgDir)) {
                         ensureLineEndings(binCommonPkgDir);
                         getExtendedPackage("bin.common", true);
-                        if(toolsBuilder != null) {
+                        if (coreToolsBuilder != null) {
+                            coreToolsBuilder.addPackageDep(PackageDependencySpec.required("bin.common"));
+                        }
+                        if (toolsBuilder != null) {
                             toolsBuilder.addPackageDep(PackageDependencySpec.required("bin.common"));
                         }
                     }
+
                     if(Files.exists(binStandalonePkgDir)) {
                         ensureLineEndings(binStandalonePkgDir);
                         getExtendedPackage("bin.standalone", true).addPackageDep("bin.common");
@@ -408,7 +427,10 @@ public class WfFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
                     if(Files.exists(binVaultToolsPkgDir)) {
                         ensureLineEndings(binVaultToolsPkgDir);
                         getExtendedPackage("bin.vaulttools", true).addPackageDep("bin.common");
-                        if(toolsBuilder != null) {
+                        if (coreToolsBuilder != null) {
+                            coreToolsBuilder.addPackageDep(PackageDependencySpec.optional("bin.vaulttools"));
+                        }
+                        if (toolsBuilder != null) {
                             toolsBuilder.addPackageDep(PackageDependencySpec.optional("bin.vaulttools"));
                         }
                     }
