@@ -51,6 +51,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -137,10 +138,12 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private static final ProvisioningOption OPTION_JAKARTA_TRANSFORM_ARTIFACTS_VERBOSE = ProvisioningOption.builder("jboss-jakarta-transform-artifacts-verbose")
             .setBooleanValueSet()
             .build();
+    private static final ProvisioningOption OPTION_OVERRIDDEN_ARTIFACTS = ProvisioningOption.builder("jboss-overridden-artifacts").setPersistent(true).build();
     private ProvisioningRuntime runtime;
     private MessageWriter log;
 
     private Map<String, String> mergedArtifactVersions = new HashMap<>();
+    private final Map<String, String> overriddenArtifactVersions = new HashMap<>();
     private Map<ProducerSpec, Map<String, String>> fpArtifactVersions = new HashMap<>();
     private Map<ProducerSpec, Map<String, String>> fpTasksProps = Collections.emptyMap();
     private Map<String, String> mergedTaskProps = new HashMap<>();
@@ -181,7 +184,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     protected List<ProvisioningOption> initPluginOptions() {
         return Arrays.asList(OPTION_MVN_DIST, OPTION_DUMP_CONFIG_SCRIPTS,
                 OPTION_FORK_EMBEDDED, OPTION_MVN_REPO, OPTION_JAKARTA_TRANSFORM_ARTIFACTS,
-                OPTION_MVN_PROVISIONING_REPO, OPTION_JAKARTA_TRANSFORM_ARTIFACTS_VERBOSE);
+                OPTION_MVN_PROVISIONING_REPO, OPTION_JAKARTA_TRANSFORM_ARTIFACTS_VERBOSE, OPTION_OVERRIDDEN_ARTIFACTS);
     }
 
     public ProvisioningRuntime getRuntime() {
@@ -202,6 +205,14 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
         final String value = runtime.getOptionValue(OPTION_MVN_PROVISIONING_REPO);
         return value == null ? null : Paths.get(value);
+    }
+
+    private Map<String, String> getOverriddenArtifacts() throws ProvisioningException {
+        if (!runtime.isOptionSet(OPTION_OVERRIDDEN_ARTIFACTS)) {
+            return Collections.emptyMap();
+        }
+        final String value = runtime.getOptionValue(OPTION_OVERRIDDEN_ARTIFACTS);
+        return value == null ? Collections.emptyMap() : Utils.toArtifactsMap(value);
     }
 
     private boolean isTransformationEnabled() throws ProvisioningException {
@@ -247,7 +258,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         thinServer = isThinServer();
         maven = (MavenRepoManager) runtime.getArtifactResolver(MavenRepoManager.REPOSITORY_ID);
         provisioningMavenRepo = getProvisioningMavenRepo();
-
+        // Overridden artifacts
+        overriddenArtifactVersions.putAll(getOverriddenArtifacts());
         if (provisioningMavenRepo != null && Files.notExists(provisioningMavenRepo)) {
             throw new ProvisioningException("Local maven repository " + provisioningMavenRepo.toAbsolutePath().toString()
                     + " used to provision the server doesn't exist.");
@@ -261,6 +273,11 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             final Path artifactProps = wfRes.resolve(WfConstants.ARTIFACT_VERSIONS_PROPS);
             if(Files.exists(artifactProps)) {
                 final Map<String, String> versionProps = Utils.readProperties(artifactProps);
+                for (Entry<String, String> entry : overriddenArtifactVersions.entrySet()) {
+                    if (versionProps.containsKey(entry.getKey())) {
+                        versionProps.put(entry.getKey(), entry.getValue());
+                    }
+                }
                 fpArtifactVersions.put(fp.getFPID().getProducer(), versionProps);
                 mergedArtifactVersions.putAll(versionProps);
             }
@@ -298,6 +315,13 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 }
             }
         }
+        // Check that all overridden artifacts are actually known.
+        for (String key : overriddenArtifactVersions.keySet()) {
+            if (!mergedArtifactVersions.containsKey(key)) {
+                throw new ProvisioningException("Overridden artifacts " + key + " is not found in the set of known server artifacts");
+            }
+        }
+        mergedArtifactVersions.putAll(overriddenArtifactVersions);
         mergedTaskPropsResolver = new MapPropertyResolver(mergedTaskProps);
 
         final ProvisioningLayoutFactory layoutFactory = runtime.getLayout().getFactory();
@@ -759,12 +783,12 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
                     throws IOException {
                     if(file.getFileName().toString().equals(WfConstants.MODULE_XML)) {
-                        final PackageRuntime overridenPkg = jbossModules.put(fpModuleDir.relativize(file), pkg);
-                        if(overridenPkg != null) {
+                        final PackageRuntime overriddenPkg = jbossModules.put(fpModuleDir.relativize(file), pkg);
+                        if (overriddenPkg != null) {
                             if(log.isVerboseEnabled()) {
                                 log.verbose("Feature-pack " + pkg.getFeaturePackRuntime().getFPID() + " package " + pkg.getName() +
-                                        " overrode jboss-module from feature-pack " + overridenPkg.getFeaturePackRuntime().getFPID() +
-                                        " package " + overridenPkg.getName());
+                                " override jboss-module from feature-pack " + overriddenPkg.getFeaturePackRuntime().getFPID() +
+                                " package " + overriddenPkg.getName());
                             }
                         }
                     } else {
@@ -778,6 +802,32 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
     }
 
+    /**
+     * A note on EE-9 transformation.
+     * <ul>
+     * <li>For fat server, a transformed artifact (not excluded) is copied to the provisioned server modules directory.</li>
+     * <li>For fat server, if overridden artifacts are detected, they are transformed but if the transformation didn't change the artifact,
+     *  the original artifacts are copied to the provisioned server modules directory.</li>
+     * <li>For thin server, if a provisioning-repository is provided, transformation applies for coords in module.xml (versions are updated with ee9 suffix), but actual transformation doesn't occur. The
+     *  artifacts in this local repo are considered to be already transformed. Jakarta transformation is expected to be disabled in this case.</li>
+     * <li>For thin server, if a provisioning-repository is provided, and overridden artifacts are detected, if the overridden artifacts are not present in
+     *  the provisioning-repository an attempt to transform the artifact is made. The transformed or not transformed artifact
+     *  (according to the transformation result) is installed inside the provisioning-repo dir. If transformation has been effective,
+     *  the artifact is not excluded and the module.xml coords are updated with ee9 suffix.</li>
+     * <li>For thin server, if no provisioning-repo is provided and no maven repo is to be generated, no transformation occurs at all. We don't transform the artifacts
+     *  located in official local maven cache</li>
+     * <li>For thin server, when a maven repo is to be generated, transformation occurs for not excluded artifacts.
+     *  Artifact (transformed or not) are then installed in the generated maven repository.</li>
+     * <li>For thin server, when a maven repo is to be generated and overridden artifacts are detected, an attempt to transform the artifact is made.
+     *  The transformed or not transformed artifact (according to the transformation result) is installed inside the generated repo dir.
+     *  If transformation has been effective the artifact is not excluded and the module.xml coords are updated with ee9 suffix.</li>
+     * </ul>
+     *
+     * @param pkg
+     * @param moduleXmlRelativePath
+     * @throws ProvisioningException
+     * @throws IOException
+     */
     private void processModuleTemplate(PackageRuntime pkg, Path moduleXmlRelativePath) throws ProvisioningException, IOException {
         final Path moduleTemplate = pkg.getResource(WfConstants.PM, WfConstants.WILDFLY, WfConstants.MODULE).resolve(moduleXmlRelativePath);
         final Path targetPath = runtime.getStagedDir().resolve(moduleXmlRelativePath.toString());
@@ -859,22 +909,81 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 }
                 moduleArtifact = artifact.getPath();
                 if (thinServer) {
-                    // ignore jandex variable, just resolve coordinates to a string
-                    final StringBuilder buf = new StringBuilder();
+                    boolean generateMavenRepo = runtime.isOptionSet(OPTION_MVN_REPO);
+                    boolean isOverriddenArtifact = Utils.containsArtifact(overriddenArtifactVersions, artifact);
+                    // If a transformedFile is found, then the overridden artifact is not excluded from transformation.
+                    Path transformedFile = null;
+                    if (isOverriddenArtifact) {
+                        // if a provisioningMavenRepo has been set, and the artifact exists already in this directory
+                        // no need to transform the artifact to discover its status .
+                        String version = artifact.getVersion();
+                        boolean needTransformation = true;
+                        if (provisioningMavenRepo != null) {
+                            artifact.setVersion(version + jakartaTransformSuffix);
+                            Path transformedPath = getLocalRepoPath(artifact, provisioningMavenRepo, false);
+                            if (Files.exists(transformedPath)) {
+                                // This repository already contains the transformed artifact. This artifact is not excluded from transformation
+                                transformedFile = artifact.getPath();
+                                needTransformation = false;
+                            } else {
+                                artifact.setVersion(version);
+                                Path notTransformedPath = getLocalRepoPath(artifact, provisioningMavenRepo, false);
+                                if (Files.exists(notTransformedPath)) {
+                                    // The artifact is not transformed and present in the repo, so excluded from transformation.
+                                    needTransformation = false;
+                                }
+                            }
+                        } else {
+                            // Transform overridden artifacts only if we generate a maven repo.
+                            needTransformation = generateMavenRepo;
+                        }
+                        // Reset the version to the original one.
+                        artifact.setVersion(version);
+                        if (needTransformation) {
+                            boolean transformAttempt = (jakartaTransform || provisioningMavenRepo != null);
+                            if (transformAttempt) {
+                                // We don't know the state of this artifact, we must transform it.
+                                String name = getTransformedArtifactFileName(version, moduleArtifact.getFileName().toString(), jakartaTransformSuffix);
+                                transformedFile = runtime.getTmpPath(name);
+                                Files.createDirectories(transformedFile);
+                                Files.deleteIfExists(transformedFile);
+                                TransformedArtifact transformedArtifact = transform(artifact, transformedFile);
+                                if (!transformedArtifact.isTransformed()) {
+                                    transformedFile = null;
+                                }
+                            }
+                            // Overriden artifact is not present in the provisioning repo, must be added
+                            if (provisioningMavenRepo != null) {
+                                if (transformedFile == null) {
+                                    Path notTransformedVersionPath = getLocalRepoPath(artifact, provisioningMavenRepo);
+                                    Files.copy(moduleArtifact, notTransformedVersionPath.resolve(moduleArtifact.getFileName().toString()));
+                                } else {
+                                    artifact.setVersion(version + jakartaTransformSuffix);
+                                    Path transformedVersionPath = getLocalRepoPath(artifact, provisioningMavenRepo);
+                                    String name = getTransformedArtifactFileName(version, moduleArtifact.getFileName().toString(), jakartaTransformSuffix);
+                                    Files.copy(transformedFile, transformedVersionPath.resolve(name), StandardCopyOption.REPLACE_EXISTING);
+                                    artifact.setVersion(version);
+                                }
+                            }
+                        }
+                    }
+                    boolean isExcluded = isExcludedFromTransformation(artifact) || (isOverriddenArtifact && transformedFile == null);
                     // If we have a maven repo for provisioning, consider that we are in a transformation case
                     // even if jakartaTransform is false.
-                    boolean requireSuffix = (jakartaTransform || provisioningMavenRepo != null) && !isExcludedFromTransformation(artifact);
+                    boolean requireSuffix = (jakartaTransform || provisioningMavenRepo != null) && !isExcluded;
+                    // ignore jandex variable, just resolve coordinates to a string
+                    final StringBuilder buf = new StringBuilder();
                     buf.append(artifact.getGroupId());
                     buf.append(':');
                     buf.append(artifact.getArtifactId());
                     buf.append(':');
                     buf.append(artifact.getVersion()).append(requireSuffix ? jakartaTransformSuffix : "");
-                    if(!artifact.getClassifier().isEmpty()) {
+                    if (!artifact.getClassifier().isEmpty()) {
                         buf.append(':');
                         buf.append(artifact.getClassifier());
                     }
                     attribute.setValue(buf.toString());
-                    if (runtime.isOptionSet(OPTION_MVN_REPO)) {
+                    if (generateMavenRepo) {
                         String path = runtime.getOptionValue(OPTION_MVN_REPO);
                         Path repo = Paths.get(path);
                         String version = artifact.getVersion();
@@ -884,16 +993,26 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                         }
                         Path versionPath = getLocalRepoPath(artifact, repo);
                         Path actualTarget = versionPath.resolve(moduleArtifact.getFileName().toString());
-                        if (jakartaTransform && !isExcludedFromTransformation(artifact)) {
+                        if (jakartaTransform && !isExcluded) {
                             // The artifact could already exist in case of redefined module as alias (eg: javax.security.jacc.api).
                             // The transformer doesn't accept existing target, so skip transformation.
                             String name = getTransformedArtifactFileName(version, moduleArtifact.getFileName().toString(), jakartaTransformSuffix);
-                            Path transformedTarget = actualTarget.getParent().resolve(name);
+                            Path transformedTarget = versionPath.resolve(name);
                             if (!Files.exists(transformedTarget)) {
-                                transform(artifact, versionPath.resolve(name));
+                                if (transformedFile == null) {
+                                    transform(artifact, transformedTarget);
+                                } else {
+                                    // An overridden artifact that we just transformed
+                                    Files.copy(transformedFile, transformedTarget, StandardCopyOption.REPLACE_EXISTING);
+                                }
                             }
                         } else {
-                            Files.copy(moduleArtifact, actualTarget, StandardCopyOption.REPLACE_EXISTING);
+                            // We could have a transformed overridden artifact
+                            if (transformedFile == null) {
+                                Files.copy(moduleArtifact, actualTarget, StandardCopyOption.REPLACE_EXISTING);
+                            } else {
+                                Files.copy(transformedFile, versionPath.resolve(transformedFile.getFileName()), StandardCopyOption.REPLACE_EXISTING);
+                            }
                         }
                         // Resolve the original pom file.
                         artifact.setVersion(version);
@@ -918,7 +1037,16 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                             boolean toTransform = !isExcludedFromTransformation(artifact);
                             if (toTransform) {
                                 finalFileName = getTransformedArtifactFileName(artifact.getVersion(), finalFileName, jakartaTransformSuffix);
-                                transform(artifact, targetDir.resolve(finalFileName));
+                                Path transformedPath = targetDir.resolve(finalFileName);
+                                TransformedArtifact transformedArtifact = transform(artifact, transformedPath);
+                                // This can happen with overridden artifacts that don't require transformation.
+                                if (!transformedArtifact.isTransformed()) {
+                                    // Ignore transformation
+                                    toTransform = false;
+                                    finalFileName = artifactFileName;
+                                    Files.delete(transformedPath);
+                                    Files.copy(moduleArtifact, targetDir.resolve(artifactFileName), StandardCopyOption.REPLACE_EXISTING);
+                                }
                             } else {
                                 Files.copy(moduleArtifact, targetDir.resolve(artifactFileName), StandardCopyOption.REPLACE_EXISTING);
                             }
@@ -973,9 +1101,9 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         return false;
     }
 
-    private Path transform(MavenArtifact artifact, Path targetDir) throws IOException {
+    private TransformedArtifact transform(MavenArtifact artifact, Path targetDir) throws IOException {
         TransformedArtifact a = JakartaTransformer.transform(jakartaTransformConfigsDir, artifact.getPath(), targetDir, jakartaTransformVerbose, logHandler);
-        return a.getTarget();
+        return a;
     }
 
     public void addExampleConfigs(FeaturePackRuntime fp, ExampleFpConfigs exampleConfigs) throws ProvisioningException {
@@ -1198,11 +1326,17 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     }
 
     private Path getLocalRepoPath(MavenArtifact artifact, Path repo) throws IOException {
+        return getLocalRepoPath(artifact, repo, true);
+    }
+
+    private Path getLocalRepoPath(MavenArtifact artifact, Path repo, boolean create) throws IOException {
         String grpid = artifact.getGroupId().replaceAll("\\.", Matcher.quoteReplacement(File.separator));
         Path grpidPath = repo.resolve(grpid);
         Path artifactidPath = grpidPath.resolve(artifact.getArtifactId());
         Path versionPath = artifactidPath.resolve(artifact.getVersion());
-        Files.createDirectories(versionPath);
+        if (create) {
+            Files.createDirectories(versionPath);
+        }
         return versionPath;
     }
 
