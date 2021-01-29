@@ -3,11 +3,6 @@
 
 = WildFly Galleon Plugins
 
-ifdef::env-github[]
-[link=https://travis-ci.org/aloubyansky/pm]
-image:https://travis-ci.org/aloubyansky/pm.svg?branch=master["Build Status", link="https://travis-ci.org/aloubyansky/pm"]
-endif::[]
-
 toc::[]
 
 = Project Modules
