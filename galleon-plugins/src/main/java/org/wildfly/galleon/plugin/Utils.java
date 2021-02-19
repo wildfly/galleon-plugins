@@ -80,6 +80,20 @@ public class Utils {
         return propsMap;
     }
 
+    public static boolean containsArtifact(Map<String, String> artifactsMap, MavenArtifact artifact) throws ProvisioningException {
+        final StringBuilder key = new StringBuilder();
+        final StringBuilder val = new StringBuilder();
+        val.append(artifact.getGroupId()).append(":").append(artifact.getArtifactId()).append(":").append(artifact.getVersion()).append(":");
+        key.append(artifact.getGroupId()).append(':').append(artifact.getArtifactId());
+        if (artifact.getClassifier() != null && !artifact.getClassifier().isEmpty()) {
+            key.append("::").append(artifact.getClassifier());
+            val.append(artifact.getClassifier());
+        }
+        val.append(":").append(artifact.getExtension());
+        String value = artifactsMap.get(key.toString());
+        return val.toString().equals(value);
+    }
+
     public static MavenArtifact toArtifactCoords(Map<String, String> versionProps, String str, boolean optional) throws ProvisioningException {
         String[] parts = str.split(":");
         if(parts.length < 2) {
@@ -223,5 +237,49 @@ public class Utils {
                         });
             }
         }
+    }
+
+    static Map<String, String> toArtifactsMap(String str) {
+        if (str == null) {
+            return Collections.emptyMap();
+        }
+        String[] split = str.split("\\|");
+        Map<String, String> ret = new HashMap<>();
+        for (String artifact : split) {
+            //grpid:artifactId:version:[classifier]:extension
+            artifact = artifact.trim();
+            StringBuilder builder = new StringBuilder();
+            String[] parts = artifact.split(":");
+            if (parts.length != 5) {
+                throw new IllegalArgumentException("Unexpected artifact coordinates format: " + artifact);
+            }
+            String grpId = check(artifact, parts[0]);
+            String artifactId = check(artifact, parts[1]);
+            String version = check(artifact, parts[2]);
+            String classifier = parts[3];
+            if (classifier != null) {
+                classifier = classifier.trim();
+            }
+            String ext = check(artifact, parts[4]);
+            String key = grpId + ":" + artifactId;
+            builder.append(grpId).append(":").append(artifactId).append(":").append(version).append(":");
+            if (classifier != null && !classifier.isEmpty()) {
+                key = key + "::" + classifier;
+                builder.append(classifier);
+            }
+            builder.append(":").append(ext);
+            ret.put(key, builder.toString());
+        }
+        return ret;
+    }
+
+    private static String check(String artifact, String item) {
+        if (item != null) {
+            item = item.trim();
+        }
+        if (item == null || item.isEmpty()) {
+            throw new IllegalArgumentException("Unexpected artifact coordinates format: " + artifact);
+        }
+        return item;
     }
 }
