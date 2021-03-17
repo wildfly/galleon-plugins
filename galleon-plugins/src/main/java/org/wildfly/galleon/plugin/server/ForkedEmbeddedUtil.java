@@ -22,6 +22,7 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
@@ -249,14 +250,19 @@ public class ForkedEmbeddedUtil {
         }
     }
 
-    private static void collectCpUrls(String javaHome, ClassLoader cl, StringBuilder buf) {
+    private static void collectCpUrls(String javaHome, ClassLoader cl, StringBuilder buf) throws ProvisioningException {
         final ClassLoader parentCl = cl.getParent();
         if(parentCl != null) {
             collectCpUrls(javaHome, cl.getParent(), buf);
         }
         if (cl instanceof URLClassLoader) {
             for (URL url : ((URLClassLoader)cl).getURLs()) {
-                final String file = url.getFile();
+                final String file;
+                try {
+                    file = new File(url.toURI()).getAbsolutePath();
+                } catch (URISyntaxException ex) {
+                    throw new ProvisioningException(ex);
+                }
                 if(file.startsWith(javaHome)) {
                     continue;
                 }
