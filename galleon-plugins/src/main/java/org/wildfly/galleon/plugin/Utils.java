@@ -47,6 +47,7 @@ import org.jboss.galleon.util.CollectionUtils;
 import org.jboss.galleon.util.IoUtils;
 import org.jboss.galleon.util.LayoutUtils;
 import org.jboss.galleon.util.StringUtils;
+import static org.wildfly.galleon.plugin.WfInstallPlugin.GLOBAL_ARTIFACTS_KEY;
 import org.wildfly.galleon.plugin.config.CopyArtifact;
 
 /**
@@ -80,7 +81,7 @@ public class Utils {
         return propsMap;
     }
 
-    public static boolean containsArtifact(Map<String, String> artifactsMap, MavenArtifact artifact) throws ProvisioningException {
+    public static boolean containsArtifact(Map<String, Map<String, String>> artifactsMap, MavenArtifact artifact, String producerName) throws ProvisioningException {
         final StringBuilder key = new StringBuilder();
         final StringBuilder val = new StringBuilder();
         val.append(artifact.getGroupId()).append(":").append(artifact.getArtifactId()).append(":").append(artifact.getVersion()).append(":");
@@ -90,8 +91,23 @@ public class Utils {
             val.append(artifact.getClassifier());
         }
         val.append(":").append(artifact.getExtension());
-        String value = artifactsMap.get(key.toString());
-        return val.toString().equals(value);
+        // Check first in global scope
+        Map<String, String> global = artifactsMap.get(GLOBAL_ARTIFACTS_KEY);
+        if (global != null) {
+            String value = global.get(key.toString());
+            if (val.toString().equals(value)) {
+                return true;
+            }
+        }
+        // Local to the feature-pack
+        Map<String, String> local = artifactsMap.get(producerName);
+        if (local != null) {
+            String value = local.get(key.toString());
+            if (val.toString().equals(value)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public static MavenArtifact toArtifactCoords(Map<String, String> versionProps, String str, boolean optional) throws ProvisioningException {
@@ -239,36 +255,58 @@ public class Utils {
         }
     }
 
-    static Map<String, String> toArtifactsMap(String str) {
+    static Map<String, Map<String, String>> toArtifactsMap(String str) {
         if (str == null) {
             return Collections.emptyMap();
         }
-        String[] split = str.split("\\|");
-        Map<String, String> ret = new HashMap<>();
-        for (String artifact : split) {
-            //grpid:artifactId:version:[classifier]:extension
-            artifact = artifact.trim();
-            StringBuilder builder = new StringBuilder();
-            String[] parts = artifact.split(":");
-            if (parts.length != 5) {
-                throw new IllegalArgumentException("Unexpected artifact coordinates format: " + artifact);
+        Map<String, Map<String, String>> ret = new HashMap<>();
+        //a|b|c
+        //@producer=a|b|c@producer=...
+        if (str.startsWith("@")) {
+            // Ignore first delimiter
+            str = str.substring(1);
+        }
+        String[] producers = str.split("@");
+        for (String producer : producers) {
+            int eqIndex = producer.indexOf("=");
+            String producerName = GLOBAL_ARTIFACTS_KEY;
+            String producerArgs = producer;
+            Map<String, String> artifactsMap;
+            if (eqIndex > 0) {
+                producerName = producer.substring(0, eqIndex);
+                producerArgs = producer.substring(eqIndex+1);
             }
-            String grpId = check(artifact, parts[0]);
-            String artifactId = check(artifact, parts[1]);
-            String version = check(artifact, parts[2]);
-            String classifier = parts[3];
-            if (classifier != null) {
-                classifier = classifier.trim();
+            artifactsMap = ret.get(producerName);
+            if (artifactsMap == null) {
+                artifactsMap = new HashMap<>();
+                ret.put(producerName, artifactsMap);
             }
-            String ext = check(artifact, parts[4]);
-            String key = grpId + ":" + artifactId;
-            builder.append(grpId).append(":").append(artifactId).append(":").append(version).append(":");
-            if (classifier != null && !classifier.isEmpty()) {
-                key = key + "::" + classifier;
-                builder.append(classifier);
+            String[] split = producerArgs.split("\\|");
+            for (String artifact : split) {
+                //grpid:artifactId:version:[classifier]:extension
+                artifact = artifact.trim();
+                StringBuilder builder = new StringBuilder();
+                String[] parts = artifact.split(":");
+                if (parts.length != 5) {
+                    throw new IllegalArgumentException("Unexpected artifact coordinates format: " + artifact);
+                }
+                String grpId = check(artifact, parts[0]);
+                String artifactId = check(artifact, parts[1]);
+                String version = check(artifact, parts[2]);
+                String classifier = parts[3];
+                if (classifier != null) {
+                    classifier = classifier.trim();
+                }
+                String ext = check(artifact, parts[4]);
+                String key = grpId + ":" + artifactId;
+                builder.append(grpId).append(":").append(artifactId).append(":").append(version).append(":");
+                if (classifier != null && !classifier.isEmpty()) {
+                    key = key + "::" + classifier;
+                    builder.append(classifier);
+                }
+                builder.append(":").append(ext);
+                artifactsMap.put(key, builder.toString());
             }
-            builder.append(":").append(ext);
-            ret.put(key, builder.toString());
         }
         return ret;
     }

@@ -119,6 +119,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private static final String MAVEN_REPO_LOCAL = "maven.repo.local";
     public static final String JAKARTA_TRANSFORM_SUFFIX_KEY = "jakarta.transform.artifacts.suffix";
 
+    static final String GLOBAL_ARTIFACTS_KEY = "org.jboss.galleon.global-artifacts.key";
+
     private static final ProvisioningOption OPTION_MVN_DIST = ProvisioningOption.builder("jboss-maven-dist")
             .setBooleanValueSet()
             .build();
@@ -143,7 +145,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private MessageWriter log;
 
     private Map<String, String> mergedArtifactVersions = new HashMap<>();
-    private final Map<String, String> overriddenArtifactVersions = new HashMap<>();
+    private final Map<String, Map<String, String>> overriddenArtifactVersions = new HashMap<>();
     private Map<ProducerSpec, Map<String, String>> fpArtifactVersions = new HashMap<>();
     private Map<ProducerSpec, Map<String, String>> fpTasksProps = Collections.emptyMap();
     private Map<String, String> mergedTaskProps = new HashMap<>();
@@ -207,7 +209,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         return value == null ? null : Paths.get(value);
     }
 
-    private Map<String, String> getOverriddenArtifacts() throws ProvisioningException {
+    private Map<String, Map<String, String>> getOverriddenArtifacts() throws ProvisioningException {
         if (!runtime.isOptionSet(OPTION_OVERRIDDEN_ARTIFACTS)) {
             return Collections.emptyMap();
         }
@@ -273,9 +275,20 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             final Path artifactProps = wfRes.resolve(WfConstants.ARTIFACT_VERSIONS_PROPS);
             if(Files.exists(artifactProps)) {
                 final Map<String, String> versionProps = Utils.readProperties(artifactProps);
-                for (Entry<String, String> entry : overriddenArtifactVersions.entrySet()) {
-                    if (versionProps.containsKey(entry.getKey())) {
-                        versionProps.put(entry.getKey(), entry.getValue());
+                Map<String, String> globalOverriddenArtifacts = overriddenArtifactVersions.get(GLOBAL_ARTIFACTS_KEY);
+                if (globalOverriddenArtifacts != null) {
+                    for (Entry<String, String> entry : globalOverriddenArtifacts.entrySet()) {
+                        if (versionProps.containsKey(entry.getKey())) {
+                            versionProps.put(entry.getKey(), entry.getValue());
+                        }
+                    }
+                }
+                final Map<String, String> localOverriden =  overriddenArtifactVersions.get(fp.getFPID().getProducer().getName());
+                if (localOverriden != null) {
+                     for (Entry<String, String> entry : localOverriden.entrySet()) {
+                        if (versionProps.containsKey(entry.getKey())) {
+                            versionProps.put(entry.getKey(), entry.getValue());
+                        }
                     }
                 }
                 fpArtifactVersions.put(fp.getFPID().getProducer(), versionProps);
@@ -316,12 +329,17 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             }
         }
         // Check that all overridden artifacts are actually known.
-        for (String key : overriddenArtifactVersions.keySet()) {
-            if (!mergedArtifactVersions.containsKey(key)) {
-                throw new ProvisioningException("Overridden artifacts " + key + " is not found in the set of known server artifacts");
+        for (String producer : overriddenArtifactVersions.keySet()) {
+            Map<String, String> artifacts = overriddenArtifactVersions.get(producer);
+            for (String key : artifacts.keySet()) {
+                if (!mergedArtifactVersions.containsKey(key)) {
+                    throw new ProvisioningException("Overridden artifacts " + key + " is not found in the set of known server artifacts");
+                }
             }
         }
-        mergedArtifactVersions.putAll(overriddenArtifactVersions);
+        for (String producer : overriddenArtifactVersions.keySet()) {
+            mergedArtifactVersions.putAll(overriddenArtifactVersions.get(producer));
+        }
         mergedTaskPropsResolver = new MapPropertyResolver(mergedTaskProps);
 
         final ProvisioningLayoutFactory layoutFactory = runtime.getLayout().getFactory();
@@ -910,7 +928,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 moduleArtifact = artifact.getPath();
                 if (thinServer) {
                     boolean generateMavenRepo = runtime.isOptionSet(OPTION_MVN_REPO);
-                    boolean isOverriddenArtifact = Utils.containsArtifact(overriddenArtifactVersions, artifact);
+                    boolean isOverriddenArtifact = Utils.containsArtifact(overriddenArtifactVersions, artifact,
+                            pkg.getFeaturePackRuntime().getFPID().getProducer().getName());
                     // If a transformedFile is found, then the overridden artifact is not excluded from transformation.
                     Path transformedFile = null;
                     if (isOverriddenArtifact) {
