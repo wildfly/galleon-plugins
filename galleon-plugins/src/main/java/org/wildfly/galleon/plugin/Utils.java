@@ -55,6 +55,10 @@ import org.wildfly.galleon.plugin.config.CopyArtifact;
  */
 public class Utils {
 
+    private static final String EXPRESSION_PREFIX = "${";
+    private static final String EXPRESSION_SUFFIX = "}";
+    private static final String EXPRESSION_ENV_VAR = "env.";
+    private static final String EXPRESSION_DEFAULT_VALUE_SEPARATOR = ":";
     public static void readProperties(Path propsFile, Map<String, String> propsMap) throws ProvisioningException {
         try(BufferedReader reader = Files.newBufferedReader(propsFile)) {
             String line = reader.readLine();
@@ -95,27 +99,11 @@ public class Utils {
     }
 
     public static MavenArtifact toArtifactCoords(Map<String, String> versionProps, String str, boolean optional) throws ProvisioningException {
-        String[] parts = str.split(":");
-        if(parts.length < 2) {
-            throw new IllegalArgumentException("Unexpected artifact coordinates format: " + str);
-        }
         final MavenArtifact artifact = new MavenArtifact();
-        artifact.setGroupId(parts[0]);
-        artifact.setArtifactId(parts[1]);
         artifact.setExtension(MavenArtifact.EXT_JAR);
-        if(parts.length > 2) {
-            if(!parts[2].isEmpty()) {
-                artifact.setVersion(parts[2]);
-            }
-            if(parts.length > 3) {
-                artifact.setClassifier(parts[3]);
-                if(parts.length > 4 && !parts[4].isEmpty()) {
-                    artifact.setExtension(parts[4]);
-                    if (parts.length > 5) {
-                        throw new IllegalArgumentException("Unexpected artifact coordinates format: " + str);
-                    }
-                }
-            }
+        resolveArtifact(str, artifact);
+        if(artifact.getGroupId() == null && artifact.getArtifactId() == null) {
+            throw new IllegalArgumentException("Unexpected artifact coordinates format: " + str);
         }
 
         if(!artifact.hasVersion()) {
@@ -126,13 +114,173 @@ public class Utils {
                 }
                 throw new ProvisioningException("Failed to resolve the version of " + artifact.getGroupId() + ':' + artifact.getArtifactId());
             }
-            parts = resolvedStr.split(":");
-            if (parts.length < 3) {
+            MavenArtifact resolvedArtifact = new MavenArtifact();
+            resolveArtifact(resolvedStr, resolvedArtifact);
+            if (!resolvedArtifact.hasVersion()) {
                 throw new ProvisioningException("Failed to resolve the version for artifact: " + resolvedStr);
             }
-            artifact.setVersion(parts[2]);
+            artifact.setVersion(resolvedArtifact.getVersion());
         }
         return artifact;
+    }
+
+    /**
+     * Resolve an expression composed of ${a,b,c:defaultValue} Where a, b and c can be System properties or env.XXX env variables.
+     */
+    private static String resolveExpression(String coords, String str) throws ProvisioningException {
+        if (str == null) {
+            return str;
+        }
+        String resolved = str;
+        str = str.trim();
+        if (str.startsWith(EXPRESSION_PREFIX) && str.endsWith(EXPRESSION_SUFFIX)) {
+            String expressions = str.substring(EXPRESSION_PREFIX.length(), str.length() - EXPRESSION_SUFFIX.length());
+            int defValueSeparator = expressions.indexOf(EXPRESSION_DEFAULT_VALUE_SEPARATOR);
+            String defaultValue = null;
+            if (defValueSeparator >= 0) {
+                defaultValue = expressions.substring(defValueSeparator+1, expressions.length());
+                defaultValue = defaultValue.trim();
+                expressions = expressions.substring(0, defValueSeparator);
+            }
+            String[] split = expressions.split(",", -1);
+            String value;
+            for (String expression : split) {
+                expression = expression.trim();
+                if (expression.isEmpty()) {
+                   throw new ProvisioningException("Invalid syntax for expression " + coords);
+                }
+                if (expression.startsWith(EXPRESSION_ENV_VAR)) {
+                    expression = expression.substring(EXPRESSION_ENV_VAR.length(), expression.length());
+                    if (expression.isEmpty()) {
+                        throw new ProvisioningException("Invalid syntax for expression " + coords);
+                    }
+                    value = System.getenv(expression);
+                    if (value != null) {
+                        return value;
+                    }
+                } else {
+                    value = System.getProperty(expression);
+                    if (value != null) {
+                        return value;
+                    }
+                }
+            }
+            if (defaultValue == null) {
+                throw new ProvisioningException("Unresolved expression for " + coords);
+            }
+            resolved = defaultValue;
+        }
+        return resolved;
+    }
+
+    enum COORDS_STATE {
+        GROUPID,
+        ARTIFACTID,
+        VERSION,
+        CLASSIFIER,
+        EXTENSION
+    }
+
+    static void resolveArtifact(String coords, MavenArtifact artifact) throws ProvisioningException {
+        if (coords == null) {
+            return;
+        }
+        COORDS_STATE state = COORDS_STATE.GROUPID;
+        StringBuilder currentBuilder = null;
+        char[] array = coords.toCharArray();
+        boolean expectSeparator = false;
+        for (int i = 0; i < array.length; i++) {
+            char c = array[i];
+            if (c == ' ') {
+                continue;
+            }
+            if (expectSeparator && c != ':') {
+                throw new ProvisioningException("Invalid syntax for expression " + coords);
+            }
+            expectSeparator = false;
+            if (c == '$') {
+                if (i < array.length - 1) {
+                    char next = array[i + 1];
+                    if ('{' == next) {
+                        // Expression
+                        String remaining = coords.substring(i);
+                        int end = remaining.indexOf("}");
+                        if (end < 0) {
+                            throw new ProvisioningException("Invalid syntax for expression " + coords);
+                        }
+                        String exp = remaining.substring(0, end + 1);
+                        if (currentBuilder == null) {
+                            currentBuilder = new StringBuilder();
+                        }
+                        currentBuilder.append(resolveExpression(coords, exp));
+                        expectSeparator = true;
+                        i += end;
+                    }
+                } else {
+                    if (currentBuilder == null) {
+                        currentBuilder = new StringBuilder();
+                    }
+                    currentBuilder.append(c);
+                }
+            } else {
+                if (c == ':') {
+                    String current = currentBuilder == null ? null : currentBuilder.toString();
+                    state = setState(coords, state, current, artifact);
+                    currentBuilder = null;
+                } else {
+
+                    if (currentBuilder == null) {
+                        currentBuilder = new StringBuilder();
+                    }
+                    currentBuilder.append(c);
+                }
+            }
+        }
+        setState(coords, state, currentBuilder == null ? null : currentBuilder.toString(), artifact);
+    }
+
+    private static COORDS_STATE setState(String coords, COORDS_STATE state, String value, MavenArtifact artifact) {
+        COORDS_STATE newState = null;
+        if(state == null) {
+            throw new IllegalArgumentException("Unexpected artifact coordinates format: " + coords);
+        }
+        switch (state) {
+            case GROUPID: {
+                if (value != null) {
+                    artifact.setGroupId(value);
+                }
+                newState = Utils.COORDS_STATE.ARTIFACTID;
+                break;
+            }
+            case ARTIFACTID: {
+                if (value != null) {
+                    artifact.setArtifactId(value);
+                }
+                newState = Utils.COORDS_STATE.VERSION;
+                break;
+            }
+            case VERSION: {
+                if (value != null) {
+                    artifact.setVersion(value);
+                }
+                newState = Utils.COORDS_STATE.CLASSIFIER;
+                break;
+            }
+            case CLASSIFIER: {
+                if (value != null) {
+                    artifact.setClassifier(value);
+                }
+                newState = Utils.COORDS_STATE.EXTENSION;
+                break;
+            }
+            case EXTENSION: {
+                if (value != null) {
+                    artifact.setExtension(value);
+                }
+                break;
+            }
+        }
+        return newState;
     }
 
     public static List<Path> collectLayersConf(ProvisioningLayout<?> layout) throws ProvisioningException {
@@ -239,7 +387,7 @@ public class Utils {
         }
     }
 
-    static Map<String, String> toArtifactsMap(String str) {
+    static Map<String, String> toArtifactsMap(String str) throws ProvisioningException {
         if (str == null) {
             return Collections.emptyMap();
         }
@@ -247,20 +395,25 @@ public class Utils {
         Map<String, String> ret = new HashMap<>();
         for (String artifact : split) {
             //grpid:artifactId:version:[classifier]:extension
-            artifact = artifact.trim();
+            // We could have overriden artifact with expression.
+            MavenArtifact  mavenArtifact = new MavenArtifact();
+            // We expect the extension.
+            mavenArtifact.setExtension(null);
+            resolveArtifact(artifact, mavenArtifact);
             StringBuilder builder = new StringBuilder();
-            String[] parts = artifact.split(":");
-            if (parts.length != 5) {
+
+            if (mavenArtifact.getGroupId() == null || mavenArtifact.getArtifactId() == null || !mavenArtifact.hasVersion() ||
+                 mavenArtifact.getExtension() == null) {
                 throw new IllegalArgumentException("Unexpected artifact coordinates format: " + artifact);
             }
-            String grpId = check(artifact, parts[0]);
-            String artifactId = check(artifact, parts[1]);
-            String version = check(artifact, parts[2]);
-            String classifier = parts[3];
+            String grpId = check(artifact, mavenArtifact.getGroupId());
+            String artifactId = check(artifact, mavenArtifact.getArtifactId());
+            String version = check(artifact, mavenArtifact.getVersion());
+            String classifier = mavenArtifact.getClassifier();
             if (classifier != null) {
                 classifier = classifier.trim();
             }
-            String ext = check(artifact, parts[4]);
+            String ext = check(artifact,mavenArtifact.getExtension());
             String key = grpId + ":" + artifactId;
             builder.append(grpId).append(":").append(artifactId).append(":").append(version).append(":");
             if (classifier != null && !classifier.isEmpty()) {
