@@ -137,6 +137,24 @@
           </execution>
         </executions>
       </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>default-test</id>
+            <goals>
+              <goal>test</goal>
+            </goals>
+            <phase>test</phase>
+            <configuration>
+              <environmentVariables>
+                <WFGP_TEST_VERSION>7777</WFGP_TEST_VERSION>
+              </environmentVariables>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
     </plugins>
   </build>
 

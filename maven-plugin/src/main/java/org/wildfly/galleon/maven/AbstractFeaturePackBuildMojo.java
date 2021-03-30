@@ -263,9 +263,14 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         for (ArtifactCoords.Gav gav : buildConfig.getDependencies().keySet()) {
             getArtifactVersions().remove(gav.getGroupId(), gav.getArtifactId());
         }
+        // Copy resources from src.
         try {
+            Path srcArtifacts = resourcesDir.resolve(Constants.RESOURCES);
+            if (Files.exists(srcArtifacts)) {
+               IoUtils.copy(srcArtifacts, fpResourcesDir);
+            }
             getArtifactVersions().store(resourcesWildFly.resolve(WfConstants.ARTIFACT_VERSIONS_PROPS));
-        } catch (IOException e) {
+        } catch (ProvisioningException | IOException e) {
             throw new MojoExecutionException("Failed to store artifact versions", e);
         }
         // Build a maven artifact resolver that looks into the local maven repo, not in the project

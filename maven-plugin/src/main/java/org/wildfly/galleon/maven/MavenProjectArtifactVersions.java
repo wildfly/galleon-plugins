@@ -22,11 +22,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeMap;
 
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.project.MavenProject;
+import org.jboss.galleon.ProvisioningException;
+import org.wildfly.galleon.plugin.Utils;
 
 /**
  * Maps groupId:artifactId[::classifier] to groupId:artifactId:version:[classifier]:type
@@ -77,17 +80,25 @@ class MavenProjectArtifactVersions {
         versions.remove(groupId + ':' + artifactId);
     }
 
-    void store(Path target) throws IOException {
+    void store(Path target) throws IOException, ProvisioningException {
         store(versions, target);
     }
 
-    static void store(Map<String, String> map, Path target) throws IOException {
-        try(BufferedWriter writer = Files.newBufferedWriter(target, StandardOpenOption.CREATE)) {
+    static void store(Map<String, String> map, Path target) throws IOException, ProvisioningException {
+        Map<String, String> existingProperties = new HashMap<>();
+        if (Files.exists(target)) {
+           // Read its content and only add entries that are not present.
+           existingProperties = Utils.readProperties(target);
+        }
+        // We could have an existing file, append to it.
+        try(BufferedWriter writer = Files.newBufferedWriter(target, StandardOpenOption.CREATE, StandardOpenOption.APPEND)) {
             for(Map.Entry<String, String> entry : map.entrySet()) {
-                writer.write(entry.getKey());
-                writer.write('=');
-                writer.write(entry.getValue());
-                writer.newLine();
+                if (!existingProperties.containsKey(entry.getKey())) {
+                    writer.write(entry.getKey());
+                    writer.write('=');
+                    writer.write(entry.getValue());
+                    writer.newLine();
+                }
             }
         }
     }
