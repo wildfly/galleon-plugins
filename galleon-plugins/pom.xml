@@ -63,14 +63,10 @@
     </dependency>
 
     <dependency>
-      <groupId>com.io7m.xom</groupId>
+      <groupId>xom</groupId>
       <artifactId>xom</artifactId>
       <scope>compile</scope>
       <exclusions>
-        <exclusion>
-          <groupId>xml-apis</groupId>
-          <artifactId>xml-apis</artifactId>
-        </exclusion>
         <exclusion>
           <groupId>xalan</groupId>
           <artifactId>xalan</artifactId>
@@ -130,7 +126,6 @@
                   <exclude>org.wildfly.security:wildfly-elytron</exclude>
                   <exclude>xalan:xalan</exclude>
                   <exclude>xerces:xercesImpl</exclude>
-                  <exclude>xml-apis:xml-apis</exclude>
                 </excludes>
               </artifactSet>
             </configuration>
