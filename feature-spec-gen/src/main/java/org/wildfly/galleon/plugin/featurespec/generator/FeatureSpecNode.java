@@ -161,16 +161,20 @@ class FeatureSpecNode {
             }
         }
         final List<ModelNode> packagesDescr = domainDescr.hasDefined("packages") ? domainDescr.get("packages").asList() : Collections.emptyList();
-        if(packagesDescr.size() != standalonePackages.size()) {
-            if(failIfDifferent) {
-                throw new ProvisioningException("Packages dependencies don't match");
+        Set<String> domainPackages = new HashSet<>(packagesDescr.size());
+        for (ModelNode packageDep : packagesDescr) {
+            domainPackages.add(packageDep.require("package").asString());
+        }
+        if (domainPackages.size() != standalonePackages.size()) {
+            if (failIfDifferent) {
+                throw new ProvisioningException("Domain packages dependencies [" + String.join(",", domainPackages) + "] don't match standalone packages dependencies [" + String.join(",", standalonePackages) + "]");
             }
             return false;
         }
-        for (ModelNode packageDep : packagesDescr) {
-            if(!standalonePackages.contains(packageDep.require("package").asString())) {
-                if(failIfDifferent) {
-                    throw new ProvisioningException("Domain model feature requires package " + packageDep.require("package").asString() + " unlike the standalone one");
+        for (String packageDep : domainPackages) {
+            if (!standalonePackages.contains(packageDep)) {
+                if (failIfDifferent) {
+                    throw new ProvisioningException("Domain model feature requires package " + packageDep + " unlike the standalone one");
                 }
                 return false;
             }
