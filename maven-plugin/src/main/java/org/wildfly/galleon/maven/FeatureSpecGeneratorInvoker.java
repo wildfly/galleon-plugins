@@ -47,6 +47,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 import javax.xml.stream.XMLStreamException;
 
@@ -142,6 +144,7 @@ public class FeatureSpecGeneratorInvoker {
     private final Path wildflyResourcesDir;
     private final Set<String> transformExcluded = new TreeSet<>();
     private final String jakartaTransformSuffix;
+    private final Pattern excludedArtifactPattern;
     FeatureSpecGeneratorInvoker(WfFeaturePackBuildMojo mojo) throws MojoExecutionException {
         this.project = mojo.project;
         this.session = mojo.session;
@@ -160,6 +163,9 @@ public class FeatureSpecGeneratorInvoker {
         this.jakartaTransformMavenRepo = mojo.jakartaTransformRepo.toPath();
         this.wildflyResourcesDir = mojo.getWildFlyResourcesDir();
         jakartaTransformSuffix = mojo.taskProps.get(WfInstallPlugin.JAKARTA_TRANSFORM_SUFFIX_KEY);
+        excludedArtifactPattern = (mojo.jakartaTransformExcludedArtifacts == null
+                || mojo.jakartaTransformExcludedArtifacts.isEmpty()) ? null :
+                Pattern.compile(toExcludedPattern(mojo.jakartaTransformExcludedArtifacts));
     }
 
     public void execute() throws MojoExecutionException, MojoFailureException {
@@ -340,20 +346,25 @@ public class FeatureSpecGeneratorInvoker {
         Path versionPath = artifactidPath.resolve(artifact.getVersion());
         Files.createDirectories(versionPath);
 
-        TransformedArtifact a = JakartaTransformer.transform(configsDir,
-                artifact.getFile().toPath(), versionPath, jakartaTransformVerbose, logHandler);
-        if (!a.isTransformed()) {
+        if (isExcludedFromTransformation(artifact)) {
             transformExcluded.add(ArtifactCoords.newGav(artifact.getGroupId(),
                     artifact.getArtifactId(), artifact.getVersion()).toString());
         } else {
-            if (jakartaTransformSuffix != null) {
-                // Copy a renamed version that will be used for future provisioning.
-                Path transformedVersionPath = artifactidPath.resolve(artifact.getVersion() + jakartaTransformSuffix);
-                Files.createDirectories(transformedVersionPath);
-                String fileName = WfInstallPlugin.getTransformedArtifactFileName(artifact.getVersion(),
-                        artifact.getFile().toPath().getFileName().toString(), jakartaTransformSuffix);
-                Files.copy(versionPath.resolve(artifact.getFile().toPath().getFileName()),
-                        transformedVersionPath.resolve(fileName), StandardCopyOption.REPLACE_EXISTING);
+            TransformedArtifact a = JakartaTransformer.transform(configsDir,
+                    artifact.getFile().toPath(), versionPath, jakartaTransformVerbose, logHandler);
+            if (!a.isTransformed()) {
+                transformExcluded.add(ArtifactCoords.newGav(artifact.getGroupId(),
+                        artifact.getArtifactId(), artifact.getVersion()).toString());
+            } else {
+                if (jakartaTransformSuffix != null) {
+                    // Copy a renamed version that will be used for future provisioning.
+                    Path transformedVersionPath = artifactidPath.resolve(artifact.getVersion() + jakartaTransformSuffix);
+                    Files.createDirectories(transformedVersionPath);
+                    String fileName = WfInstallPlugin.getTransformedArtifactFileName(artifact.getVersion(),
+                            artifact.getFile().toPath().getFileName().toString(), jakartaTransformSuffix);
+                    Files.copy(versionPath.resolve(artifact.getFile().toPath().getFileName()),
+                            transformedVersionPath.resolve(fileName), StandardCopyOption.REPLACE_EXISTING);
+                }
             }
         }
     }
@@ -802,5 +813,31 @@ public class FeatureSpecGeneratorInvoker {
         if (log.isDebugEnabled()) {
             log.debug(String.format(format, args));
         }
+    }
+
+    static String toExcludedPattern(List<String> patterns) {
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < patterns.size(); i++) {
+            builder.append(patterns.get(i));
+            if (i < patterns.size() - 1 ) {
+                builder.append("|");
+            }
+        }
+        return builder.toString();
+    }
+
+    private boolean isExcludedFromTransformation(Artifact artifact) throws MojoExecutionException {
+        if (excludedArtifactPattern != null) {
+            try {
+                Matcher matchArtifact = excludedArtifactPattern.matcher(artifact.getGroupId() + ":" + artifact.getArtifactId());
+                if (matchArtifact.find()) {
+                    log.info("EE9: excluded " + artifact.getGroupId() + ":" + artifact.getArtifactId());
+                    return true;
+                }
+            } catch (PatternSyntaxException e) {
+                throw new MojoExecutionException("Invalid exclusion pattern: " + e.getMessage(), e);
+            }
+        }
+        return false;
     }
 }

@@ -29,6 +29,7 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -163,6 +164,23 @@ public class WfFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
      */
     @Parameter(alias = "jakarta-transform-maven-repo", defaultValue = "${project.build.directory}/jakarta-transform-maven-repo", required = true)
     protected File jakartaTransformRepo;
+
+    /**
+     * A list of regular expression filters to exclude a list of
+     * GroupId:ArtifactId from jakarta transformation. For example, to exclude
+     * wildfly-ee and smallrye-config artifacts:
+     * <br/>
+     * <pre>
+     * {@code
+     * <jakarta-transform-excluded-artifacts>
+     *   <exclude>org.wildfly:wildfly-ee\z</exclude>
+     *   <exclude>io.smallrye.config:smallrye-config\z</exclude>
+     * </jakarta-transform-excluded-artifacts>
+     * }
+     * </pre>
+     */
+    @Parameter(alias = "jakarta-transform-excluded-artifacts", required = false)
+    protected List<String> jakartaTransformExcludedArtifacts;
 
     private WildFlyFeaturePackBuild buildConfig;
     private Map<String, PackageSpec.Builder> extendedPackages = Collections.emptyMap();
