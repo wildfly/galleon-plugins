@@ -67,7 +67,7 @@ public class WildFlyFeaturePackBuild {
         }
 
         public Builder addDependency(Gav gav, FeaturePackDependencySpec dependency) {
-            dependencies = CollectionUtils.put(dependencies, gav, dependency);
+            dependencies = CollectionUtils.putLinked(dependencies, gav, dependency);
             return this;
         }
 
