@@ -28,7 +28,7 @@
 
   <groupId>org.wildfly.galleon-plugins</groupId>
   <artifactId>wildfly-provisioning-parent</artifactId>
-  <version>5.2.2.Final-SNAPSHOT</version>
+  <version>5.2.2.Beta1</version>
   <packaging>pom</packaging>
 
   <name>WildFly Galleon Plugins Parent</name>
