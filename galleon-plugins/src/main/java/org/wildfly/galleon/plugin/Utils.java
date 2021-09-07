@@ -347,7 +347,7 @@ public class Utils {
         if(!Files.exists(target)) {
             Files.createDirectories(target);
         }
-        try (FileSystem zipFS = FileSystems.newFileSystem(artifact, null)) {
+        try (FileSystem zipFS = FileSystems.newFileSystem(artifact, (ClassLoader) null)) {
             for(Path zipRoot : zipFS.getRootDirectories()) {
                 Files.walkFileTree(zipRoot, EnumSet.of(FileVisitOption.FOLLOW_LINKS), Integer.MAX_VALUE,
                         new SimpleFileVisitor<Path>() {
