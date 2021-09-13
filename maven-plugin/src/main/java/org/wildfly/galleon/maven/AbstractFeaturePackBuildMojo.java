@@ -43,6 +43,7 @@ import java.util.TreeSet;
 import java.util.stream.Stream;
 import javax.xml.stream.XMLStreamException;
 import nu.xom.ParsingException;
+import org.apache.maven.artifact.Artifact;
 import org.apache.maven.artifact.DefaultArtifact;
 import org.apache.maven.artifact.handler.DefaultArtifactHandler;
 import org.apache.maven.execution.MavenSession;
@@ -90,6 +91,7 @@ import static org.wildfly.galleon.maven.Util.mkdirs;
 import org.wildfly.galleon.maven.build.tasks.ResourcesTask;
 import org.wildfly.galleon.plugin.ArtifactCoords;
 import org.wildfly.galleon.plugin.WfConstants;
+import org.wildfly.galleon.plugin.WfInstallPlugin;
 
 /**
  * This Maven mojo creates a WildFly style feature-pack archive from the
@@ -151,6 +153,47 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     @Parameter(alias = "task-properties", required = false)
     protected Map<String, String> taskProps = Collections.emptyMap();
 
+    /**
+     * Whether to transform artifacts from javax.* to jakarta.* before generating feature specs.
+     */
+    @Parameter(alias = "jakarta-transform", required = false)
+    protected boolean jakartaTransform;
+
+    /**
+     * Directory where external user provided transformation configs are located (turns of default transformation rules).
+     */
+    @Parameter(alias = "jakarta-transform-configs-dir", required = false)
+    protected File jakartaTransformConfigsDir;
+
+    /**
+     * If jakarta-transform is true, whether to produce verbose log output of the transformation work.
+     */
+    @Parameter(alias = "jakarta-transform-verbose", required = false)
+    protected boolean jakartaTransformVerbose;
+
+    /**
+     * The directory where a generated local maven repo containing Jakarta-transformed artifacts are stored.
+     */
+    @Parameter(alias = "jakarta-transform-maven-repo", defaultValue = "${project.build.directory}/jakarta-transform-maven-repo", required = true)
+    protected File jakartaTransformRepo;
+
+    /**
+     * A list of regular expression filters to exclude a list of
+     * GroupId:ArtifactId from jakarta transformation. For example, to exclude
+     * wildfly-ee and smallrye-config artifacts:
+     * <br/>
+     * <pre>
+     * {@code
+     * <jakarta-transform-excluded-artifacts>
+     *   <exclude>org.wildfly:wildfly-ee\z</exclude>
+     *   <exclude>io.smallrye.config:smallrye-config\z</exclude>
+     * </jakarta-transform-excluded-artifacts>
+     * }
+     * </pre>
+     */
+    @Parameter(alias = "jakarta-transform-excluded-artifacts", required = false)
+    protected List<String> jakartaTransformExcludedArtifacts;
+
     @Component
     protected RepositorySystem repoSystem;
 
@@ -171,14 +214,22 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     private Path fpResourcesDir;
     private Path resourcesDir;
 
+    private JakartaTransformation jakartaTransformation;
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
         try {
             artifactVersions = MavenProjectArtifactVersions.getInstance(project);
+            jakartaTransformation = new JakartaTransformation(getLog(), jakartaTransform, jakartaTransformVerbose,
+                    jakartaTransformConfigsDir, jakartaTransformRepo, taskProps.get(WfInstallPlugin.JAKARTA_TRANSFORM_SUFFIX_KEY),
+                    jakartaTransformExcludedArtifacts);
             doExecute();
         } catch (RuntimeException | Error | MojoExecutionException | MojoFailureException e) {
             throw e;
         }
+    }
+
+    protected JakartaTransformation getJakartaTransformation() {
+        return jakartaTransformation;
     }
 
     protected Map<String, FeaturePackDescription> getFpDependencies() {
@@ -230,6 +281,19 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         return resolved;
     }
 
+    protected void transformOnlyArtifactDependencies(WildFlyFeaturePackBuild buildConfig) throws MojoExecutionException {
+        if (getJakartaTransformation().isJakartaTransformEnabled()) {
+            // We simply need to transform dependencies of this FP to generate an exclusion list
+            for (Artifact artifact : MavenProjectArtifactVersions.getFilteredArtifacts(project, buildConfig)) {
+                try {
+                    getJakartaTransformation().transform(artifact);
+                } catch (IOException ex) {
+                    throw new MojoExecutionException(ex.getLocalizedMessage(), ex);
+                }
+            }
+        }
+    }
+
     protected void buildFeaturePack(FeaturePackDescription.Builder fpBuilder, WildFlyFeaturePackBuild buildConfig) throws MojoExecutionException {
         if (buildConfig.hasConfigs()) {
             for (ConfigModel config : buildConfig.getConfigs()) {
@@ -263,6 +327,12 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         for (ArtifactCoords.Gav gav : buildConfig.getDependencies().keySet()) {
             getArtifactVersions().remove(gav.getGroupId(), gav.getArtifactId());
         }
+
+        // Generate excluded from transformations
+        if (jakartaTransformation.isJakartaTransformEnabled()) {
+            jakartaTransformation.writeExcludedArtifactsFile(resourcesWildFly);
+        }
+
         // Copy resources from src.
         try {
             Path srcArtifacts = resourcesDir.resolve(Constants.RESOURCES);

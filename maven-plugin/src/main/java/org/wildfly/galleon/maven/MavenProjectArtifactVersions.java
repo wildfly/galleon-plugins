@@ -23,12 +23,15 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.project.MavenProject;
 import org.jboss.galleon.ProvisioningException;
+import org.wildfly.galleon.plugin.ArtifactCoords;
 import org.wildfly.galleon.plugin.Utils;
 
 /**
@@ -54,6 +57,24 @@ class MavenProjectArtifactVersions {
             }
             put(artifact.getGroupId(), artifact.getArtifactId(), artifact.getClassifier(), artifact.getVersion(), artifact.getType());
         }
+    }
+
+    static Set<Artifact> getFilteredArtifacts(MavenProject project, WildFlyFeaturePackBuild buildConfig) {
+        Set<ArtifactCoords.Gav> dependencies = buildConfig.getDependencies().keySet();
+        Set<ArtifactCoords.Ga> dependenciesGa = new HashSet<>();
+        for (ArtifactCoords.Gav gav : dependencies) {
+            dependenciesGa.add(gav.toGa());
+        }
+        Set<Artifact> ret = new HashSet<>();
+        for (Artifact artifact : project.getArtifacts()) {
+            if (TEST_JAR.equals(artifact.getType()) || SYSTEM.equals(artifact.getScope())) {
+                continue;
+            }
+            if (!dependenciesGa.contains(ArtifactCoords.newGa(artifact.getGroupId(), artifact.getArtifactId()))) {
+                ret.add(artifact);
+            }
+        }
+        return ret;
     }
 
     String getVersion(String gac) {
