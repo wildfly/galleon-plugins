@@ -466,7 +466,19 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         for(FeaturePackRuntime fp : runtime.getFeaturePacks()) {
             final Path finalizeCli = fp.getResource(WfConstants.WILDFLY, WfConstants.SCRIPTS, "finalize.cli");
             if(Files.exists(finalizeCli)) {
-                CliScriptRunner.runCliScript(runtime.getStagedDir(), finalizeCli, log);
+                Path script;
+                try {
+                    byte[] content = Files.readAllBytes(finalizeCli);
+                    Path tmpDir = runtime.getTmpPath();
+                    if (!Files.exists(tmpDir)) {
+                        Files.createDirectory(tmpDir);
+                    }
+                    script = tmpDir.resolve(finalizeCli.getFileName().toString());
+                    Files.write(script, content);
+                } catch (IOException ex) {
+                   throw new ProvisioningException(ex.getLocalizedMessage(), ex);
+                }
+                CliScriptRunner.runCliScript(runtime.getStagedDir(), script, log);
             }
         }
 
