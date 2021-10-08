@@ -43,7 +43,7 @@ public class CliScriptRunner {
                 .addCliArgument("--echo-command")
                 .addCliArgument("--file=" + script);
         List<String> arguments = builder.build();
-        messageWriter.verbose("Executing jboss console: %s", arguments.stream().collect(Collectors.joining(" ")));
+        messageWriter.verbose("Executing CLI process: %s", arguments.stream().collect(Collectors.joining(" ")));
         final ProcessBuilder processBuilder = new ProcessBuilder(arguments).redirectErrorStream(true);
         processBuilder.environment().put("JBOSS_HOME", installHome.toString());
 
@@ -55,25 +55,11 @@ public class CliScriptRunner {
         try {
             cliProcess = processBuilder.start();
 
-            String config = null;
             final StringWriter errorWriter = new StringWriter();
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(cliProcess.getInputStream(), StandardCharsets.UTF_8));
                     BufferedWriter writer = new BufferedWriter(errorWriter)) {
                 String line = reader.readLine();
-                boolean flush = false;
                 while (line != null) {
-                    if (line.equals("}")) {
-                        flush = true;
-                    } else {
-                        if(line.startsWith("&config ")) {
-                            config = line;
-                        }
-                        if (flush) {
-                            writer.flush();
-                            errorWriter.getBuffer().setLength(0);
-                            flush = false;
-                        }
-                    }
                     writer.write(line);
                     writer.newLine();
                     line = reader.readLine();
@@ -89,10 +75,9 @@ public class CliScriptRunner {
                     messageWriter.error(e, e.getMessage());
                 }
             }
-
+            messageWriter.verbose("CLI output: %s", errorWriter.getBuffer().toString());
             if (cliProcess.exitValue() != 0) {
-                throw new ProvisioningException("Failed to generate " + config.substring(1),
-                        new ProvisioningException(errorWriter.getBuffer().toString()));
+                throw new ProvisioningException("Failed to execute finalize.cli script. CLI output is:" + errorWriter.getBuffer().toString());
             }
         } catch (IOException e) {
             throw new ProvisioningException("CLI process failed", e);
