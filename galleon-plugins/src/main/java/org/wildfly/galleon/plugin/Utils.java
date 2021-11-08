@@ -107,7 +107,7 @@ public class Utils {
         }
 
         if(!artifact.hasVersion()) {
-            final String resolvedStr = versionProps.get(artifact.getGroupId() + ':' + artifact.getArtifactId());
+            final String resolvedStr = versionProps.get(str);
             if (resolvedStr == null) {
                 if (optional) {
                     return null;
