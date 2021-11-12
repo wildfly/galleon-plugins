@@ -107,7 +107,10 @@ public class Utils {
         }
 
         if(!artifact.hasVersion()) {
-            final String resolvedStr = versionProps.get(str);
+            // The key is composed of groupId:artifactId[::classifier]
+            String key = artifact.getGroupId() + ':' + artifact.getArtifactId() + ( artifact.getClassifier() == null || artifact.getClassifier().isEmpty() ?
+                    "" : "::" + artifact.getClassifier() );
+            final String resolvedStr = versionProps.get(key);
             if (resolvedStr == null) {
                 if (optional) {
                     return null;

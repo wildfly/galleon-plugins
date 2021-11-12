@@ -69,14 +69,28 @@ public class UtilsTestCase {
         }
         {
             Map<String, String> versionsProps = new HashMap<>();
-            String key = "artId:grpId::linux-x86_64:so";
-            String value = "artId:grpId:1.0.0.Final:linux-x86_64:so";
+            String key = "artId:grpId";
+            String value = "artId:grpId:1.0.0.Final::so";
             versionsProps.put(key, value);
-            MavenArtifact artifact = Utils.toArtifactCoords(versionsProps, key, false);
+            String lookupArtifact = "artId:grpId:::so";
+            MavenArtifact artifact = Utils.toArtifactCoords(versionsProps, lookupArtifact, false);
             Assert.assertEquals("artId", artifact.getGroupId());
             Assert.assertEquals("grpId", artifact.getArtifactId());
             Assert.assertEquals("1.0.0.Final", artifact.getVersion());
-            Assert.assertEquals("linux-x86_64", artifact.getClassifier());
+            Assert.assertEquals("so", artifact.getExtension());
+        }
+
+        {
+            Map<String, String> versionsProps = new HashMap<>();
+            String key = "artId:grpId::class";
+            String value = "artId:grpId:1.0.0.Final:class:so";
+            versionsProps.put(key, value);
+            String lookupArtifact = "artId:grpId::class:so";
+            MavenArtifact artifact = Utils.toArtifactCoords(versionsProps, lookupArtifact, false);
+            Assert.assertEquals("artId", artifact.getGroupId());
+            Assert.assertEquals("grpId", artifact.getArtifactId());
+            Assert.assertEquals("1.0.0.Final", artifact.getVersion());
+            Assert.assertEquals("class", artifact.getClassifier());
             Assert.assertEquals("so", artifact.getExtension());
         }
     }
