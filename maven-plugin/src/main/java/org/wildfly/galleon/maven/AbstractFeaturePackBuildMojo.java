@@ -16,6 +16,10 @@
  */
 package org.wildfly.galleon.maven;
 
+import static java.lang.String.format;
+import static org.wildfly.galleon.maven.FeatureSpecGeneratorInvoker.MODULE_PATH_SEGMENT;
+import static org.wildfly.galleon.maven.Util.mkdirs;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
@@ -29,6 +33,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.time.Clock;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -41,12 +46,15 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Stream;
+
 import javax.xml.stream.XMLStreamException;
+
 import nu.xom.ParsingException;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.artifact.DefaultArtifact;
 import org.apache.maven.artifact.handler.DefaultArtifactHandler;
 import org.apache.maven.execution.MavenSession;
+import org.apache.maven.model.Dependency;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
@@ -86,8 +94,6 @@ import org.jboss.galleon.util.ZipUtils;
 import org.jboss.galleon.xml.FeaturePackXmlWriter;
 import org.jboss.galleon.xml.PackageXmlParser;
 import org.jboss.galleon.xml.PackageXmlWriter;
-import static org.wildfly.galleon.maven.FeatureSpecGeneratorInvoker.MODULE_PATH_SEGMENT;
-import static org.wildfly.galleon.maven.Util.mkdirs;
 import org.wildfly.galleon.maven.build.tasks.ResourcesTask;
 import org.wildfly.galleon.plugin.ArtifactCoords;
 import org.wildfly.galleon.plugin.WfConstants;
@@ -108,6 +114,9 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
 
     static final String ARTIFACT_LIST_CLASSIFIER = "artifact-list";
     static final String ARTIFACT_LIST_EXTENSION = "txt";
+
+    static final String CHANNEL_CLASSIFIER = "channel";
+    static final String CHANNEL_EXTENSION = "yaml";
 
     static boolean isProvided(String module) {
         return module.startsWith("java.")
@@ -193,6 +202,20 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
      */
     @Parameter(alias = "jakarta-transform-excluded-artifacts", required = false)
     protected List<String> jakartaTransformExcludedArtifacts;
+
+    /**
+     * Generates a channel YAML definition when the feature-pack is produced.
+     * Any dependency from the feature pack is declared as a stream in the channel.
+     */
+    @Parameter(alias = "generate-channel", required = false, defaultValue = "false")
+    protected boolean channelGenerated;
+
+    /**
+     * Add any feature-pack dependency as a required channel in the channel YAML definition.
+     * This parameter has no effect if "generate-channel" is false.
+     */
+    @Parameter(alias = "add-feature-packs-as-required-channels", required = false, defaultValue = "true")
+    protected boolean addFeaturePacksAsRequiredChannels;
 
     @Component
     protected RepositorySystem repoSystem;
@@ -410,6 +433,14 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                                 debug("Attaching feature-pack artifact list %s as a project artifact", offLinerTarget);
                                 Files.write(offLinerTarget, builder.build().getBytes());
                                 projectHelper.attachArtifact(project, ARTIFACT_LIST_EXTENSION, ARTIFACT_LIST_CLASSIFIER, offLinerTarget.toFile());
+                                if (channelGenerated) {
+                                    final Path channelTarget = Paths.get(project.getBuild().getDirectory()).resolve(artifactId + '-'
+                                            + versionDir.getFileName() + "-" + CHANNEL_CLASSIFIER + "." + CHANNEL_EXTENSION);
+                                    debug("Attaching channel definition %s as a project artifact", channelTarget);
+                                    String channel = createYAMLChannel(buildConfig);
+                                    Files.write(channelTarget, channel.getBytes());
+                                    projectHelper.attachArtifact(project, CHANNEL_EXTENSION, CHANNEL_CLASSIFIER, channelTarget.toFile());
+                                }
                             }
                         }
                     }
@@ -418,6 +449,56 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         } catch (IOException e) {
             throw new MojoExecutionException("Failed to create a feature-pack archives from the layout", e);
         }
+    }
+
+    /**
+     * Create a YAML Channel that defines streams for all the feature-pack dependencies.
+     * The feature-pack itself is added to the channel's streams.
+     * @param featurePackDependencies
+     */
+    private String createYAMLChannel(WildFlyFeaturePackBuild buildConfig) {
+        StringBuilder channel = new StringBuilder();
+        channel.append(format("name: Channel for %s feature pack.\n", project.getArtifact()));
+        channel.append(format(
+                "description: |-\n  Generated by org.wildfly.galleon-plugins:wildfly-galleon-maven-plugin at %s\n",
+                Clock.systemUTC().instant()));
+        if (addFeaturePacksAsRequiredChannels && !buildConfig.getDependencies().isEmpty()) {
+            // add all feature pack dependencies as channel requirements
+            channel.append("requires:\n");
+            for (ArtifactCoords.Gav gav : buildConfig.getDependencies().keySet()) {
+                String groupId = gav.getGroupId();
+                String artifactId = gav.getArtifactId();
+                Dependency featurePackDependency = project.getDependencies().stream().filter(dep ->
+                        groupId.equals(dep.getGroupId()) &&
+                                artifactId.equals(dep.getArtifactId()) &&
+                                "zip".equals(dep.getType())).findFirst().get();
+                appendMavenGAV(channel, "  ", featurePackDependency.getGroupId(),
+                        featurePackDependency.getArtifactId(),
+                        featurePackDependency.getVersion());
+            }
+        }
+        // add a stream for this feature pack
+        channel.append("streams:\n");
+        appendMavenGAV(channel, "  ", project.getGroupId(),
+                project.getArtifactId(),
+                project.getVersion());
+        // add all feature-pack artifacts dependencies as streams (except zip and pom dependencies)
+        for (Artifact artifact : MavenProjectArtifactVersions.getFilteredArtifacts(project, buildConfig)) {
+            switch (artifact.getType()) {
+                case "zip":
+                case "pom":
+                    break;
+                default:
+                    appendMavenGAV(channel, "  ", artifact.getGroupId(), artifact.getArtifactId(), artifact.getVersion());
+            }
+        }
+        return channel.toString();
+    }
+
+    static void appendMavenGAV(StringBuilder out, String indent, String groupId, String artifactId, String version) {
+        out.append(format("%s- groupId: %s\n", indent, groupId));
+        out.append(format("%s  artifactId: %s\n", indent, artifactId));
+        out.append(format("%s  version: \"%s\"\n", indent, version));
     }
 
     private void addConfigPackages(final Path configDir, final Path packagesDir, final FeaturePackDescription.Builder fpBuilder) throws MojoExecutionException {
@@ -751,13 +832,13 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
 
     protected void debug(String msg, Object... args) {
         if (getLog().isDebugEnabled()) {
-            getLog().debug(String.format(msg, args));
+            getLog().debug(format(msg, args));
         }
     }
 
     protected void warn(String msg, Object... args) {
         if (getLog().isWarnEnabled()) {
-            getLog().warn(String.format(msg, args));
+            getLog().warn(format(msg, args));
         }
     }
 
