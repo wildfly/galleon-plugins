@@ -1,5 +1,5 @@
 = WildFly Galleon Plugins Documentation
-Alexey Loubyansky
+Alexey Loubyansky, Jean-Francois Denise
 :revnumber: {version}
 :revdate: {localdate}
 :toc: left
@@ -11,8 +11,10 @@ Alexey Loubyansky
 :ec2-pub-ip-dash: 1-2-3-4
 :ec2-pub-ip: 1.2.3.4
 
-(C) 2018 The original authors.
+(C) 2021 The original authors.
 
 include::intro/index.adoc[]
+
+include::examples/index.adoc[]
 
 include::maven-plugins/index.adoc[]

@@ -1,0 +1,475 @@
+## Building a custom feature-pack example
+
+Defining your own Galleon feature-packs allow you to create customized WildFly server installation containing 
+your custom content and trimmed to your need. In this example we are seeing how to setup a Maven project 
+to create a Galleon feature-pack that contains Galleon layers to install static web content, a JDBC driver and a datasource.
+
+### Setting up Maven project
+
+Call the following command to create an empty Maven project:
+
+[source,bash]
+---- 
+mvn archetype:generate -DarchetypeGroupId=org.codehaus.mojo.archetypes \
+-DarchetypeArtifactId=pom-root -DgroupId=org.example.demo \
+-DartifactId=my-custom-galleon-pack -DinteractiveMode=false
+----
+
+N.B.: The type of packaging of your pom.xml project file must be  `<packaging>pom</packaging>`.
+
+Add the Maven plugin dependency in your pom.xml file :
+ 
+[source,xml]
+----
+<dependencies>
+  <dependency>
+    <groupId>org.wildfly.galleon-plugins</groupId>
+    <artifactId>wildfly-galleon-maven-plugin</artifactId>
+    <version>5.2.7.Final</version>
+  </dependency>
+</dependencies>
+----
+
+Integrate the plugin in your build element:
+
+[source,xml]
+----
+ <build>                
+   <plugins>
+     <plugin>
+       <groupId>org.wildfly.galleon-plugins</groupId>
+       <artifactId>wildfly-galleon-maven-plugin</artifactId>
+       <executions>
+         <execution>
+           <id>myproject-galleon-pack-build</id>
+           <goals>
+             <goal>build-user-feature-pack</goal>
+           </goals>
+           <phase>compile</phase>
+         </execution>
+       </executions>
+     </plugin>
+   </plugins>
+ </build>
+----
+
+### Expressing a dependency on WildFly
+
+A feature-pack has a dependency on WildFly feature-pack, this dependency is resolved from the project pom file.
+Add the WildFly Galleon feature-pack dependency to the project dependencies section:
+
+[source,xml]
+----
+<dependency>
+  <groupId>org.wildfly</groupId>
+  <artifactId>wildfly-galleon-pack</artifactId>
+  <version>26.0.0.Final</version>
+  <type>zip</type>
+</dependency>
+----
+
+Expressing a dependency on WildFly 26.0.0.Final doesn't mean that the feature-pack is limited to be used in conjunction with WildFly 26.0.0.Final.
+When provisioning your feature-pack with a WildFly feature-pack, the version of the WildFly feature-pack present in the provisioning will get used. 
+This means that your feature-pack is usable with future WildFly release (WildFly guarantee backward compatibility there).
+ 
+### Source structure
+
+Create the directory `src/main/resources`, it will contain the content of your feature-pack. 
+The `resources` directory can contain the following sub-directories:
+
+* `configs`: contains default configurations provided by this feature-pack.
+* `feature_groups`: contains feature groups, a reusable unit that contains the server configuration content that can then be referenced from layers and configurations.
+* `layers`: contains layers, a layer reflects the content and configuration of a WildFly server capability that are provisioned when the layer is used.
+* `modules`: contains JBoss Modules modules you want to see packaged in the feature-pack. JBoss Modules modules can then be referenced from layers and configurations.
+* `packages`: contains packages, a package contains content you want to see installed in the server (eg: properties files, keystores, tools, scripts,...).
+
+In this example we are adding `feature_groups`, `layers`, `modules` and `packages` to our custom WildFly feature-pack.
+
+### Defining JBoss Modules modules
+
+JBoss Modules modules can be referenced from Galleon layers and/or feature-groups using the module name. e.g.: `org.mariadb.jdbc`.
+
+Under the `modules` directory create a directory path identical to the one we would find under the `JBOSS_HOME/modules` directory.
+
+For this example create the directory `src/main/resources/modules/org/mariadb/jdbc/main` that will contain the `module.xml` file. 
+NB: The actual JAR files that implement the module are NOT packaged inside the feature-pack, the JAR files are retrieved from Maven at provisioning time.
+
+The `module.xml` file content is:
+
+[source,xml]
+----
+<?xml version="1.0" encoding="UTF-8"?>
+<module name="org.mariadb.jdbc" xmlns="urn:jboss:module:1.8">
+   <resources>
+       <!-- Expression to retrieve the mariadb driver artifact from Maven. The version must be expressed in the feature-pack pom.xml dependencies--> 
+       <artifact name="${org.mariadb.jdbc:mariadb-java-client}"/>
+   </resources>
+   <!-- The JDBC driver depends on the following API -->
+   <dependencies>
+       <module name="javax.api"/>
+       <module name="javax.transaction.api"/>
+   </dependencies>
+</module>
+----
+
+The pom.xml of your feature-pack project must also contain the actual dependency on the `org.mariadb.jdbc:mariadb-java-client` Maven artifact.
+
+Add the following dependency to the project dependencies:
+
+[source,xml]
+----
+<dependency>
+  <groupId>org.mariadb.jdbc</groupId>
+  <artifactId>mariadb-java-client</artifactId>
+  <version>2.7.2</version>
+</dependency>
+----
+
+We are done defining the `org.mariadb.jdbc` JBoss Modules module. This module will get installed when the Galleon layer  
+that references it is used. We will see that later when provisioning the custom feature-pack.
+
+### Defining packages
+
+For each package you are defining, under the directory `src/main/resources/packages/` create a directory with the name of the package.
+The usual package directory structure is:
+....
+packages/<package_name>
+|- content/
+|- pm/
+|  `- wildfly/
+|     `- tasks.xml
+`- package.xml
+....
+
+The file `package.xml` is required, it contains the package name. Optionally it can contain the dependencies on other packages 
+that would get installed when this package is provisioned.
+
+XML syntax for the `package.xml` is covered by this link:https://github.com/wildfly/galleon/blob/master/core/src/main/resources/schema/galleon-package-2_0.xsd[XML schema].
+
+Create the directory `src/main/resources/packages/my-web-server-content`.
+
+The file `src/main/resources/packages/my-web-server-content/package.xml` content is:
+
+[source,xml]
+----
+<?xml version="1.0" ?>
+<package-spec xmlns="urn:jboss:galleon:package:2.0" name="my-web-server-content"/>
+----
+
+The `content` directory includes content that will be copied to the installation root directory when the package is installed.
+
+Create the directory `src/main/resources/packages/my-web-server-content/content/my-web-server-content`. It will contain our static web content.
+
+Create the file `src/main/resources/packages/my-web-server-content/content/my-web-server-content/index.html`:
+
+[source,xml]
+----
+<html>
+<body>
+<h1>Hello World</h1>
+</body>
+</html> 
+----
+
+Create the file `src/main/resources/packages/my-web-server-content/content/my-web-server-content/Error404.html`:
+
+[source,xml]
+----
+<html>
+<body>
+<h1>Resource not found!</h1>
+</body>
+</html> 
+----
+
+When the package `my-web-server-content` is provisioned (because referenced from a Galleon layer), the directory `my-web-server-content` will get installed in 
+the server.
+
+`pm/wildfly/tasks.xml` file is optional, it may include instructions to copy and/or delete files and directories, 
+create directories, resolve and copy Maven artifacts to the installation directory, etc. 
+These tasks are executed when the content of all the packages has been copied into the installation.
+
+The tasks link:https://raw.githubusercontent.com/wildfly/galleon-plugins/master/maven-plugin/src/main/resources/schema/wildfly-feature-pack-tasks-3_0.xsd[XML schema] contains the definition of the tasks you can add to the tasks.xml file.
+This link:https://raw.githubusercontent.com/wildfly/galleon-plugins/master/maven-plugin/src/test/resources/xml/tasks.xml[example] of tasks.xml file contains the set of tasks one can use in a tasks.xml file.
+
+In the context of this example we don't need to define a `tasks.xml` file.
+
+### Defining layers
+
+One powerful aspect of Galleon are layers. By provisioning layers you can create a trimmed WildFly server containing only the set 
+of features (server configuration and JBoss Modules modules) required by your application.
+
+WildFly comes with a set of link:https://docs.wildfly.org/26/Galleon_Guide.html#wildfly_layers[Galleon layers] that allows you to provision 
+a trimmed server containing subsystems configured in a way that is nearly identical to the default configuration (as found in standalone*.xml configuration).
+
+In order to fine tune the trimmed server configuration, WildFly CLI tool can be an approach. Running CLI scripts 
+imply to execute the CLI tool on each provisioned server instance.
+
+By defining your own Galleon layers, you can provision a server already fully configured without the need for extra CLI script execution.
+ 
+XML syntax for layers is covered by this link:https://github.com/wildfly/galleon/blob/master/core/src/main/resources/schema/galleon-layer-1_0.xsd[XML schema].
+
+A layer allows you to package inside a single artifact (the layer) some server configuration item (eg: subsystem configuration) and 
+content (eg: JBoss Modules modules).
+
+A good example is the JDBC driver. When adding a JDBC driver to a wildfly installation we are generally 
+updating the datasources subsystem and add a JBoss Module module.
+
+Now for each layer you are defining, create a directory with the name of the layer. Each directory contains a single file named `layer-spec.xml` that contains the 
+actual content of the layer.
+
+#### `my-undertow-handler` layer example
+
+This layer configures undertow subsystem to serve the static content, sets a 404 handler and references 
+the `my-web-server-content` package.
+
+Create the directory `src/main/resources/layers/standalone/my-undertow-handler`.
+
+Create the file `src/main/resources/layers/standalone/my-undertow-handler/layer-spec.xml` with the following content:
+
+[source,xml]
+----
+<?xml version="1.0" ?>
+<layer-spec xmlns="urn:jboss:galleon:layer-spec:1.0" name="my-undertow-handler">
+  <!-- features are added to the server configuration -->
+  <feature spec="subsystem.undertow.server">
+    <param name="server" value="default-server" />
+    <feature spec="subsystem.undertow.server.host">
+       <param name="host" value="default-host" />
+       <feature spec="subsystem.undertow.server.host.location">
+         <param name="location" value="/web"/>
+         <param name="handler" value="my-web-server-content"/>
+       </feature>
+       <feature spec="subsystem.undertow.server.host.filter-ref">
+         <param name="filter-ref" value="404-handler"/>
+         <param name="predicate" value="true"/>
+       </feature>
+    </feature>
+  </feature>
+  <feature spec="subsystem.undertow.configuration.handler.file">
+    <param name="file" value="my-web-server-content"/>
+    <param name="path" value="${jboss.home.dir}/my-web-server-content"/>
+    <param name="directory-listing" value="true"/>
+  </feature>
+  <feature spec="subsystem.undertow.configuration.filter.error-page">
+    <param name="error-page" value="404-handler"/>
+    <param name="code" value="404"/>
+    <param name="path" value="${jboss.home.dir}/my-web-server-content/Error404.html"/>
+  </feature>
+
+  <!-- Packages content is installed inside the server -->
+  <packages> 
+    <package name="my-web-server-content"/>
+  </packages>
+</layer-spec>
+----
+
+You will notice that a layer contains `feature`. You can see features as server Management resources. The `spec` attribute 
+can be derived from the resource path used in JBoss CLI commands. The following CLI operations would have 
+the same effect than the features instantiated in this layer:
+
+[source]
+----
+/subsystem=undertow/configuration=handler/file=my-web-server-content:add(path="${jboss.home.dir}/my-web-server-content", directory-listing=true)
+/subsystem=undertow/configuration=filter/error-page=404-handler:add(path="${jboss.home.dir}/my-web-server-content/Error404.html", code=404)
+/subsystem=undertow/server=default-server/host=default-host/location="/web":add(handler=my-web-server-content)
+/subsystem=undertow/server=default-server/host=default-host/filter-ref=404-handler:add(predicate=true)
+----
+
+#### `mariadb-driver` layer example
+
+This layer contains the configuration for a `mariadb` JDBC driver.
+
+Create the directory `src/main/resources/layers/standalone/mariadb-driver`.
+
+Create the file `src/main/resources/layers/standalone/mariadb-driver/layer-spec.xml` with the following content:
+
+[source,xml]
+----
+<?xml version="1.0" ?>
+<layer-spec xmlns="urn:jboss:galleon:layer-spec:1.0" name="mariadb-driver">
+  <!-- Add the driver to the datasources subsystem -->
+  <feature spec="subsystem.datasources">
+    <feature spec="subsystem.datasources.jdbc-driver">
+      <param name="driver-name" value="mariadb"/>
+      <param name="jdbc-driver" value="mariadb"/>
+      <param name="driver-xa-datasource-class-name" value="org.mariadb.jdbc.MariaDbDataSource"/>
+      <param name="driver-module-name" value="org.mariadb.jdbc"/>
+    </feature>
+  </feature>
+
+  <!-- Will install the JBoss Modules org.mariadb.jdbc module. --> 
+  <packages> 
+    <package name="org.mariadb.jdbc"/>
+  </packages>
+</layer-spec>
+----
+
+The following CLI operations would have the same effect than the features instantiated in this layer:
+
+[source]
+----
+/subsystem=datasources/jdbc-driver=mariadb:add(driver-name=mariadb, \
+driver-module-name=org.mariadb.jdbc, \
+driver-xa-datasource-class-name=org.mariadb.jdbc.MariaDbDataSource)
+----
+
+#### `mariadb-datasource` layer example
+
+A layer that adds a `MariaDBDS` datasource that is bound to the `mariadb` driver. This layer adds the 
+ability to configure the datasource (host, port, database, username, password) thanks to environment variables that can be be set at server run-time.
+
+Create the directory `src/main/resources/layers/standalone/mariadb-datasource`.
+
+Create the file `src/main/resources/layers/standalone/mariadb-datasource/layer-spec.xml` with the following content:
+
+[source,xml]
+----
+<?xml version="1.0" ?>
+<layer-spec xmlns="urn:jboss:galleon:layer-spec:1.0" name="mariadb-datasource">
+
+  <!-- express a dependency on the driver layer to have it automatically provisioned when mariadb-datasource is provisioned -->
+  <dependencies>
+    <layer name="mariadb-driver"/>
+  </dependencies>
+
+  <feature spec="subsystem.datasources.data-source">
+    <param name="data-source" value="MariaDBDS"/>
+    <param name="jndi-name" value="java:jboss/datasources/${env.MARIADB_DATASOURCE:MariaDBDS}"/>
+    <param name="connection-url" value="jdbc:mariadb://${env.MARIADB_HOST:localhost}:${env.MARIADB_PORT:3306}/${env.MARIADB_DATABASE}"/>
+    <param name="driver-name" value="mariadb"/>
+    <param name="user-name" value="${env.MARIADB_USER}"/>
+    <param name="password" value="${env.MARIADB_PASSWORD}"/>
+  </feature>
+</layer-spec>
+----
+
+The following CLI operations would have the same effect than what we have expressed in this layer:
+
+[source]
+----
+/subsystem=datasources/data-source=MariaDBDS:add(jndi-name="java:jboss/datasources/${env.MARIADB_DATASOURCE:MariaDBDS}", \
+connection-url="jdbc:mariadb://${env.MARIADB_HOST:localhost}:${env.MARIADB_PORT:3306}/${env.MARIADB_DATABASE}", \
+driver-name=mariadb, user-name="${env.MARIADB_USER}", password="${env.MARIADB_PASSWORD}")
+----
+
+### Defining feature groups
+
+XML syntax for feature-groups is covered by this link:https://github.com/wildfly/galleon/blob/master/core/src/main/resources/schema/galleon-feature-group-1_0.xsd[XML schema].
+
+A feature-group is contained inside an xml file located inside the `src/main/resources/feature_groups`. The XML file name is the name of the feature-group.
+
+A feature-group allows you to group feature instantiation inside a group that can then be referenced from other groups or layers.
+
+We could have chosen to define the undertow handler in a feature group and reference it from the layer.
+
+The content of the `src/main/resources/feature_groups/my-undertow-handler-grp.xml` feature-group would look like:
+
+[source,xml]
+----
+<?xml version="1.0" ?>
+
+<feature-group-spec name="my-undertow-handler-grp" xmlns="urn:jboss:galleon:feature-group:1.0">
+  <!-- features are added to the server configuration -->
+  <feature spec="subsystem.undertow.server">
+    <param name="server" value="default-server" />
+    <feature spec="subsystem.undertow.server.host">
+       <param name="host" value="default-host" />
+       <feature spec="subsystem.undertow.server.host.location">
+         <param name="location" value="/web"/>
+         <param name="handler" value="my-web-server-content"/>
+       </feature>
+       <feature spec="subsystem.undertow.server.host.filter-ref">
+         <param name="filter-ref" value="404-handler"/>
+         <param name="predicate" value="true"/>
+       </feature>
+    </feature>
+  </feature>
+  <feature spec="subsystem.undertow.configuration.handler.file">
+    <param name="file" value="my-web-server-content"/>
+    <param name="path" value="${jboss.home.dir}/my-web-server-content"/>
+    <param name="directory-listing" value="true"/>
+  </feature>
+  <feature spec="subsystem.undertow.configuration.filter.error-page">
+    <param name="error-page" value="404-handler"/>
+    <param name="code" value="404"/>
+    <param name="path" value="${jboss.home.dir}/my-web-server-content/Error404.html"/>
+  </feature>
+
+  <!-- Packages content is installed inside the server -->
+  <packages> 
+    <package name="my-web-server-content"/>
+  </packages>
+</feature-group-spec>
+----
+
+Then, from the `my-undertow-handler` layer, we could have referenced the feature-group instead of the features:
+
+[source,xml]
+----
+<?xml version="1.0" ?>
+
+<layer-spec xmlns="urn:jboss:galleon:layer-spec:1.0" name="my-undertow-handler">
+  <feature-group name="my-undertow-handler-grp"/>
+</layer-spec>
+----
+
+### Building your feature-pack
+
+This is done by calling `mvn clean install` in the maven project. A zip artifact `org.example.demo:my-custom-galleon-pack:1.0-SNAPSHOT` 
+is built and installed in the maven local cache. This feature-pack artifact is what will get used when provisioning a WildFly server.
+
+### Making your feature-pack available
+
+For local development and testing, having the feature-pack installed in the Maven local cache is all what you need. In order to share your feature-pack, it has to 
+be deployed in remote Maven repositories.
+
+### Provisioning your feature-pack
+
+The same feature-pack can be used to provision a server using different tooling. Usage is not limited to bare-metal, feature-packs can be used to 
+provision custom WildFly server on the cloud. Main tools to provision custom WildFly servers are:
+
+* link:https://github.com/wildfly-extras/wildfly-jar-maven-plugin/[WildFly Bootable JAR Maven plugin, bare metal and cloud]
+* link:https://github.com/wildfly/wildfly-maven-plugin/[WildFly Maven plugin, bare metal and cloud]
+* link:https://docs.wildfly.org/galleon/#_maven_plugin[Galleon Maven plugin, bare-metal]
+* link:https://docs.wildfly.org/galleon/#_galleon_cli_tool[Galleon command line tool, bare-metal]
+
+#### WildFly Bootable JAR Maven plugin
+
+We will not go into all the details of how to provision a Bootable JAR, the link:https://docs.wildfly.org/bootablejar/[Bootable JAR documentation] 
+covers it in detail. We are here showing plugin configuration extract in which we are referencing our custom feature-pack and layers.
+
+[source,xml]
+----
+<plugin>
+    <groupId>org.wildfly.plugins</groupId>
+    <artifactId>wildfly-jar-maven-plugin</artifactId>
+    <configuration>
+        <feature-packs>
+            <!-- the List of feature-packs to use during provisioning. Always provide WildFly feature-pack as the first one. -->
+            <feature-pack>
+                <groupId>org.wildfly</groupId>
+                <artifactId>wildfly-galleon-pack</artifactId>
+                <version>26.0.0.Final</version>
+            </feature-pack>
+            <!-- Our custom feature-pack -->
+            <feature-pack>
+                <groupId>org.example.demo</groupId>
+                <artifactId>my-custom-galleon-pack</artifactId>
+                <version>1.0-SNAPSHOT</version>
+            </feature-pack>
+        </feature-packs>
+        <!-- Layers in use to provision the server -->
+        <layers>
+            <!-- WildFly layer that provides web + support for datasources -->
+            <layer>datasources-web-server</layer>
+            <!-- The custom layers we have defined -->
+            <layer>mariadb-datasource</layer>
+            <layer>my-undertow-handler</layer>
+        </layers>
+        ...
+----
+
+#### WildFly Maven plugin
+
+The configuration of feature-packs and layers is identical to the one we have seen in the Bootable JAR chapter.

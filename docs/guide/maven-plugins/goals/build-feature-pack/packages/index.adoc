@@ -18,5 +18,7 @@ In general, the only required child of the package directory is `package.xml`.
 
 Package content directory includes content that will be copied to the installation root directory when the package is installed.
 
-`pm/wildfly/tasks.xml` file is optional, it may include instructions to copy and/or delete files and diretcories, create directories, resolve and copy Maven artifacts to the installation directory, etc. These tasks are executed when the content of all the packages has been copied into the installation.
+`pm/wildfly/tasks.xml` file is optional, it may include instructions to copy and/or delete files and directories, create directories, resolve and copy Maven artifacts to the installation directory, etc. These tasks are executed when the content of all the packages has been copied into the installation.
 
+The tasks link:https://raw.githubusercontent.com/wildfly/galleon-plugins/master/maven-plugin/src/main/resources/schema/wildfly-feature-pack-tasks-3_0.xsd[XML schema] contains the definition of the tasks you can add to the tasks.xml file.
+This link:https://raw.githubusercontent.com/wildfly/galleon-plugins/master/maven-plugin/src/test/resources/xml/tasks.xml[example] of tasks.xml file contains the set of tasks one can use in a tasks.xml file.
