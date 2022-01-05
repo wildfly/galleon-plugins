@@ -1,15 +1,3 @@
 ## Introduction
 
-WildFly Galleon Plugins project includes Galleon and Maven plugin implementations that are dedicated to 
-building feature-packs (including generation of feature specs, packages and other resources) for WildFly releases and provisioning of WildFly-based distributions. 
-These plugins can also be used by projects that integrate into or extend WildFly.
-
-This Maven tooling allows to build feature-packs that can be combined with WildFly feature-packs to produce customized WildFly server installations.
-
-The Maven plugin "org.wildfly.galleon:wildfly-galleon-maven-plugin" exposes 2 goals:
-
-* `build-feature-pack`: A goal to be used by WildFly developers when defining WildFly feature-packs that 
-implement new WidFly subsystems and expose new server capabilities.
-
-* `build-user-feature-pack`: A goal to be used by WildFly server users in order to define new Layers, new JBoss Modules, ... that depend on existing WildFly 
-subsystems and capabilities.
+WildFly Galleon Plugins project includes Galleon and Maven plugin implementations that are dedicated to building feature-packs (including generation of feature specs, packages and other resources) for WildFly releases and provisioning of WildFly-based distributions. These plugins can also be used by projects that integrate into or extend WildFly (Core, Servlet or Full base distributions).
