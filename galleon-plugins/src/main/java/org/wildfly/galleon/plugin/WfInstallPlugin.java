@@ -463,52 +463,54 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 System.setProperty(MAVEN_REPO_LOCAL, originalMavenRepoLocal);
             }
         }
-
-        for(FeaturePackRuntime fp : runtime.getFeaturePacks()) {
-            final Path finalizeCli = fp.getResource(WfConstants.WILDFLY, WfConstants.SCRIPTS, "finalize.cli");
-            if (Files.exists(finalizeCli)) {
-                final Path configGenJar = runtime.getResource(CONFIG_GEN_PATH);
-                if (!Files.exists(configGenJar)) {
-                    throw new ProvisioningException(Errors.pathDoesNotExist(configGenJar));
-                }
-                final URL[] cp = new URL[2];
-                try {
-                    MavenArtifact artifact = Utils.toArtifactCoords(mergedArtifactVersions, "org.wildfly.core:wildfly-launcher", false);
-                    artifactResolver.resolve(artifact);
-                    cp[0] = configGenJar.toUri().toURL();
-                    cp[1] = artifact.getPath().toUri().toURL();
-                } catch (IOException e) {
-                    throw new ProvisioningException("Failed to init classpath to run CLI finalize script for " + runtime.getStagedDir(), e);
-                }
-                final ClassLoader originalCl = Thread.currentThread().getContextClassLoader();
-                final URLClassLoader cliScriptCl = new URLClassLoader(cp, originalCl);
-                Path script;
-                try {
+        // If the dir doesn't exist, no configuration has been generated, no need to execute CLI scripts.
+        if (Files.exists(runtime.getStagedDir())) {
+            for (FeaturePackRuntime fp : runtime.getFeaturePacks()) {
+                final Path finalizeCli = fp.getResource(WfConstants.WILDFLY, WfConstants.SCRIPTS, "finalize.cli");
+                if (Files.exists(finalizeCli)) {
+                    final Path configGenJar = runtime.getResource(CONFIG_GEN_PATH);
+                    if (!Files.exists(configGenJar)) {
+                        throw new ProvisioningException(Errors.pathDoesNotExist(configGenJar));
+                    }
+                    final URL[] cp = new URL[2];
                     try {
-                        byte[] content = Files.readAllBytes(finalizeCli);
-                        Path tmpDir = runtime.getTmpPath();
-                        if (!Files.exists(tmpDir)) {
-                            Files.createDirectory(tmpDir);
+                        MavenArtifact artifact = Utils.toArtifactCoords(mergedArtifactVersions, "org.wildfly.core:wildfly-launcher", false);
+                        artifactResolver.resolve(artifact);
+                        cp[0] = configGenJar.toUri().toURL();
+                        cp[1] = artifact.getPath().toUri().toURL();
+                    } catch (IOException e) {
+                        throw new ProvisioningException("Failed to init classpath to run CLI finalize script for " + runtime.getStagedDir(), e);
+                    }
+                    final ClassLoader originalCl = Thread.currentThread().getContextClassLoader();
+                    final URLClassLoader cliScriptCl = new URLClassLoader(cp, originalCl);
+                    Path script;
+                    try {
+                        try {
+                            byte[] content = Files.readAllBytes(finalizeCli);
+                            Path tmpDir = runtime.getTmpPath();
+                            if (!Files.exists(tmpDir)) {
+                                Files.createDirectory(tmpDir);
+                            }
+                            script = tmpDir.resolve(finalizeCli.getFileName().toString());
+                            Files.write(script, content);
+                        } catch (IOException ex) {
+                            throw new ProvisioningException(ex.getLocalizedMessage(), ex);
                         }
-                        script = tmpDir.resolve(finalizeCli.getFileName().toString());
-                        Files.write(script, content);
-                    } catch (IOException ex) {
-                        throw new ProvisioningException(ex.getLocalizedMessage(), ex);
+                        Thread.currentThread().setContextClassLoader(cliScriptCl);
+                        try {
+                            final Class<?> cliScriptRunnerCls = cliScriptCl.loadClass(CLI_SCRIPT_RUNNER_CLASS);
+                            final Method m = cliScriptRunnerCls.getMethod(CLI_SCRIPT_RUNNER_METHOD, Path.class, Path.class, MessageWriter.class);
+                            m.invoke(null, runtime.getStagedDir(), script, log);
+                        } catch (Throwable e) {
+                            throw new ProvisioningException("Failed to initialize CLI script runner " + CLI_SCRIPT_RUNNER_CLASS, e);
+                        }
+                    } finally {
+                        Thread.currentThread().setContextClassLoader(originalCl);
+                        try {
+                            cliScriptCl.close();
+                        } catch (IOException e) {
+                        }
                     }
-                    Thread.currentThread().setContextClassLoader(cliScriptCl);
-                    try {
-                        final Class<?> cliScriptRunnerCls = cliScriptCl.loadClass(CLI_SCRIPT_RUNNER_CLASS);
-                        final Method m = cliScriptRunnerCls.getMethod(CLI_SCRIPT_RUNNER_METHOD, Path.class, Path.class, MessageWriter.class);
-                        m.invoke(null, runtime.getStagedDir(), script, log);
-                    } catch (Throwable e) {
-                        throw new ProvisioningException("Failed to initialize CLI script runner " + CLI_SCRIPT_RUNNER_CLASS, e);
-                    }
-                } finally {
-                   Thread.currentThread().setContextClassLoader(originalCl);
-                   try {
-                        cliScriptCl.close();
-                   } catch (IOException e) {
-                   }
                 }
             }
         }
