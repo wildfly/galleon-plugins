@@ -121,6 +121,10 @@ public class JakartaTransformation {
             transformExcluded.add(ArtifactCoords.newGav(artifact.getGroupId(),
                     artifact.getArtifactId(), artifact.getVersion()).toString());
             isTransformed = false;
+            Path srcPath = artifact.getFile().toPath();
+            // Excluded artifact could not exist in remote repository, we need to copy it in the local cache.
+            // Local cache is being used when the server is started to generate features.
+            Files.copy(srcPath, target.resolve(srcPath.getFileName().toString()), StandardCopyOption.REPLACE_EXISTING);
         } else {
             TransformedArtifact a = JakartaTransformer.transform(jakartaTransformConfigsDir,
                     artifact.getFile().toPath(), target, jakartaTransformVerbose, logHandler);
