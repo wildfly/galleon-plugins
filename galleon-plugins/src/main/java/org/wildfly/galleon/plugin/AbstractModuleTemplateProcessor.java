@@ -35,16 +35,28 @@ import org.jboss.galleon.universe.maven.MavenUniverseException;
  */
 abstract class AbstractModuleTemplateProcessor {
 
-    class ModuleArtifact {
+    static class ModuleArtifact {
 
         private final Element element;
+        private final Map<String, String> versionProps;
+        private final MessageWriter log;
+        private final AbstractArtifactInstaller installer;
+        private final boolean channelArtifactResolution;
         boolean jandex;
         String coordsStr;
         private MavenArtifact artifact;
         private final Attribute attribute;
 
-        ModuleArtifact(Element element) {
+        ModuleArtifact(Element element,
+                       Map<String, String> versionProps,
+                       MessageWriter log,
+                       AbstractArtifactInstaller installer,
+                       boolean channelArtifactResolution) {
+            this.versionProps = versionProps;
+            this.log = log;
+            this.installer = installer;
             this.element = element;
+            this.channelArtifactResolution = channelArtifactResolution;
             assert element.getLocalName().equals("artifact");
             attribute = element.getAttribute("name");
             coordsStr = attribute.getValue();
@@ -55,25 +67,29 @@ abstract class AbstractModuleTemplateProcessor {
                     jandex = coordsStr.indexOf("jandex", optionsIndex) >= 0;
                     coordsStr = coordsStr.substring(0, optionsIndex);
                 }
-                coordsStr = versionProps.get(coordsStr);
+                coordsStr = this.versionProps.get(coordsStr);
+            }
+        }
+
+        MavenArtifact getUnresolvedArtifact() throws IOException {
+            if (coordsStr == null) {
+                return null;
+            }
+            try {
+                return Utils.toArtifactCoords(this.versionProps, coordsStr, false, channelArtifactResolution);
+            } catch (ProvisioningException e) {
+                throw new IOException("Failed to resolve full coordinates for " + coordsStr, e);
             }
         }
 
         MavenArtifact getMavenArtifact() throws IOException {
-            if (coordsStr == null) {
-                return null;
-            }
             if (artifact == null) {
-                try {
-                    artifact = Utils.toArtifactCoords(versionProps, coordsStr, false, channelArtifactResolution);
-                } catch (ProvisioningException e) {
-                    throw new IOException("Failed to resolve full coordinates for " + coordsStr, e);
-                }
-                plugin.log.verbose("Resolving %s", artifact);
+                artifact = getUnresolvedArtifact();
+                log.verbose("Resolving %s", artifact);
                 try {
                     installer.getArtifactResolver().resolve(artifact);
                     if (channelArtifactResolution) {
-                        plugin.log.verbose("Resolved %s", artifact);
+                        log.verbose("Resolved %s", artifact);
                     }
                 } catch (ProvisioningException e) {
                     throw new IOException("Failed to resolve artifact " + artifact, e);
@@ -171,7 +187,7 @@ abstract class AbstractModuleTemplateProcessor {
         }
         final int artifactCount = artifacts.size();
         for (int i = 0; i < artifactCount; i++) {
-            final ModuleArtifact moduleArtifact = new ModuleArtifact(artifacts.get(i));
+            final ModuleArtifact moduleArtifact = new ModuleArtifact(artifacts.get(i), versionProps, getLog(), installer, channelArtifactResolution);
             if (moduleArtifact.hasMavenArtifact()) {
                 Path artifactPath = moduleArtifact.getMavenArtifact().getPath();
                 processArtifact(moduleArtifact);
