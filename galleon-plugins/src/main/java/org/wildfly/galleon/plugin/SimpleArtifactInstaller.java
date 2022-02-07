@@ -60,7 +60,7 @@ class SimpleArtifactInstaller extends AbstractArtifactInstaller {
     }
 
     @Override
-    Path installCopiedArtifact(MavenArtifact artifact) throws IOException, ProvisioningException {
+    public Path installCopiedArtifact(MavenArtifact artifact) throws IOException, ProvisioningException {
         // Although copied artifact are not thin, we copy them in generated repo for consistency.
         // This means that all artifacts provisioned are present.
         installInGeneratedRepo(artifact, artifact.getVersion(), artifact.getPath());

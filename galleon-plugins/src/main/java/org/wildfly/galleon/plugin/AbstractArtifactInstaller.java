@@ -37,7 +37,7 @@ import org.wildfly.galleon.plugin.WfInstallPlugin.ArtifactResolver;
  *
  * @author jdenise
  */
-abstract class AbstractArtifactInstaller {
+abstract class AbstractArtifactInstaller implements ShadedModel.Installer {
 
     private final Path generatedMavenRepo;
     private final ArtifactResolver resolver;
@@ -53,7 +53,8 @@ abstract class AbstractArtifactInstaller {
     abstract String installArtifactThin(MavenArtifact artifact) throws IOException,
             ProvisioningException;
 
-    abstract Path installCopiedArtifact(MavenArtifact artifact) throws IOException, ProvisioningException;
+    @Override
+    public abstract Path installCopiedArtifact(MavenArtifact artifact) throws IOException, ProvisioningException;
 
     Path getGeneratedMavenRepo() {
         return generatedMavenRepo;

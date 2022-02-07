@@ -36,7 +36,7 @@ public class TasksTestCase {
     public void testTasks() throws Exception {
         SchemaFactory schemaFactory = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI);
         Validator validator = null;
-        try (Reader r = Files.newBufferedReader(Paths.get("src/main/resources/schema/wildfly-feature-pack-tasks-3_0.xsd"),
+        try (Reader r = Files.newBufferedReader(Paths.get("src/main/resources/schema/wildfly-feature-pack-tasks-3_2.xsd"),
                 Charset.forName("utf-8"))) {
             Schema schema = schemaFactory.newSchema(new StreamSource(r));
             validator = schema.newValidator();
