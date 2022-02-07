@@ -87,6 +87,7 @@ import org.jboss.galleon.universe.maven.repo.MavenRepoManager;
 import org.jboss.galleon.util.IoUtils;
 import org.jboss.galleon.util.CollectionUtils;
 import org.jboss.galleon.util.ZipUtils;
+import org.wildfly.galleon.plugin.config.AssembleShadedArtifact;
 import org.wildfly.galleon.plugin.config.CopyArtifact;
 import org.wildfly.galleon.plugin.config.CopyPath;
 import org.wildfly.galleon.plugin.config.DeletePath;
@@ -107,7 +108,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private static final String TRACK_ARTIFACTS_RESOLVE = "JB_ARTIFACTS_RESOLVE";
     private Optional<ArtifactRecorder> artifactRecorder;
 
-    interface ArtifactResolver {
+    public interface ArtifactResolver {
         void resolve(MavenArtifact artifact) throws ProvisioningException;
     }
 
@@ -194,6 +195,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private final Map<String, String> resolvedVersionsProperties = new HashMap<>();
     private Map<ProducerSpec, WildFlyChannelResolutionMode> channelResolutionModes = new LinkedHashMap<>();
     private Map<String, ProducerSpec> gaToProducer = new HashMap<>();
+    private final Map<String, ShadedModel> shadedPackages = new HashMap<>();
 
     @Override
     protected List<ProvisioningOption> initPluginOptions() {
@@ -409,6 +411,10 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             pkgsTotal += fp.getPackageNames().size();
         }
         pkgProgressTracker.starting(pkgsTotal);
+        // Must first retrieve the shaded that could be required by other packages
+        for(FeaturePackRuntime fp : runtime.getFeaturePacks()) {
+            processShaded(fp);
+        }
         for(FeaturePackRuntime fp : runtime.getFeaturePacks()) {
             processPackages(fp);
         }
@@ -742,7 +748,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
         final long startTime = runtime.isLogTime() ? System.nanoTime() : -1;
 
-        final URL[] cp = new URL[3];
+        URL[] cp;
+        List<URL> urls = new ArrayList<>();
         try {
             MavenArtifact artifact = Utils.toArtifactCoords(mergedArtifactVersions, CONFIG_GEN_GA,
                     false, channelArtifactResolution, requireChannel(gaToProducer.get(CONFIG_GEN_GA)));
@@ -750,15 +757,26 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             if (artifactRecorder.isPresent()) {
                 artifactRecorder.get().cache(artifact, artifact.getPath());
             }
-            cp[0] = artifact.getPath().toUri().toURL();
+            urls.add(artifact.getPath().toUri().toURL());
             artifact = Utils.toArtifactCoords(mergedArtifactVersions, JBOSS_MODULES_GA,
                     false, channelArtifactResolution, requireChannel(gaToProducer.get(JBOSS_MODULES_GA)));
             artifactResolver.resolve(artifact);
-            cp[1] = artifact.getPath().toUri().toURL();
-            artifact = Utils.toArtifactCoords(mergedArtifactVersions, WILDFLY_CLI_GA+"::client",
+            urls.add(artifact.getPath().toUri().toURL());
+            ShadedModel model = shadedPackages.get("org.wildfly.core.wildfly-cli.shaded");
+            if (model == null) {
+                // This can occur in tests that rely on WildFly version that doesn't contain shaded models.
+                log.print("WARNING: defaulting to wildfly-cli:client shaded jar.");
+                artifact = Utils.toArtifactCoords(mergedArtifactVersions, WILDFLY_CLI_GA+"::client",
                     false, channelArtifactResolution, requireChannel(gaToProducer.get(WILDFLY_CLI_GA)));
-            artifactResolver.resolve(artifact);
-            cp[2] = artifact.getPath().toUri().toURL();
+                artifactResolver.resolve(artifact);
+                urls.add(artifact.getPath().toUri().toURL());
+            } else {
+                for (MavenArtifact a : model.getArtifacts()) {
+                    urls.add(a.getPath().toUri().toURL());
+                }
+            }
+            cp = new URL[urls.size()];
+            cp = urls.toArray(cp);
         } catch (IOException e) {
             throw new ProvisioningException("Failed to init classpath for " + runtime.getStagedDir(), e);
         }
@@ -797,6 +815,27 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             try {
                 configGenCl.close();
             } catch (IOException e) {
+            }
+        }
+    }
+
+    private void processShaded(final FeaturePackRuntime fp) throws ProvisioningException {
+        for(PackageRuntime pkg : fp.getPackages()) {
+            final Path pmWfDir = pkg.getResource(WfConstants.PM, WfConstants.WILDFLY);
+            if(!Files.exists(pmWfDir)) {
+                continue;
+            }
+            final Path shadedDir = pmWfDir.resolve(WfConstants.SHADED);
+            if(Files.exists(shadedDir)) {
+                try {
+                    shadedPackages.put(pkg.getName(), new ShadedModel(
+                            requireChannel(pkg.getFeaturePackRuntime().getFPID().getProducer()),
+                            shadedDir.resolve(ShadedModel.FILE_NAME),
+                            runtime.getTmpPath(),
+                            artifactResolver, log, mergedArtifactVersions, artifactInstaller, channelArtifactResolution, artifactRecorder));
+                } catch (IOException ex) {
+                    throw new ProvisioningException(ex);
+                }
             }
         }
     }
@@ -1029,13 +1068,29 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
     }
 
-    private boolean requireChannel(ProducerSpec spec) {
+    private boolean requireChannel(String artifactGA) {
+        return requireChannel(gaToProducer.get(artifactGA));
+    }
+
+    boolean requireChannel(ProducerSpec spec) {
         WildFlyChannelResolutionMode mode = channelResolutionModes.get(spec);
         boolean requireChannel = false;
         if(mode != null) {
             requireChannel = WildFlyChannelResolutionMode.REQUIRED.equals(mode);
         }
         return requireChannel;
+    }
+
+    public void assembleArtifact(AssembleShadedArtifact copyArtifact, PackageRuntime pkg) throws ProvisioningException {
+        try {
+            ShadedModel model = shadedPackages.get(copyArtifact.getShadedModelPackage());
+            String location = copyArtifact.getToLocation();
+            final Path jarTarget = runtime.getStagedDir().resolve(location);
+            Files.createDirectories(jarTarget.getParent());
+            model.buildJar(jarTarget);
+        } catch (IOException e) {
+            throw new ProvisioningException("Failed to copy shaded jar " + copyArtifact.getShadedModelPackage(), e);
+        }
     }
 
     public void copyArtifact(CopyArtifact copyArtifact, PackageRuntime pkg) throws ProvisioningException {

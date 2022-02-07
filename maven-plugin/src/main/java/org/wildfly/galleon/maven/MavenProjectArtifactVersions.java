@@ -41,8 +41,8 @@ import org.wildfly.galleon.plugin.Utils;
  */
 class MavenProjectArtifactVersions {
 
-    private static final String TEST_JAR = "test-jar";
-    private static final String SYSTEM = "system";
+    static final String TEST_JAR = "test-jar";
+    static final String SYSTEM = "system";
 
     static MavenProjectArtifactVersions getInstance(MavenProject project) {
         return new MavenProjectArtifactVersions(project);
