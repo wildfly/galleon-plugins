@@ -69,6 +69,7 @@
     <version.org.apache.maven.plugin-testing.maven-plugin-testing-harness>3.2.0</version.org.apache.maven.plugin-testing.maven-plugin-testing-harness>
     <version.org.apache.maven.plugin-tools>${version.plugin.plugin}</version.org.apache.maven.plugin-tools>
     <version.org.apache.maven.plugins.maven-shade-plugin>3.1.0</version.org.apache.maven.plugins.maven-shade-plugin>
+    <version.org.apache.maven.shared>3.2.0</version.org.apache.maven.shared>
     <version.maven-aether-provider>3.3.9</version.maven-aether-provider>
     <version.org.codehaus.mojo.xml-maven-plugin>1.0.1</version.org.codehaus.mojo.xml-maven-plugin>
     <version.org.codehaus.plexus.plexus-utils>3.1.0</version.org.codehaus.plexus.plexus-utils>
@@ -353,6 +354,11 @@
         <version>${version.org.wildfly.maven.plugins}</version>
       </dependency>
 
+      <dependency>
+        <groupId>org.apache.maven.shared</groupId>
+        <artifactId>maven-filtering</artifactId>
+        <version>${version.org.apache.maven.shared}</version>
+      </dependency>
     </dependencies>
   </dependencyManagement>
   <dependencies>
