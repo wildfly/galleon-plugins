@@ -54,7 +54,6 @@ import org.apache.maven.artifact.Artifact;
 import org.apache.maven.artifact.DefaultArtifact;
 import org.apache.maven.artifact.handler.DefaultArtifactHandler;
 import org.apache.maven.execution.MavenSession;
-import org.apache.maven.model.Dependency;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
@@ -454,7 +453,6 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     /**
      * Create a YAML Channel that defines streams for all the feature-pack dependencies.
      * The feature-pack itself is added to the channel's streams.
-     * @param featurePackDependencies
      */
     private String createYAMLChannel(WildFlyFeaturePackBuild buildConfig) {
         StringBuilder channel = new StringBuilder();
@@ -465,16 +463,15 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         if (addFeaturePacksAsRequiredChannels && !buildConfig.getDependencies().isEmpty()) {
             // add all feature pack dependencies as channel requirements
             channel.append("requires:\n");
-            for (ArtifactCoords.Gav gav : buildConfig.getDependencies().keySet()) {
-                String groupId = gav.getGroupId();
-                String artifactId = gav.getArtifactId();
-                Dependency featurePackDependency = project.getDependencies().stream().filter(dep ->
-                        groupId.equals(dep.getGroupId()) &&
-                                artifactId.equals(dep.getArtifactId()) &&
-                                "zip".equals(dep.getType())).findFirst().get();
-                appendMavenGAV(channel, "  ", featurePackDependency.getGroupId(),
-                        featurePackDependency.getArtifactId(),
-                        featurePackDependency.getVersion());
+            for (ArtifactCoords.Gav gav : new TreeSet<>(buildConfig.getDependencies().keySet())) {
+                project.getDependencies().stream()
+                        .filter(dep ->
+                                gav.getGroupId().equals(dep.getGroupId())
+                                        && gav.getArtifactId().equals(dep.getArtifactId())
+                                        && "zip".equals(dep.getType()))
+                        .findFirst()
+                        .ifPresent(
+                                fp -> appendMavenGAV(channel, "  ", fp.getGroupId(), fp.getArtifactId(), fp.getVersion()));
             }
         }
         // add a stream for this feature pack
@@ -482,16 +479,11 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         appendMavenGAV(channel, "  ", project.getGroupId(),
                 project.getArtifactId(),
                 project.getVersion());
-        // add all feature-pack artifacts dependencies as streams (except zip and pom dependencies)
-        for (Artifact artifact : MavenProjectArtifactVersions.getFilteredArtifacts(project, buildConfig)) {
-            switch (artifact.getType()) {
-                case "zip":
-                case "pom":
-                    break;
-                default:
-                    appendMavenGAV(channel, "  ", artifact.getGroupId(), artifact.getArtifactId(), artifact.getVersion());
-            }
-        }
+        // append all feature-pack artifacts dependencies as streams (except zip and pom dependencies)
+       MavenProjectArtifactVersions.getFilteredArtifacts(project, buildConfig).stream()
+               .filter(a -> !"zip".equals(a.getType()) && !"pom".equals(a.getType()))
+               .sorted()
+               .forEach(artifact -> appendMavenGAV(channel, "  ", artifact.getGroupId(), artifact.getArtifactId(), artifact.getVersion()));
         return channel.toString();
     }
 
