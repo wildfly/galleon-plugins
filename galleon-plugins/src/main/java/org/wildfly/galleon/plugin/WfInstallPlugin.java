@@ -186,6 +186,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
     private AbstractArtifactInstaller artifactInstaller;
     private ArtifactResolver artifactResolver;
+    private boolean channelArtifactResolution;
 
     @Override
     protected List<ProvisioningOption> initPluginOptions() {
@@ -225,6 +226,9 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private Map<String, String> getOverriddenArtifacts() throws ProvisioningException {
         if (!runtime.isOptionSet(OPTION_OVERRIDDEN_ARTIFACTS)) {
             return Collections.emptyMap();
+        }
+        if (channelArtifactResolution) {
+            throw new ProvisioningException("Option " + OPTION_OVERRIDDEN_ARTIFACTS + " can't be used when channels are enabled.");
         }
         final String value = runtime.getOptionValue(OPTION_OVERRIDDEN_ARTIFACTS);
         return value == null ? Collections.emptyMap() : Utils.toArtifactsMap(value);
@@ -276,6 +280,15 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             IoUtils.recursiveDelete(generatedMavenRepo);
         }
         maven = (MavenRepoManager) runtime.getArtifactResolver(MavenRepoManager.REPOSITORY_ID);
+        // The Channel resolution depends on the tool in use.
+        // Generic Galleon provisioning doesn't support it.
+        try {
+            Class<?> clazz = Class.forName("org.wildfly.channel.spi.ChannelResolvable");
+            channelArtifactResolution = clazz.isAssignableFrom(maven.getClass());
+        } catch(ClassNotFoundException ex) {
+            log.verbose("Channel not present in classpath.");
+        }
+        log.verbose("Channel artifact resolution enabled=" + channelArtifactResolution);
         provisioningMavenRepo = getProvisioningMavenRepo();
         // Overridden artifacts
         overriddenArtifactVersions.putAll(getOverriddenArtifacts());
@@ -474,7 +487,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                     }
                     final URL[] cp = new URL[2];
                     try {
-                        MavenArtifact artifact = Utils.toArtifactCoords(mergedArtifactVersions, "org.wildfly.core:wildfly-launcher", false);
+                        MavenArtifact artifact = Utils.toArtifactCoords(mergedArtifactVersions, "org.wildfly.core:wildfly-launcher", false, channelArtifactResolution);
                         artifactResolver.resolve(artifact);
                         cp[0] = configGenJar.toUri().toURL();
                         cp[1] = artifact.getPath().toUri().toURL();
@@ -686,10 +699,10 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         final URL[] cp = new URL[3];
         try {
             cp[0] = configGenJar.toUri().toURL();
-            MavenArtifact artifact = Utils.toArtifactCoords(mergedArtifactVersions, "org.jboss.modules:jboss-modules", false);
+            MavenArtifact artifact = Utils.toArtifactCoords(mergedArtifactVersions, "org.jboss.modules:jboss-modules", false, channelArtifactResolution);
             artifactResolver.resolve(artifact);
             cp[1] = artifact.getPath().toUri().toURL();
-            artifact = Utils.toArtifactCoords(mergedArtifactVersions, "org.wildfly.core:wildfly-cli::client", false);
+            artifact = Utils.toArtifactCoords(mergedArtifactVersions, "org.wildfly.core:wildfly-cli::client", false, channelArtifactResolution);
             artifactResolver.resolve(artifact);
             cp[2] = artifact.getPath().toUri().toURL();
         } catch (IOException e) {
@@ -902,9 +915,9 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                     artifactInstaller,
                     moduleXmlRelativePath,
                     moduleTemplate,
-                    versionProps);
+                    versionProps, channelArtifactResolution);
         } else {
-            processor = new FatModuleTemplateProcessor(this, artifactInstaller, targetDir, moduleTemplate, versionProps, transformationMavenRepo);
+            processor = new FatModuleTemplateProcessor(this, artifactInstaller, targetDir, moduleTemplate, versionProps, transformationMavenRepo, channelArtifactResolution);
         }
         processor.process();
         moduleTemplate.store();
@@ -937,16 +950,18 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     }
 
     public void copyArtifact(CopyArtifact copyArtifact, PackageRuntime pkg) throws ProvisioningException {
-        final MavenArtifact artifact = Utils.toArtifactCoords(
-                copyArtifact.isFeaturePackVersion() ? fpArtifactVersions.get(pkg.getFeaturePackRuntime().getFPID().getProducer())
+        final MavenArtifact artifact = Utils.toArtifactCoords(copyArtifact.isFeaturePackVersion() ? fpArtifactVersions.get(pkg.getFeaturePackRuntime().getFPID().getProducer())
                         : mergedArtifactVersions,
-                copyArtifact.getArtifact(), copyArtifact.isOptional());
+                copyArtifact.getArtifact(), copyArtifact.isOptional(), channelArtifactResolution);
         if(artifact == null) {
             return;
         }
         try {
             log.verbose("Resolving artifact %s ", artifact);
             artifactResolver.resolve(artifact);
+            if (channelArtifactResolution) {
+                log.verbose("Resolved artifact %s ", artifact);
+            }
             // If transformation occurs, the actual jar artifact file is renamed.
             // * Copied artifact for which we expect a well known name have a location file name, e.g.: jboss-modules.jar or bin/client/jboss-client.jar
             // * Copied artifact that are extracted, e.g.: openssl lib, the jar name is meaningless.

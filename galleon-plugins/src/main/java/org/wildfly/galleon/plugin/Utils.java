@@ -98,10 +98,10 @@ public class Utils {
         return val.toString().equals(value);
     }
 
-    public static MavenArtifact toArtifactCoords(Map<String, String> versionProps, String str, boolean optional) throws ProvisioningException {
+    public static MavenArtifact toArtifactCoords(Map<String, String> versionProps, String str, boolean optional, boolean channelArtifactResolution) throws ProvisioningException {
         final MavenArtifact artifact = new MavenArtifact();
         artifact.setExtension(MavenArtifact.EXT_JAR);
-        resolveArtifact(str, artifact);
+        resolveArtifact(str, artifact, channelArtifactResolution);
         if(artifact.getGroupId() == null && artifact.getArtifactId() == null) {
             throw new IllegalArgumentException("Unexpected artifact coordinates format: " + str);
         }
@@ -118,11 +118,12 @@ public class Utils {
                 throw new ProvisioningException("Failed to resolve the version of " + artifact.getGroupId() + ':' + artifact.getArtifactId());
             }
             MavenArtifact resolvedArtifact = new MavenArtifact();
-            resolveArtifact(resolvedStr, resolvedArtifact);
-            if (!resolvedArtifact.hasVersion()) {
+            resolveArtifact(resolvedStr, resolvedArtifact, channelArtifactResolution);
+            if (!resolvedArtifact.hasVersion() && !channelArtifactResolution) {
                 throw new ProvisioningException("Failed to resolve the version for artifact: " + resolvedStr);
+            } else {
+                artifact.setVersion(resolvedArtifact.getVersion());
             }
-            artifact.setVersion(resolvedArtifact.getVersion());
         }
         return artifact;
     }
@@ -130,7 +131,7 @@ public class Utils {
     /**
      * Resolve an expression composed of ${a,b,c:defaultValue} Where a, b and c can be System properties or env.XXX env variables.
      */
-    private static String resolveExpression(String coords, String str) throws ProvisioningException {
+    private static String resolveExpression(String coords, String str, boolean channelArtifactResolution, boolean isVersion) throws ProvisioningException {
         if (str == null) {
             return str;
         }
@@ -169,7 +170,10 @@ public class Utils {
                 }
             }
             if (defaultValue == null) {
-                throw new ProvisioningException("Unresolved expression for " + coords);
+                // Fail if not a version or if no channels have been configured
+                if (!isVersion || !channelArtifactResolution ) {
+                    throw new ProvisioningException("Unresolved expression for " + coords);
+                }
             }
             resolved = defaultValue;
         }
@@ -184,7 +188,7 @@ public class Utils {
         EXTENSION
     }
 
-    static void resolveArtifact(String coords, MavenArtifact artifact) throws ProvisioningException {
+    static void resolveArtifact(String coords, MavenArtifact artifact, boolean channelArtifactResolution) throws ProvisioningException {
         if (coords == null) {
             return;
         }
@@ -212,10 +216,13 @@ public class Utils {
                             throw new ProvisioningException("Invalid syntax for expression " + coords);
                         }
                         String exp = remaining.substring(0, end + 1);
-                        if (currentBuilder == null) {
-                            currentBuilder = new StringBuilder();
+                        String resolvedExp = resolveExpression(coords, exp, channelArtifactResolution, state == COORDS_STATE.VERSION);
+                        if (resolvedExp != null) {
+                            if( currentBuilder == null) {
+                                currentBuilder = new StringBuilder();
+                            }
+                            currentBuilder.append(resolvedExp);
                         }
-                        currentBuilder.append(resolveExpression(coords, exp));
                         expectSeparator = true;
                         i += end;
                     }
@@ -402,7 +409,7 @@ public class Utils {
             MavenArtifact  mavenArtifact = new MavenArtifact();
             // We expect the extension.
             mavenArtifact.setExtension(null);
-            resolveArtifact(artifact, mavenArtifact);
+            resolveArtifact(artifact, mavenArtifact, false);
             StringBuilder builder = new StringBuilder();
 
             if (mavenArtifact.getGroupId() == null || mavenArtifact.getArtifactId() == null || !mavenArtifact.hasVersion() ||

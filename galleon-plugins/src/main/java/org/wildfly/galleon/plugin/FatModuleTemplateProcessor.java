@@ -39,8 +39,8 @@ class FatModuleTemplateProcessor extends AbstractModuleTemplateProcessor {
     public FatModuleTemplateProcessor(WfInstallPlugin plugin, AbstractArtifactInstaller installer,
             Path targetPath, ModuleTemplate template,
             Map<String, String> versionProps,
-            Path localCache) {
-        super(plugin, installer, targetPath, template, versionProps);
+            Path localCache, boolean channelArtifactResolution) {
+        super(plugin, installer, targetPath, template, versionProps, channelArtifactResolution);
         this.localCache = localCache;
     }
 

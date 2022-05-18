@@ -36,7 +36,7 @@ public class UtilsTestCase {
             String key = "artId:grpId";
             String value = "artId:grpId:1.0.0.Final::jar";
             versionsProps.put(key, value);
-            MavenArtifact artifact = Utils.toArtifactCoords(versionsProps, key, false);
+            MavenArtifact artifact = Utils.toArtifactCoords(versionsProps, key, false, false);
             Assert.assertEquals("artId", artifact.getGroupId());
             Assert.assertEquals("grpId", artifact.getArtifactId());
             Assert.assertEquals("1.0.0.Final", artifact.getVersion());
@@ -48,7 +48,7 @@ public class UtilsTestCase {
             String key = "artId:grpId";
             String value = "artId:grpId:1.0.0.Final";
             versionsProps.put(key, value);
-            MavenArtifact artifact = Utils.toArtifactCoords(versionsProps, key, false);
+            MavenArtifact artifact = Utils.toArtifactCoords(versionsProps, key, false, false);
             Assert.assertEquals("artId", artifact.getGroupId());
             Assert.assertEquals("grpId", artifact.getArtifactId());
             Assert.assertEquals("1.0.0.Final", artifact.getVersion());
@@ -60,7 +60,7 @@ public class UtilsTestCase {
             String key = "artId:grpId::linux-x86_64";
             String value = "artId:grpId:1.0.0.Final:linux-x86_64:jar";
             versionsProps.put(key, value);
-            MavenArtifact artifact = Utils.toArtifactCoords(versionsProps, key, false);
+            MavenArtifact artifact = Utils.toArtifactCoords(versionsProps, key, false, false);
             Assert.assertEquals("artId", artifact.getGroupId());
             Assert.assertEquals("grpId", artifact.getArtifactId());
             Assert.assertEquals("1.0.0.Final", artifact.getVersion());
@@ -73,7 +73,7 @@ public class UtilsTestCase {
             String value = "artId:grpId:1.0.0.Final::so";
             versionsProps.put(key, value);
             String lookupArtifact = "artId:grpId:::so";
-            MavenArtifact artifact = Utils.toArtifactCoords(versionsProps, lookupArtifact, false);
+            MavenArtifact artifact = Utils.toArtifactCoords(versionsProps, lookupArtifact, false, false);
             Assert.assertEquals("artId", artifact.getGroupId());
             Assert.assertEquals("grpId", artifact.getArtifactId());
             Assert.assertEquals("1.0.0.Final", artifact.getVersion());
@@ -86,7 +86,7 @@ public class UtilsTestCase {
             String value = "artId:grpId:1.0.0.Final:class:so";
             versionsProps.put(key, value);
             String lookupArtifact = "artId:grpId::class:so";
-            MavenArtifact artifact = Utils.toArtifactCoords(versionsProps, lookupArtifact, false);
+            MavenArtifact artifact = Utils.toArtifactCoords(versionsProps, lookupArtifact, false, false);
             Assert.assertEquals("artId", artifact.getGroupId());
             Assert.assertEquals("grpId", artifact.getArtifactId());
             Assert.assertEquals("1.0.0.Final", artifact.getVersion());
@@ -185,8 +185,8 @@ public class UtilsTestCase {
             String v = "123";
             String val = "a:b:" + v + "::jar";
             versionsProps.put(key, val);
-            Assert.assertEquals(v, Utils.toArtifactCoords(versionsProps, key, false).getVersion());
-            Assert.assertEquals(v, Utils.toArtifactCoords(versionsProps, val, false).getVersion());
+            Assert.assertEquals(v, Utils.toArtifactCoords(versionsProps, key, false, false).getVersion());
+            Assert.assertEquals(v, Utils.toArtifactCoords(versionsProps, val, false, false).getVersion());
         }
 
         {
@@ -197,8 +197,8 @@ public class UtilsTestCase {
             System.setProperty(prop, versionValue);
             Map<String, String> versionsProps = Utils.toArtifactsMap(val);
             try {
-                Assert.assertEquals(versionValue, Utils.toArtifactCoords(versionsProps, key, false).getVersion());
-                Assert.assertEquals(versionValue, Utils.toArtifactCoords(versionsProps, val, false).getVersion());
+                Assert.assertEquals(versionValue, Utils.toArtifactCoords(versionsProps, key, false, false).getVersion());
+                Assert.assertEquals(versionValue, Utils.toArtifactCoords(versionsProps, val, false, false).getVersion());
             } finally {
                 System.clearProperty(prop);
             }
@@ -211,8 +211,8 @@ public class UtilsTestCase {
             String defaultValue = "010101";
             String val = "a:b:${" + prop + ":" + defaultValue + "}::jar";
             versionsProps.put(key, val);
-            Assert.assertEquals(defaultValue, Utils.toArtifactCoords(versionsProps, key, false).getVersion());
-            Assert.assertEquals(defaultValue, Utils.toArtifactCoords(versionsProps, val, false).getVersion());
+            Assert.assertEquals(defaultValue, Utils.toArtifactCoords(versionsProps, key, false, false).getVersion());
+            Assert.assertEquals(defaultValue, Utils.toArtifactCoords(versionsProps, val, false, false).getVersion());
         }
 
         {
@@ -222,8 +222,8 @@ public class UtilsTestCase {
             String defaultValue = ":01:0101:";
             String val = "a:b:${" + prop + ":" + defaultValue + "}::jar";
             versionsProps.put(key, val);
-            Assert.assertEquals(defaultValue, Utils.toArtifactCoords(versionsProps, key, false).getVersion());
-            Assert.assertEquals(defaultValue, Utils.toArtifactCoords(versionsProps, val, false).getVersion());
+            Assert.assertEquals(defaultValue, Utils.toArtifactCoords(versionsProps, key, false, false).getVersion());
+            Assert.assertEquals(defaultValue, Utils.toArtifactCoords(versionsProps, val, false, false).getVersion());
         }
 
         {
@@ -233,8 +233,8 @@ public class UtilsTestCase {
             String defaultValue = "010101";
             String val = "a:b:  ${" + prop + ":" + defaultValue + "}  ::jar";
             versionsProps.put(key, val);
-            Assert.assertEquals(defaultValue, Utils.toArtifactCoords(versionsProps, key, false).getVersion());
-            Assert.assertEquals(defaultValue, Utils.toArtifactCoords(versionsProps, val, false).getVersion());
+            Assert.assertEquals(defaultValue, Utils.toArtifactCoords(versionsProps, key, false, false).getVersion());
+            Assert.assertEquals(defaultValue, Utils.toArtifactCoords(versionsProps, val, false, false).getVersion());
         }
 
         {
@@ -244,8 +244,8 @@ public class UtilsTestCase {
             String defaultValue = "";
             String val = "a:b:${" + prop + ":}::jar";
             versionsProps.put(key, val);
-            Assert.assertEquals(defaultValue, Utils.toArtifactCoords(versionsProps, key, false).getVersion());
-            Assert.assertEquals(defaultValue, Utils.toArtifactCoords(versionsProps, val, false).getVersion());
+            Assert.assertEquals(defaultValue, Utils.toArtifactCoords(versionsProps, key, false, false).getVersion());
+            Assert.assertEquals(defaultValue, Utils.toArtifactCoords(versionsProps, val, false, false).getVersion());
         }
 
         {
@@ -255,14 +255,14 @@ public class UtilsTestCase {
             String val = "a:b:${" + prop + ",:}::jar";
             versionsProps.put(key, val);
             try {
-                Utils.toArtifactCoords(versionsProps, key, false);
+                Utils.toArtifactCoords(versionsProps, key, false, false);
                 throw new Exception("Should have failed");
             } catch (ProvisioningException ex) {
                 // XXX OK expected
                 Assert.assertEquals("Invalid syntax for expression " + val, ex.getMessage());
             }
             try {
-                Utils.toArtifactCoords(versionsProps, val, false);
+                Utils.toArtifactCoords(versionsProps, val, false, false);
                 throw new Exception("Should have failed");
             } catch (ProvisioningException ex) {
                 // XXX OK expected
@@ -277,14 +277,14 @@ public class UtilsTestCase {
             String val = "a:b:${,,:   " + defaultValue + "   }::jar";
             versionsProps.put(key, val);
             try {
-                Utils.toArtifactCoords(versionsProps, key, false);
+                Utils.toArtifactCoords(versionsProps, key, false, false);
                 throw new Exception("Should have failed");
             } catch (ProvisioningException ex) {
                 // XXX OK expected
                 Assert.assertEquals("Invalid syntax for expression " + val, ex.getMessage());
             }
             try {
-                Utils.toArtifactCoords(versionsProps, val, false);
+                Utils.toArtifactCoords(versionsProps, val, false, false);
                 throw new Exception("Should have failed");
             } catch (ProvisioningException ex) {
                 // XXX OK expected
@@ -298,14 +298,14 @@ public class UtilsTestCase {
             String val = "a:b:${:}::jar";
             versionsProps.put(key, val);
             try {
-                Utils.toArtifactCoords(versionsProps, key, false);
+                Utils.toArtifactCoords(versionsProps, key, false, false);
                 throw new Exception("Should have failed");
             } catch (ProvisioningException ex) {
                 // XXX OK expected
                 Assert.assertEquals("Invalid syntax for expression " + val, ex.getMessage());
             }
             try {
-                Utils.toArtifactCoords(versionsProps, val, false);
+                Utils.toArtifactCoords(versionsProps, val, false, false);
                 throw new Exception("Should have failed");
             } catch (ProvisioningException ex) {
                 // XXX OK expected
@@ -319,14 +319,14 @@ public class UtilsTestCase {
             String val = "a:b:${}::jar";
             versionsProps.put(key, val);
             try {
-                Utils.toArtifactCoords(versionsProps, key, false).getVersion();
+                Utils.toArtifactCoords(versionsProps, key, false, false).getVersion();
                 throw new Exception("Should have failed");
             } catch (ProvisioningException ex) {
                 // XXX OK expected
                 Assert.assertEquals("Invalid syntax for expression " + val, ex.getMessage());
             }
             try {
-                Utils.toArtifactCoords(versionsProps, val, false).getVersion();
+                Utils.toArtifactCoords(versionsProps, val, false, false).getVersion();
                 throw new Exception("Should have failed");
             } catch (ProvisioningException ex) {
                 // XXX OK expected
@@ -341,14 +341,14 @@ public class UtilsTestCase {
             String val = "a:b:${,,,,,,,,,,:}::jar";
             versionsProps.put(key, val);
             try {
-                Utils.toArtifactCoords(versionsProps, key, false);
+                Utils.toArtifactCoords(versionsProps, key, false, false);
                 throw new Exception("Should have failed");
             } catch (ProvisioningException ex) {
                 // XXX OK expected
                 Assert.assertEquals("Invalid syntax for expression " + val, ex.getMessage());
             }
             try {
-                Utils.toArtifactCoords(versionsProps, val, false);
+                Utils.toArtifactCoords(versionsProps, val, false, false);
                 throw new Exception("Should have failed");
             } catch (ProvisioningException ex) {
                 // XXX OK expected
@@ -361,8 +361,8 @@ public class UtilsTestCase {
             String key = "a:b";
             String val = "a:b:${" + env + "}::jar";
             versionsProps.put(key, val);
-            Assert.assertEquals(envVersionValue, Utils.toArtifactCoords(versionsProps, key, false).getVersion());
-            Assert.assertEquals(envVersionValue, Utils.toArtifactCoords(versionsProps, val, false).getVersion());
+            Assert.assertEquals(envVersionValue, Utils.toArtifactCoords(versionsProps, key, false, false).getVersion());
+            Assert.assertEquals(envVersionValue, Utils.toArtifactCoords(versionsProps, val, false, false).getVersion());
         }
 
         {
@@ -374,8 +374,8 @@ public class UtilsTestCase {
             versionsProps.put(key, val);
             System.setProperty(prop, versionValue);
             try {
-                Assert.assertEquals(versionValue, Utils.toArtifactCoords(versionsProps, key, false).getVersion());
-                Assert.assertEquals(versionValue, Utils.toArtifactCoords(versionsProps, val, false).getVersion());
+                Assert.assertEquals(versionValue, Utils.toArtifactCoords(versionsProps, key, false, false).getVersion());
+                Assert.assertEquals(versionValue, Utils.toArtifactCoords(versionsProps, val, false, false).getVersion());
             } finally {
                 System.clearProperty(prop);
             }
@@ -390,8 +390,8 @@ public class UtilsTestCase {
             versionsProps.put(key, val);
             System.setProperty(prop, versionValue);
             try {
-                Assert.assertEquals(envVersionValue, Utils.toArtifactCoords(versionsProps, key, false).getVersion());
-                Assert.assertEquals(envVersionValue, Utils.toArtifactCoords(versionsProps, val, false).getVersion());
+                Assert.assertEquals(envVersionValue, Utils.toArtifactCoords(versionsProps, key, false, false).getVersion());
+                Assert.assertEquals(envVersionValue, Utils.toArtifactCoords(versionsProps, val, false, false).getVersion());
             } finally {
                 System.clearProperty(prop);
             }
@@ -407,8 +407,8 @@ public class UtilsTestCase {
             versionsProps.put(key, val);
             System.setProperty(prop2, versionValue);
             try {
-                Assert.assertEquals(versionValue, Utils.toArtifactCoords(versionsProps, key, false).getVersion());
-                Assert.assertEquals(versionValue, Utils.toArtifactCoords(versionsProps, val, false).getVersion());
+                Assert.assertEquals(versionValue, Utils.toArtifactCoords(versionsProps, key, false, false).getVersion());
+                Assert.assertEquals(versionValue, Utils.toArtifactCoords(versionsProps, val, false, false).getVersion());
             } finally {
                 System.clearProperty(prop2);
             }
@@ -421,14 +421,14 @@ public class UtilsTestCase {
             String val = "a:b:${" + prop + "}::jar";
             versionsProps.put(key, val);
             try {
-                Utils.toArtifactCoords(versionsProps, key, false);
+                Utils.toArtifactCoords(versionsProps, key, false, false);
                 throw new Exception("Should have failed");
             } catch (ProvisioningException ex) {
                 // XXX OK expected
                 Assert.assertEquals("Unresolved expression for " + val, ex.getMessage());
             }
             try {
-                Utils.toArtifactCoords(versionsProps, val, false);
+                Utils.toArtifactCoords(versionsProps, val, false, false);
                 throw new Exception("Should have failed");
             } catch (ProvisioningException ex) {
                 // XXX OK expected
@@ -443,14 +443,14 @@ public class UtilsTestCase {
             String val = "a:b:${" + unknownEnv + "}::jar";
             versionsProps.put(key, val);
             try {
-                Utils.toArtifactCoords(versionsProps, key, false);
+                Utils.toArtifactCoords(versionsProps, key, false, false);
                 throw new Exception("Should have failed");
             } catch (ProvisioningException ex) {
                 // XXX OK expected
                 Assert.assertEquals("Unresolved expression for " + val, ex.getMessage());
             }
             try {
-                Utils.toArtifactCoords(versionsProps, val, false);
+                Utils.toArtifactCoords(versionsProps, val, false, false);
                 throw new Exception("Should have failed");
             } catch (ProvisioningException ex) {
                 // XXX OK expected
@@ -464,14 +464,14 @@ public class UtilsTestCase {
             String val = "a:b:${env.:foo}::jar";
             versionsProps.put(key, val);
             try {
-                Utils.toArtifactCoords(versionsProps, key, false);
+                Utils.toArtifactCoords(versionsProps, key, false, false);
                 throw new Exception("Should have failed");
             } catch (ProvisioningException ex) {
                 // XXX OK expected
                 Assert.assertEquals("Invalid syntax for expression " + val, ex.getMessage());
             }
             try {
-                Utils.toArtifactCoords(versionsProps, val, false);
+                Utils.toArtifactCoords(versionsProps, val, false, false);
                 throw new Exception("Should have failed");
             } catch (ProvisioningException ex) {
                 // XXX OK expected
@@ -489,7 +489,7 @@ public class UtilsTestCase {
         {
             String val = "a:b:c:d:e";
             MavenArtifact artifact = new MavenArtifact();
-            Utils.resolveArtifact(val, artifact);
+            Utils.resolveArtifact(val, artifact, false);
             Assert.assertEquals("a", artifact.getGroupId());
             Assert.assertEquals("b", artifact.getArtifactId());
             Assert.assertEquals("c", artifact.getVersion());
@@ -516,7 +516,7 @@ public class UtilsTestCase {
             System.setProperty(prop5, val5);
             try {
                 MavenArtifact artifact = new MavenArtifact();
-                Utils.resolveArtifact(val, artifact);
+                Utils.resolveArtifact(val, artifact, false);
                 Assert.assertEquals(val1, artifact.getGroupId());
                 Assert.assertEquals(val2, artifact.getArtifactId());
                 Assert.assertEquals(val3, artifact.getVersion());
@@ -537,14 +537,14 @@ public class UtilsTestCase {
             String val = "a:b:${env.BAR:foo::jar";
             versionsProps.put(key, val);
             try {
-                Utils.toArtifactCoords(versionsProps, key, false);
+                Utils.toArtifactCoords(versionsProps, key, false, false);
                 throw new Exception("Should have failed");
             } catch (ProvisioningException ex) {
                 // XXX OK expected
                 Assert.assertEquals("Invalid syntax for expression " + val, ex.getMessage());
             }
             try {
-                Utils.toArtifactCoords(versionsProps, val, false);
+                Utils.toArtifactCoords(versionsProps, val, false, false);
                 throw new Exception("Should have failed");
             } catch (ProvisioningException ex) {
                 // XXX OK expected
@@ -557,7 +557,7 @@ public class UtilsTestCase {
             String val = "a:b:${env.BAR:foo}::$";
             versionsProps.put(key, val);
             MavenArtifact artifact = new MavenArtifact();
-            Utils.resolveArtifact(val, artifact);
+            Utils.resolveArtifact(val, artifact, false);
             Assert.assertEquals("a", artifact.getGroupId());
             Assert.assertEquals("b", artifact.getArtifactId());
             Assert.assertEquals("foo", artifact.getVersion());
@@ -571,7 +571,7 @@ public class UtilsTestCase {
             versionsProps.put(key, val);
             MavenArtifact artifact = new MavenArtifact();
             artifact.setExtension(null);
-            Utils.resolveArtifact(val, artifact);
+            Utils.resolveArtifact(val, artifact, false);
             Assert.assertNull(artifact.getGroupId());
             Assert.assertNull(artifact.getArtifactId());
             Assert.assertNull(artifact.getVersion());
@@ -585,19 +585,86 @@ public class UtilsTestCase {
             String val = "a:b:${env.BAR:foo}::jar:";
             versionsProps.put(key, val);
             try {
-                Utils.toArtifactCoords(versionsProps, key, false);
+                Utils.toArtifactCoords(versionsProps, key, false, false);
                 throw new Exception("Should have failed");
             } catch (IllegalArgumentException ex) {
                 // XXX OK expected
                 Assert.assertEquals("Unexpected artifact coordinates format: " + val, ex.getMessage());
             }
             try {
-                Utils.toArtifactCoords(versionsProps, val, false);
+                Utils.toArtifactCoords(versionsProps, val, false, false);
                 throw new Exception("Should have failed");
             } catch (IllegalArgumentException ex) {
                 // XXX OK expected
                 Assert.assertEquals("Unexpected artifact coordinates format: " + val, ex.getMessage());
             }
         }
+
+        {
+            String prop1 = "org.wfgp.grpid";
+            String prop2 = "org.wfgp.artid";
+            String prop3 = "org.wfgp.version";
+            String prop4 = "org.wfgp.classifier";
+            String prop5 = "org.wfgp.ext";
+            String val1 = "org.foo.bar";
+            String val2 = "babar";
+            String val4 = "foo";
+            String val5 = "dd";
+            String val = "${" + prop1 + "}:${" + prop2 + "}:${" + prop3 + "}:${" + prop4 + "}:${" + prop5 + "}";
+            System.setProperty(prop1, val1);
+            System.setProperty(prop2, val2);
+            System.setProperty(prop4, val4);
+            System.setProperty(prop5, val5);
+            try {
+                MavenArtifact artifact = new MavenArtifact();
+                // Emulate channel resolution, version expression is not resolved, should succeed.
+                Utils.resolveArtifact(val, artifact, true);
+                Assert.assertEquals(val1, artifact.getGroupId());
+                Assert.assertEquals(val2, artifact.getArtifactId());
+                Assert.assertNull(artifact.getVersion());
+                Assert.assertEquals(val4, artifact.getClassifier());
+                Assert.assertEquals(val5, artifact.getExtension());
+            } finally {
+                System.clearProperty(prop1);
+                System.clearProperty(prop2);
+                System.clearProperty(prop4);
+                System.clearProperty(prop5);
+            }
+        }
+
+        {
+            String prop1 = "org.wfgp.grpid";
+            String prop2 = "org.wfgp.artid";
+            String prop3 = "org.wfgp.version";
+            String prop4 = "org.wfgp.classifier";
+            String prop5 = "org.wfgp.ext";
+            String val1 = "org.foo.bar";
+            String val2 = "babar";
+            String val3 = "1.0.Final";
+            String val4 = "foo";
+            String val5 = "dd";
+            String val = "${" + prop1 + "}:${" + prop2 + "}:${" + prop3 + "}:${" + prop4 + "}:${" + prop5 + "}";
+            System.setProperty(prop2, val2);
+            System.setProperty(prop3, val3);
+            System.setProperty(prop4, val4);
+            System.setProperty(prop5, val5);
+            try {
+                try {
+                    MavenArtifact artifact = new MavenArtifact();
+                    // When channels are enabled, all expressions except version must be resolved.
+                    Utils.resolveArtifact(val, artifact, true);
+                    throw new Exception("Should have failed");
+                } catch (ProvisioningException ex) {
+                    // XXX OK expected
+                    Assert.assertEquals("Unresolved expression for " + val, ex.getMessage());
+                }
+            } finally {
+                System.clearProperty(prop2);
+                System.clearProperty(prop3);
+                System.clearProperty(prop4);
+                System.clearProperty(prop5);
+            }
+        }
+
     }
 }

@@ -65,13 +65,16 @@ abstract class AbstractModuleTemplateProcessor {
             }
             if (artifact == null) {
                 try {
-                    artifact = Utils.toArtifactCoords(versionProps, coordsStr, false);
+                    artifact = Utils.toArtifactCoords(versionProps, coordsStr, false, channelArtifactResolution);
                 } catch (ProvisioningException e) {
                     throw new IOException("Failed to resolve full coordinates for " + coordsStr, e);
                 }
                 plugin.log.verbose("Resolving %s", artifact);
                 try {
                     installer.getArtifactResolver().resolve(artifact);
+                    if (channelArtifactResolution) {
+                        plugin.log.verbose("Resolved %s", artifact);
+                    }
                 } catch (ProvisioningException e) {
                     throw new IOException("Failed to resolve artifact " + artifact, e);
                 }
@@ -104,13 +107,16 @@ abstract class AbstractModuleTemplateProcessor {
     private final WfInstallPlugin plugin;
     private final AbstractArtifactInstaller installer;
     private final Path targetDir;
+    private final boolean channelArtifactResolution;
 
-    AbstractModuleTemplateProcessor(WfInstallPlugin plugin, AbstractArtifactInstaller installer, Path targetPath, ModuleTemplate template, Map<String, String> versionProps) {
+    AbstractModuleTemplateProcessor(WfInstallPlugin plugin, AbstractArtifactInstaller installer, Path targetPath,
+            ModuleTemplate template, Map<String, String> versionProps, boolean channelArtifactResolution) {
         this.template = template;
         this.versionProps = versionProps;
         this.plugin = plugin;
         this.installer = installer;
         this.targetDir = targetPath.getParent();
+        this.channelArtifactResolution = channelArtifactResolution;
     }
 
     AbstractArtifactInstaller getInstaller() {
@@ -150,7 +156,7 @@ abstract class AbstractModuleTemplateProcessor {
                 } else {
                     artifactName = exprBody;
                 }
-                final MavenArtifact artifact = Utils.toArtifactCoords(versionProps, artifactName, false);
+                final MavenArtifact artifact = Utils.toArtifactCoords(versionProps, artifactName, false, channelArtifactResolution);
                 if (artifact != null) {
                     versionAttribute.setValue(artifact.getVersion());
                 }
