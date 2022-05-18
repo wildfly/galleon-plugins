@@ -51,6 +51,7 @@ import org.jboss.galleon.state.ProvisionedFeature;
 import org.jboss.galleon.util.CollectionUtils;
 import org.wildfly.galleon.plugin.WfConstants;
 import org.wildfly.galleon.plugin.WfInstallPlugin;
+import org.wildfly.galleon.plugin.server.ConfigGeneratorException;
 
 /**
  *
@@ -430,7 +431,11 @@ public class WfProvisionedConfigHandler implements ProvisionedConfigHandler, Aut
             paramFilter = getStandaloneParamFilter();
         } else if(WfConstants.DOMAIN.equals(config.getModel())) {
             configGen.startHc(getEmbeddedArgs(config));
-            configGen.handle(Operations.createAddOperation(Operations.createAddress("host", "tmp")));
+            try {
+                configGen.handle(Operations.createAddOperation(Operations.createAddress("host", "tmp")));
+            } catch (ConfigGeneratorException e) {
+                throw new ProvisioningException("Unsupported config model " + config.getModel());
+            }
             paramFilter = getDomainParamFilter();
         } else if (WfConstants.HOST.equals(config.getModel())) {
             configGen.startHc(getEmbeddedArgs(config));
@@ -512,7 +517,7 @@ public class WfProvisionedConfigHandler implements ProvisionedConfigHandler, Aut
         }
         try {
             configGen.startBatch();
-        } catch(ProvisioningException | RuntimeException | Error t) {
+        } catch(RuntimeException | Error t) {
             if(scriptWriter != null) {
                 closeScriptWriter();
             }
@@ -528,11 +533,13 @@ public class WfProvisionedConfigHandler implements ProvisionedConfigHandler, Aut
         }
         try {
             configGen.endBatch();
-        } catch(ProvisioningException | RuntimeException | Error t) {
+        } catch(ConfigGeneratorException | RuntimeException | Error t) {
             if(scriptWriter != null) {
                 closeScriptWriter();
             }
-            throw t;
+            if (t instanceof ConfigGeneratorException) {
+                throw new ProvisioningException(t);
+            }
         }
     }
 
@@ -541,7 +548,11 @@ public class WfProvisionedConfigHandler implements ProvisionedConfigHandler, Aut
         if(scriptWriter != null) {
             closeScriptWriter();
         }
-        configGen.stopEmbedded();
+        try {
+            configGen.stopEmbedded();
+        } catch (ConfigGeneratorException e) {
+            throw new ProvisioningException(e);
+        }
     }
 
     @Override
@@ -597,9 +608,6 @@ public class WfProvisionedConfigHandler implements ProvisionedConfigHandler, Aut
         } catch (Throwable t) {
             if (scriptWriter != null) {
                 closeScriptWriter();
-            }
-            if (t instanceof ProvisioningException) {
-                throw t;
             }
             throw new ProvisioningException("Failed to execute operation " + op, t);
         }
