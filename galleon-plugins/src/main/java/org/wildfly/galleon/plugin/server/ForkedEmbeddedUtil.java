@@ -30,11 +30,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
-import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -51,15 +48,6 @@ import org.jboss.galleon.util.IoUtils;
 public class ForkedEmbeddedUtil {
 
     public static final String FORKED_EMBEDDED_ERROR_START = "Forked embedded process has failed with the following error:";
-
-    public interface ForkCallback {
-
-        void forkedForEmbedded(String... args) throws ProvisioningException;
-
-        default void forkedEmbeddedMessage(String msg) {}
-
-        default void forkedEmbeddedDone(String... args) throws ProvisioningException {}
-    }
 
     private static int javaVersion = -1;
     private static String javaHome;
@@ -95,6 +83,8 @@ public class ForkedEmbeddedUtil {
         try {
             fork(callback, props, args);
             callback.forkedEmbeddedDone(args);
+        } catch (ConfigGeneratorException e) {
+            throw new ProvisioningException(e);
         } finally {
             IoUtils.recursiveDelete(props);
         }
@@ -113,7 +103,7 @@ public class ForkedEmbeddedUtil {
         }
         argsList.add("-cp");
         argsList.add(cp.toString());
-        argsList.add(ForkedEmbeddedUtil.class.getName());
+        argsList.add(ForkedProcessRunner.class.getName());
         argsList.add(props.toString());
         argsList.add(callback.getClass().getName());
         for(String arg : args) {
@@ -181,74 +171,9 @@ public class ForkedEmbeddedUtil {
         return props;
     }
 
-    public static void main(String... args) {
-        try{
-            if(args.length < 2) {
-                throw new IllegalStateException("Expected at least two arguments but got " + Arrays.asList(args));
-            }
 
-            // set system properties
-            setSystemProps(args[0]);
 
-            Class<?> cls;
-            try {
-                cls = Thread.currentThread().getContextClassLoader().loadClass(args[1]);
-            } catch (ClassNotFoundException e) {
-                throw new ProvisioningException("Failed to locate the target class " + args[1], e);
-            }
-        /*if(!ForkCallback.class.isAssignableFrom(cls)) {
-            throw new ProvisioningException(args[1] + " does not implement " + ForkCallback.class.getName());
-        }*/
 
-            Object o;
-            try {
-                o = cls.newInstance();
-            } catch (Exception e) {
-                throw new ProvisioningException("Failed to instantiate " + args[1], e);
-            }
-            ((ForkCallback)o).forkedForEmbedded(args.length == 2 ? new String[0] : Arrays.copyOfRange(args, 2, args.length));
-
-        } catch (Throwable t) {
-            System.err.println(FORKED_EMBEDDED_ERROR_START);
-            final StringBuilder buf = new StringBuilder();
-            while(t != null) {
-                buf.setLength(0);
-                buf.append(t.getClass().getName());
-                if(t.getMessage() != null) {
-                    buf.append(": ").append(t.getMessage());
-                }
-                System.err.println(buf.toString());
-                for(StackTraceElement e : t.getStackTrace()) {
-                    buf.setLength(0);
-                    buf.append("\tat ").append(e.toString());
-                    System.err.println(buf.toString());
-                }
-                t = t.getCause();
-            }
-            System.exit(1);
-        }
-    }
-
-    private static void setSystemProps(String path) throws ProvisioningException {
-        final Path props = Paths.get(path);
-        if(!Files.exists(props)) {
-            throw new ProvisioningException(Errors.pathDoesNotExist(props));
-        }
-        final Properties tmp = new Properties();
-        try(BufferedReader reader = Files.newBufferedReader(props)) {
-            tmp.load(reader);
-        } catch (IOException e) {
-            throw new ProvisioningException(Errors.readFile(props));
-        }
-        for(Map.Entry<?, ?> prop : tmp.entrySet()) {
-            final String current = System.getProperty(prop.getKey().toString());
-            if(current != null) {
-                // do not override the default properties
-                continue;
-            }
-            System.setProperty(prop.getKey().toString(), prop.getValue().toString());
-        }
-    }
 
     private static void collectCpUrls(String javaHome, ClassLoader cl, StringBuilder buf) throws ProvisioningException {
         final ClassLoader parentCl = cl.getParent();

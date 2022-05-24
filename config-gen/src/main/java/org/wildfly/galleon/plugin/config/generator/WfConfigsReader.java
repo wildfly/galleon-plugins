@@ -66,6 +66,7 @@ import org.jboss.galleon.xml.ProvisionedFeatureBuilder;
 import org.jboss.galleon.xml.ProvisioningXmlParser;
 import org.jboss.galleon.xml.ProvisioningXmlWriter;
 import org.wildfly.galleon.plugin.WfConstants;
+import org.wildfly.galleon.plugin.server.ConfigGeneratorException;
 
 /**
  *
@@ -322,28 +323,35 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
     }
 
     @Override
-    public void forkedForEmbedded(String... args) throws ProvisioningException {
+    public void forkedForEmbedded(String... args) throws ConfigGeneratorException {
         int i = args.length;
         final String provisioningXml = args[--i];
-        final ProvisioningConfig provisioningConfig = ProvisioningXmlParser.parse(Paths.get(provisioningXml));
-        layout = ProvisioningLayoutFactory.getInstance(null).newConfigLayout(provisioningConfig, new FeaturePackLayoutFactory<FeaturePackRuntimeBuilder>() {
-            @Override
-            public FeaturePackRuntimeBuilder newFeaturePack(FeaturePackLocation fpl, FeaturePackSpec spec, Path dir, int type)
-                    throws ProvisioningException {
-                return new FeaturePackRuntimeBuilder(fpl.getFPID(), null, dir, type);
-            }}, false);
-        super.forkedForEmbedded(args);
-        --i;
-        if(!addedConfigs.isEmpty()) {
-            persistConfigs(args[i], ADDED, addedConfigs);
-        }
-        if(!updatedConfigs.isEmpty()) {
-            persistConfigs(args[i], UPDATED, updatedConfigs);
+        try {
+            final ProvisioningConfig provisioningConfig = ProvisioningXmlParser.parse(Paths.get(provisioningXml));
+            layout = ProvisioningLayoutFactory.getInstance(null).newConfigLayout(provisioningConfig, new FeaturePackLayoutFactory<FeaturePackRuntimeBuilder>() {
+                @Override
+                public FeaturePackRuntimeBuilder newFeaturePack(FeaturePackLocation fpl,
+                                                                FeaturePackSpec spec,
+                                                                Path dir,
+                                                                int type) throws ProvisioningException {
+                    return new FeaturePackRuntimeBuilder(fpl.getFPID(), null, dir, type);
+                }
+            }, false);
+            super.forkedForEmbedded(args);
+            --i;
+            if (!addedConfigs.isEmpty()) {
+                persistConfigs(args[i], ADDED, addedConfigs);
+            }
+            if (!updatedConfigs.isEmpty()) {
+                persistConfigs(args[i], UPDATED, updatedConfigs);
+            }
+        } catch (ProvisioningException e) {
+            throw new ConfigGeneratorException(e);
         }
     }
 
     @Override
-    public void forkedEmbeddedDone(String... args) throws ProvisioningException {
+    public void forkedEmbeddedDone(String... args) throws ConfigGeneratorException {
         final Path configsDir = Paths.get(args[args.length - 3]);
         if(!Files.exists(configsDir)) {
             return;
@@ -354,8 +362,8 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
                 for(Path xml : stream) {
                     addedConfigs = CollectionUtils.add(addedConfigs, ProvisionedConfigXmlParser.parse(xml));
                 }
-            } catch (IOException e) {
-                throw new ProvisioningException(Errors.readDirectory(p), e);
+            } catch (IOException | ProvisioningException e) {
+                throw new ConfigGeneratorException(Errors.readDirectory(p), e);
             }
         }
         p = configsDir.resolve(UPDATED);
@@ -364,8 +372,8 @@ public class WfConfigsReader extends WfEmbeddedTaskBase<List<ProvisionedConfig>>
                 for(Path xml : stream) {
                     updatedConfigs = CollectionUtils.add(updatedConfigs, ProvisionedConfigXmlParser.parse(xml));
                 }
-            } catch (IOException e) {
-                throw new ProvisioningException(Errors.readDirectory(p), e);
+            } catch (IOException | ProvisioningException e) {
+                throw new ConfigGeneratorException(Errors.readDirectory(p), e);
             }
         }
     }

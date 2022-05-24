@@ -45,14 +45,15 @@ import org.wildfly.core.embedded.EmbeddedManagedProcess;
 import org.wildfly.core.embedded.EmbeddedProcessFactory;
 import org.wildfly.core.embedded.EmbeddedProcessStartException;
 import org.wildfly.galleon.plugin.WfConstants;
+import org.wildfly.galleon.plugin.server.ForkCallback;
 import org.wildfly.galleon.plugin.server.ForkedEmbeddedUtil;
-
+import org.wildfly.galleon.plugin.server.ConfigGeneratorException;
 
 /**
  *
  * @author Alexey Loubyansky
  */
-public abstract class WfEmbeddedTaskBase<R> implements ForkedEmbeddedUtil.ForkCallback {
+public abstract class WfEmbeddedTaskBase<R> implements ForkCallback {
 
     private static final byte INITIAL = 0;
     private static final byte START_STANDALONE = 1;
@@ -447,19 +448,19 @@ public abstract class WfEmbeddedTaskBase<R> implements ForkedEmbeddedUtil.ForkCa
     }
 
     @Override
-    public void forkedForEmbedded(String... args) throws ProvisioningException {
+    public void forkedForEmbedded(String... args) throws ConfigGeneratorException {
         if(args.length < 2) {
             throw new IllegalArgumentException("Expected at least two arguments but received " + Arrays.asList(args));
         }
         this.jbossHome = args[0];
         final Path script = Paths.get(args[1]);
         if(!Files.exists(script)) {
-            throw new ProvisioningException(Errors.pathDoesNotExist(script));
+            throw new ConfigGeneratorException(Errors.pathDoesNotExist(script));
         }
         try {
             executeScript(script);
-        } catch(IOException e) {
-            throw new ProvisioningException("Failed to execute configuration script", e);
+        } catch(Exception e) {
+            throw new ConfigGeneratorException("Failed to execute configuration script", e);
         }
     }
 

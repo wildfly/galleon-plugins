@@ -47,13 +47,15 @@ import org.wildfly.core.embedded.EmbeddedManagedProcess;
 import org.wildfly.core.embedded.EmbeddedProcessFactory;
 import org.wildfly.core.embedded.EmbeddedProcessStartException;
 import org.wildfly.galleon.plugin.WfConstants;
+import org.wildfly.galleon.plugin.server.ForkCallback;
 import org.wildfly.galleon.plugin.server.ForkedEmbeddedUtil;
+import org.wildfly.galleon.plugin.server.ConfigGeneratorException;
 
 /**
  *
  * @author Alexey Loubyansky
  */
-public class FeatureSpecGenerator implements ForkedEmbeddedUtil.ForkCallback {
+public class FeatureSpecGenerator implements ForkCallback {
 
     private Map<String, FeatureSpecNode> nodesBySpecName = new HashMap<>();
     private Map<String, Map<String, FeatureSpecNode>> referencedSpecs = new HashMap<>();
@@ -223,17 +225,21 @@ public class FeatureSpecGenerator implements ForkedEmbeddedUtil.ForkCallback {
     }
 
     @Override
-    public void forkedForEmbedded(String... args) throws ProvisioningException {
+    public void forkedForEmbedded(String... args) throws ConfigGeneratorException {
         if(args.length != 3) {
             final StringBuilder buf = new StringBuilder();
             StringUtils.append(buf, Arrays.asList(args));
             throw new IllegalArgumentException("Expected 3 arguments but got " + Arrays.asList(args));
         }
-        ModelNode result = readFeatureSpecs(createStandaloneServer(args[0]));
-        writeSpecsFile(Paths.get(args[1]), result);
-        if(Files.exists(Paths.get(args[0]).resolve(WfConstants.DOMAIN).resolve(WfConstants.CONFIGURATION))) {
-            result = readFeatureSpecs(createEmbeddedHc(args[0]));
-            writeSpecsFile(Paths.get(args[2]), result);
+        try {
+            ModelNode result = readFeatureSpecs(createStandaloneServer(args[0]));
+            writeSpecsFile(Paths.get(args[1]), result);
+            if (Files.exists(Paths.get(args[0]).resolve(WfConstants.DOMAIN).resolve(WfConstants.CONFIGURATION))) {
+                result = readFeatureSpecs(createEmbeddedHc(args[0]));
+                writeSpecsFile(Paths.get(args[2]), result);
+            }
+        } catch (ProvisioningException e) {
+            throw new ConfigGeneratorException(e);
         }
     }
 
