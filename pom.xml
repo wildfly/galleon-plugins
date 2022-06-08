@@ -79,7 +79,7 @@
     <version.org.jboss.galleon>5.0.1.Final</version.org.jboss.galleon>
     <version.org.jboss.dmr>1.5.0.Final</version.org.jboss.dmr>
     <version.org.jboss.jandex>2.0.3.Final</version.org.jboss.jandex>
-    <version.org.wildfly.channel>1.0.0.Alpha15</version.org.wildfly.channel>
+    <version.org.wildfly.channel>1.0.0.Alpha16</version.org.wildfly.channel>
     <version.org.wildfly.core.wildfly-core>19.0.0.Beta8</version.org.wildfly.core.wildfly-core>
     <version.org.wildfly.maven.plugins>2.0.0.Final</version.org.wildfly.maven.plugins>
     <version.org.jboss.logging>3.3.1.Final</version.org.jboss.logging>
