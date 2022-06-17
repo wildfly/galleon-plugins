@@ -460,7 +460,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
      * Create a YAML Channel that defines streams for all the feature-pack dependencies.
      * The feature-pack itself is added to the channel's streams.
      */
-    private String createYAMLChannel(WildFlyFeaturePackBuild buildConfig) throws IOException {
+    String createYAMLChannel(WildFlyFeaturePackBuild buildConfig) throws IOException {
         ArrayList<ChannelRequirement> channelRequirements = new ArrayList<>();
         if (addFeaturePacksAsRequiredChannels && !buildConfig.getDependencies().isEmpty()) {
             for (ArtifactCoords.Gav gav : new TreeSet<>(buildConfig.getDependencies().keySet())) {
