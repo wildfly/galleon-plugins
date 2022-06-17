@@ -161,10 +161,19 @@ public class JakartaTransformation {
     private boolean isExcludedFromTransformation(Artifact artifact) throws MojoExecutionException {
         if (excludedArtifactPattern != null) {
             try {
-                Matcher matchArtifact = excludedArtifactPattern.matcher(artifact.getGroupId() + ":" + artifact.getArtifactId());
-                if (matchArtifact.find()) {
-                    log.info("EE9: excluded " + artifact.getGroupId() + ":" + artifact.getArtifactId());
+                String artifactCoordinates = artifact.getGroupId() + ":" + artifact.getArtifactId();
+                Matcher matchGaArtifact = excludedArtifactPattern.matcher(artifactCoordinates);
+                if (matchGaArtifact.find()) {
+                    log.info("EE9: excluded " + artifactCoordinates);
                     return true;
+                }
+                if (artifact.getClassifier() != null && !artifact.getClassifier().isEmpty()) {
+                    artifactCoordinates = artifactCoordinates + ":" + artifact.getClassifier();
+                    Matcher matchGacArtifact = excludedArtifactPattern.matcher(artifactCoordinates);
+                    if (matchGacArtifact.find()) {
+                        log.info("EE9: excluded " + artifactCoordinates);
+                        return true;
+                    }
                 }
             } catch (PatternSyntaxException e) {
                 throw new MojoExecutionException("Invalid exclusion pattern: " + e.getMessage(), e);

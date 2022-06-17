@@ -192,14 +192,15 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
 
     /**
      * A list of regular expression filters to exclude a list of
-     * GroupId:ArtifactId from jakarta transformation. For example, to exclude
-     * wildfly-ee and smallrye-config artifacts:
+     * GroupId:ArtifactId[:Classifier] from jakarta transformation. For example, to exclude
+     * wildfly-ee, smallrye-config and wildfly-cli:client artifacts:
      * <br/>
      * <pre>
      * {@code
      * <jakarta-transform-excluded-artifacts>
      *   <exclude>org.wildfly:wildfly-ee\z</exclude>
      *   <exclude>io.smallrye.config:smallrye-config\z</exclude>
+     *   <exclude>org.wildfly.core:wildfly-cli:client\z</exclude>
      * </jakarta-transform-excluded-artifacts>
      * }
      * </pre>
