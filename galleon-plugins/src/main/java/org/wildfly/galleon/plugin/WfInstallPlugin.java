@@ -63,7 +63,7 @@ import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.stream.StreamSource;
 
-
+import nu.xom.Elements;
 import org.jboss.galleon.Errors;
 import org.jboss.galleon.MessageWriter;
 import org.jboss.galleon.ProvisioningException;
@@ -84,6 +84,7 @@ import org.jboss.galleon.runtime.ProvisioningRuntime;
 import org.jboss.galleon.universe.FeaturePackLocation.FPID;
 import org.jboss.galleon.universe.FeaturePackLocation.ProducerSpec;
 import org.jboss.galleon.universe.maven.MavenArtifact;
+import org.jboss.galleon.universe.maven.MavenUniverseException;
 import org.jboss.galleon.universe.maven.repo.MavenRepoManager;
 import org.jboss.galleon.util.IoUtils;
 import org.jboss.galleon.util.CollectionUtils;
@@ -147,6 +148,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             .setBooleanValueSet()
             .build();
     private static final ProvisioningOption OPTION_OVERRIDDEN_ARTIFACTS = ProvisioningOption.builder("jboss-overridden-artifacts").setPersistent(true).build();
+    private static final ProvisioningOption OPTION_BULK_RESOLVE_ARTIFACTS = ProvisioningOption.builder("jboss-bulk-resolve-artifacts").setBooleanValueSet().build();
     private ProvisioningRuntime runtime;
     MessageWriter log;
 
@@ -188,11 +190,17 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private ArtifactResolver artifactResolver;
     private boolean channelArtifactResolution;
 
+    private boolean bulkResolveArtifacts;
+
+    private final Map<MavenArtifact, MavenArtifact> artifactCache = new HashMap<>();
+    private final Map<Path, ModuleTemplate> moduleTemplateCache = new HashMap<>();
+
     @Override
     protected List<ProvisioningOption> initPluginOptions() {
         return Arrays.asList(OPTION_MVN_DIST, OPTION_DUMP_CONFIG_SCRIPTS,
-                OPTION_FORK_EMBEDDED, OPTION_MVN_REPO, OPTION_JAKARTA_TRANSFORM_ARTIFACTS,
-                OPTION_MVN_PROVISIONING_REPO, OPTION_JAKARTA_TRANSFORM_ARTIFACTS_VERBOSE, OPTION_OVERRIDDEN_ARTIFACTS);
+                             OPTION_FORK_EMBEDDED, OPTION_MVN_REPO, OPTION_JAKARTA_TRANSFORM_ARTIFACTS,
+                             OPTION_MVN_PROVISIONING_REPO, OPTION_JAKARTA_TRANSFORM_ARTIFACTS_VERBOSE,
+                             OPTION_OVERRIDDEN_ARTIFACTS, OPTION_BULK_RESOLVE_ARTIFACTS);
     }
 
     public ProvisioningRuntime getRuntime() {
@@ -200,11 +208,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     }
 
     private boolean isThinServer() throws ProvisioningException {
-        if(!runtime.isOptionSet(OPTION_MVN_DIST)) {
-            return false;
-        }
-        final String value = runtime.getOptionValue(OPTION_MVN_DIST);
-        return value == null ? true : Boolean.parseBoolean(value);
+        return getBooleanOption(OPTION_MVN_DIST);
     }
 
     private Path getGeneratedMavenRepo() throws ProvisioningException {
@@ -243,10 +247,22 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     }
 
     private boolean isVerboseTransformation() throws ProvisioningException {
-        if (!runtime.isOptionSet(OPTION_JAKARTA_TRANSFORM_ARTIFACTS_VERBOSE)) {
+        return getBooleanOption(OPTION_JAKARTA_TRANSFORM_ARTIFACTS_VERBOSE);
+    }
+
+    private boolean isBulkResolveArtifacts() throws ProvisioningException {
+        return getBooleanOption(OPTION_BULK_RESOLVE_ARTIFACTS);
+    }
+
+    private boolean isForkEmbedded(ProvisioningRuntime runtime) throws ProvisioningException {
+        return getBooleanOption(OPTION_FORK_EMBEDDED);
+    }
+
+    private boolean getBooleanOption(ProvisioningOption option) throws ProvisioningException {
+        if (!runtime.isOptionSet(option)) {
             return false;
         }
-        final String value = runtime.getOptionValue(OPTION_JAKARTA_TRANSFORM_ARTIFACTS_VERBOSE);
+        final String value = runtime.getOptionValue(option);
         return value == null ? true : Boolean.parseBoolean(value);
     }
 
@@ -273,6 +289,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         this.runtime = runtime;
         log = runtime.getMessageWriter();
         log.verbose("WildFly Galleon Installation Plugin");
+
+        this.bulkResolveArtifacts = isBulkResolveArtifacts();
 
         thinServer = isThinServer();
         generatedMavenRepo = getGeneratedMavenRepo();
@@ -425,6 +443,14 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             }
             final ProgressTracker<PackageRuntime> modulesTracker = layoutFactory.getProgressTracker("JBMODULES");
             modulesTracker.starting(jbossModules.size());
+
+            if (bulkResolveArtifacts) {
+                log.verbose("Preloading artifacts");
+                populateArtifactCache();
+                resolveArtifactsInCache();
+                log.verbose("Finished preloading artifacts");
+            }
+
             for (Map.Entry<Path, PackageRuntime> entry : jbossModules.entrySet()) {
                 final PackageRuntime pkg = entry.getValue();
                 modulesTracker.processing(pkg);
@@ -540,6 +566,59 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
         if (startTime > 0) {
             log.print(Errors.tookTime("Overall WildFly Galleon Plugin", startTime));
+        }
+    }
+
+    private void populateArtifactCache() throws ProvisioningException {
+        for (Entry<Path, PackageRuntime> entry : jbossModules.entrySet()) {
+            final PackageRuntime pkg = entry.getValue();
+            try {
+                findArtifacts(pkg, entry.getKey());
+            } catch (IOException e) {
+                throw new ProvisioningException("Failed to process JBoss module XML template for feature-pack "
+                                                   + pkg.getFeaturePackRuntime().getFPID() + " package " + pkg.getName(), e);
+            }
+        }
+    }
+
+    private void findArtifacts(PackageRuntime pkg, Path moduleXmlRelativePath) throws ProvisioningException, IOException {
+        final Path moduleTemplateFile = pkg.getResource(WfConstants.PM, WfConstants.WILDFLY, WfConstants.MODULE).resolve(moduleXmlRelativePath);
+        final Path targetPath = runtime.getStagedDir().resolve(moduleXmlRelativePath.toString());
+        final Map<String, String> versionProps = fpArtifactVersions.get(pkg.getFeaturePackRuntime().getFPID().getProducer());
+        ModuleTemplate moduleTemplate = new ModuleTemplate(pkg, moduleTemplateFile, targetPath);
+        moduleTemplateCache.put(moduleTemplateFile, moduleTemplate);
+        if (!moduleTemplate.isModule()) {
+            return;
+        }
+
+        final Elements artifacts = moduleTemplate.getArtifacts();
+        if (artifacts == null) {
+            return;
+        }
+
+        final int artifactCount = artifacts.size();
+        for (int i = 0; i < artifactCount; i++) {
+            final AbstractModuleTemplateProcessor.ModuleArtifact moduleArtifact = new AbstractModuleTemplateProcessor.ModuleArtifact(artifacts.get(i), versionProps, log, artifactInstaller, channelArtifactResolution);
+            final MavenArtifact mavenArtifact = moduleArtifact.getUnresolvedArtifact();
+            if (mavenArtifact != null) {
+                final MavenArtifact key = new MavenArtifact();
+                key.setGroupId(mavenArtifact.getGroupId());
+                key.setArtifactId(mavenArtifact.getArtifactId());
+                key.setExtension(mavenArtifact.getExtension());
+                key.setClassifier(mavenArtifact.getClassifier());
+                key.setVersion(mavenArtifact.getVersion());
+                key.setVersionRange(mavenArtifact.getVersionRange());
+
+                artifactCache.put(key, mavenArtifact);
+            }
+        }
+    }
+
+    private void resolveArtifactsInCache() throws ProvisioningException {
+        try {
+            maven.resolveAll(artifactCache.values());
+        } catch (MavenUniverseException e) {
+            throw new ProvisioningException("Failed to resolve artifact", e);
         }
     }
 
@@ -723,11 +802,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             final Constructor<?> ctor = configHandlerCls.getConstructor();
             final Method m = configHandlerCls.getMethod(CONFIG_GEN_METHOD, ProvisioningRuntime.class, boolean.class);
             final Object generator = ctor.newInstance();
-            boolean forkEmbedded = false;
-            if(runtime.isOptionSet(OPTION_FORK_EMBEDDED)) {
-                final String value = runtime.getOptionValue(OPTION_FORK_EMBEDDED);
-                forkEmbedded = value == null ? true : Boolean.parseBoolean(value);
-            }
+            boolean forkEmbedded = isForkEmbedded(runtime);
             m.invoke(generator, runtime, forkEmbedded);
             if(startTime > 0) {
                 log.print(Errors.tookTime("WildFly configuration generation", startTime));
@@ -901,7 +976,14 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private void processModuleTemplate(PackageRuntime pkg, Path moduleXmlRelativePath) throws ProvisioningException, IOException {
         final Path moduleTemplateFile = pkg.getResource(WfConstants.PM, WfConstants.WILDFLY, WfConstants.MODULE).resolve(moduleXmlRelativePath);
         final Path targetPath = runtime.getStagedDir().resolve(moduleXmlRelativePath.toString());
-        ModuleTemplate moduleTemplate = new ModuleTemplate(pkg, moduleTemplateFile, targetPath);
+
+        final ModuleTemplate moduleTemplate;
+        if (moduleTemplateCache.containsKey(moduleTemplateFile)) {
+            moduleTemplate = moduleTemplateCache.get(moduleTemplateFile);
+        } else {
+            moduleTemplate = new ModuleTemplate(pkg, moduleTemplateFile, targetPath);
+        }
+
         if (!moduleTemplate.isModule()) {
             Files.copy(moduleTemplateFile, targetPath, StandardCopyOption.REPLACE_EXISTING);
             return;
@@ -1146,7 +1228,13 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     }
 
     void resolveMaven(MavenArtifact artifact) throws ProvisioningException {
-        maven.resolve(artifact);
+        if (bulkResolveArtifacts && artifactCache.containsKey(artifact)) {
+            final MavenArtifact resolvedArtifact = artifactCache.get(artifact);
+            artifact.setVersion(resolvedArtifact.getVersion());
+            artifact.setPath(resolvedArtifact.getPath());
+        } else {
+            maven.resolve(artifact);
+        }
     }
 
     void resolveMaven(MavenArtifact artifact, String suffix) throws ProvisioningException {
