@@ -52,6 +52,7 @@ public class WildFlyFeaturePackBuild {
         private List<String> standaloneExtensions = Collections.emptyList();
         private List<String> domainExtensions = Collections.emptyList();
         private List<String> hostExtensions = Collections.emptyList();
+        private Set<String> systemPaths = Collections.emptySet();
 
         private Builder() {
         }
@@ -111,6 +112,11 @@ public class WildFlyFeaturePackBuild {
             return this;
         }
 
+        public Builder addSystemPath(String systemPath) {
+            systemPaths = CollectionUtils.add(systemPaths, systemPath);
+            return this;
+        }
+
         public WildFlyFeaturePackBuild build() {
             return new WildFlyFeaturePackBuild(this);
         }
@@ -135,6 +141,7 @@ public class WildFlyFeaturePackBuild {
     private final List<String> standaloneExtensions;
     private final List<String> domainExtensions;
     private final List<String> hostExtensions;
+    private final Set<String> systemPaths;
 
     private WildFlyFeaturePackBuild(Builder builder) {
         this.producer = builder.producer;
@@ -148,6 +155,7 @@ public class WildFlyFeaturePackBuild {
         this.standaloneExtensions = CollectionUtils.unmodifiable(builder.standaloneExtensions);
         this.domainExtensions = CollectionUtils.unmodifiable(builder.domainExtensions);
         this.hostExtensions = CollectionUtils.unmodifiable(builder.hostExtensions);
+        this.systemPaths = CollectionUtils.unmodifiable(builder.systemPaths);
     }
 
     public FeaturePackLocation getProducer() {
@@ -224,5 +232,13 @@ public class WildFlyFeaturePackBuild {
 
     public List<String> getHostExtensions() {
         return hostExtensions;
+    }
+
+    public boolean hasSystemPaths() {
+        return !systemPaths.isEmpty();
+    }
+
+    public Set<String> getSystemPaths() {
+        return systemPaths;
     }
 }

@@ -188,6 +188,10 @@ public class WfFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
         // feature-pack builder
         final FeaturePackDescription.Builder fpBuilder = FeaturePackDescription.builder(FeaturePackSpec.builder(fpl.getFPID()));
 
+        for (String path: buildConfig.getSystemPaths()) {
+            fpBuilder.getSpecBuilder().addSystemPaths(path);
+        }
+
         for(String defaultPackage : buildConfig.getDefaultPackages()) {
             fpBuilder.getSpecBuilder().addDefaultPackage(defaultPackage);
         }
