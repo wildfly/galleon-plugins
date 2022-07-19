@@ -789,7 +789,8 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                 throw new IOException(Errors.parseXml(targetXml), e);
             }
 
-            final PackageSpec pkgSpec = pkgSpecBuilder.build();
+            final PackageSpec pkgSpec = pkgSpecBuilder
+               .build();
             try {
                 PackageXmlWriter.getInstance().write(pkgSpec, packageDir.resolve(Constants.PACKAGE_XML));
             } catch (XMLStreamException e) {
