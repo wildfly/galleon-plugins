@@ -34,9 +34,11 @@ import org.wildfly.galleon.plugin.WildFlyPackageTasks;
 public class WildFlyPackageTasksParser {
     public static final String NAMESPACE_2_0 = "urn:wildfly:wildfly-feature-pack-tasks:2.0";
     public static final String NAMESPACE_3_0 = "urn:wildfly:wildfly-feature-pack-tasks:3.0";
+    public static final String NAMESPACE_3_1 = "urn:wildfly:wildfly-feature-pack-tasks:3.1";
 
     private static final QName ROOT_2_0 = new QName(NAMESPACE_2_0, WildFlyPackageTasksParser20.Element.TASKS.getLocalName());
     private static final QName ROOT_3_0 = new QName(NAMESPACE_3_0, WildFlyPackageTasksParser30.Element.TASKS.getLocalName());
+    private static final QName ROOT_3_1 = new QName(NAMESPACE_3_1, WildFlyPackageTasksParser31.Element.TASKS.getLocalName());
 
     private static final XMLInputFactory INPUT_FACTORY = XMLInputFactory.newInstance();
 
@@ -44,6 +46,7 @@ public class WildFlyPackageTasksParser {
 
     public WildFlyPackageTasksParser() {
         mapper = XMLMapper.Factory.create();
+        mapper.registerRootElement(ROOT_3_1, new WildFlyPackageTasksParser31());
         mapper.registerRootElement(ROOT_3_0, new WildFlyPackageTasksParser30());
         mapper.registerRootElement(ROOT_2_0, new WildFlyPackageTasksParser20());
     }

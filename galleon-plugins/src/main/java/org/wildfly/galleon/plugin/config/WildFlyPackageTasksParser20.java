@@ -18,11 +18,13 @@ package org.wildfly.galleon.plugin.config;
 
 import org.jboss.galleon.ProvisioningDescriptionException;
 import org.jboss.galleon.config.ConfigModel;
+import org.jboss.galleon.util.CollectionUtils;
 import org.jboss.galleon.util.ParsingUtils;
 import org.jboss.galleon.xml.ConfigXml;
 import org.jboss.galleon.xml.XmlNameProvider;
 import org.jboss.staxmapper.XMLElementReader;
 import org.jboss.staxmapper.XMLExtendedStreamReader;
+import org.wildfly.galleon.plugin.WildFlyPackageTask;
 import org.wildfly.galleon.plugin.WildFlyPackageTasks;
 
 import javax.xml.namespace.QName;
@@ -35,6 +37,7 @@ import static org.wildfly.galleon.plugin.config.WildFlyPackageTasksParser.NAMESP
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -344,19 +347,23 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
     }
 
     private void parseLineEndings(final XMLStreamReader reader, final WildFlyPackageTasks.Builder builder) throws XMLStreamException {
+        List<FileFilter> unixLineEndFilters = Collections.emptyList();
+        List<FileFilter> windowsLineEndFilters = Collections.emptyList();
         while (reader.hasNext()) {
             switch (reader.nextTag()) {
                 case XMLStreamConstants.END_ELEMENT: {
+                    final LineEndingsTask lineEndingsTask = new LineEndingsTask(unixLineEndFilters, windowsLineEndFilters, WildFlyPackageTask.Phase.PROCESSING);
+                    builder.addLineEndings(lineEndingsTask);
                     return;
                 }
                 case XMLStreamConstants.START_ELEMENT: {
                     final Element element = Element.of(reader.getName());
                     switch (element) {
                         case WINDOWS:
-                            parseLineEnding(reader, builder, true);
+                            windowsLineEndFilters = CollectionUtils.addAll(windowsLineEndFilters, parseLineEnding(reader));
                             break;
                         case UNIX:
-                            parseLineEnding(reader, builder, false);
+                            unixLineEndFilters = CollectionUtils.addAll(windowsLineEndFilters, parseLineEnding(reader));
                             break;
                         default:
                             throw ParsingUtils.unexpectedContent(reader);
@@ -371,25 +378,23 @@ class WildFlyPackageTasksParser20 implements XMLElementReader<WildFlyPackageTask
         throw ParsingUtils.endOfDocument(reader.getLocation());
     }
 
-    private void parseLineEnding(XMLStreamReader reader, final WildFlyPackageTasks.Builder builder, boolean windows) throws XMLStreamException {
+    private List<FileFilter> parseLineEnding(XMLStreamReader reader) throws XMLStreamException {
         if(reader.getAttributeCount() != 0) {
             throw ParsingUtils.unexpectedContent(reader);
         }
 
+        List<FileFilter> filters = Collections.emptyList();
         while (reader.hasNext()) {
             switch (reader.nextTag()) {
                 case XMLStreamConstants.END_ELEMENT: {
-                    return;
+                    return filters;
                 }
                 case XMLStreamConstants.START_ELEMENT: {
                     final Element element = Element.of(reader.getName());
+                    final FileFilter filter = parseFilter(reader);
                     switch (element) {
                         case FILTER:
-                            if(windows) {
-                                builder.addWindowsLineEndFilter(parseFilter(reader));
-                            } else {
-                                builder.addUnixLineEndFilter(parseFilter(reader));
-                            }
+                            filters = CollectionUtils.add(filters, filter);
                             break;
                         default:
                             throw ParsingUtils.unexpectedContent(reader);
