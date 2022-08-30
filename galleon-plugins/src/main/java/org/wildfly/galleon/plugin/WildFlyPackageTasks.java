@@ -27,7 +27,7 @@ import javax.xml.stream.XMLStreamException;
 import org.jboss.galleon.Errors;
 import org.jboss.galleon.ProvisioningException;
 import org.jboss.galleon.util.CollectionUtils;
-import org.wildfly.galleon.plugin.config.FileFilter;
+import org.wildfly.galleon.plugin.config.LineEndingsTask;
 import org.wildfly.galleon.plugin.config.WildFlyPackageTasksParser;
 
 
@@ -40,8 +40,7 @@ public class WildFlyPackageTasks {
     public static class Builder {
 
         private List<String> mkDirs = Collections.emptyList();
-        private List<FileFilter> windowsLineEndFilters = Collections.emptyList();
-        private List<FileFilter> unixLineEndFilters = Collections.emptyList();
+        private List<LineEndingsTask> lineEndings = Collections.emptyList();
 
         private List<WildFlyPackageTask> tasks = Collections.emptyList();
 
@@ -58,13 +57,8 @@ public class WildFlyPackageTasks {
             return this;
         }
 
-        public Builder addWindowsLineEndFilter(FileFilter filter) {
-            windowsLineEndFilters = CollectionUtils.add(windowsLineEndFilters, filter);
-            return this;
-        }
-
-        public Builder addUnixLineEndFilter(FileFilter filter) {
-            unixLineEndFilters = CollectionUtils.add(unixLineEndFilters, filter);
+        public Builder addLineEndings(LineEndingsTask lineEndingsTask) {
+            lineEndings = CollectionUtils.add(lineEndings, lineEndingsTask);
             return this;
         }
 
@@ -88,14 +82,12 @@ public class WildFlyPackageTasks {
     }
 
     private final List<String> mkDirs;
-    private final List<FileFilter> windowsLineEndFilters;
-    private final List<FileFilter> unixLineEndFilters;
+    private final List<LineEndingsTask> lineEndings;
     private final List<WildFlyPackageTask> tasks;
 
     private WildFlyPackageTasks(Builder builder) {
         this.mkDirs = CollectionUtils.unmodifiable(builder.mkDirs);
-        this.windowsLineEndFilters = CollectionUtils.unmodifiable(builder.windowsLineEndFilters);
-        this.unixLineEndFilters = CollectionUtils.unmodifiable(builder.unixLineEndFilters);
+        this.lineEndings = CollectionUtils.unmodifiable(builder.lineEndings);
         this.tasks = CollectionUtils.unmodifiable(builder.tasks);
     }
 
@@ -107,12 +99,8 @@ public class WildFlyPackageTasks {
         return mkDirs;
     }
 
-    public List<FileFilter> getWindowsLineEndFilters() {
-        return windowsLineEndFilters;
-    }
-
-    public List<FileFilter> getUnixLineEndFilters() {
-        return unixLineEndFilters;
+    public List<LineEndingsTask> getLineEndings() {
+        return lineEndings;
     }
 
     public boolean hasTasks() {

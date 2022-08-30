@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2019 Red Hat, Inc. and/or its affiliates
+ * Copyright 2016-2022 Red Hat, Inc. and/or its affiliates
  * and other contributors as indicated by the @author tags.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,6 +17,17 @@
 
 package org.wildfly.galleon.plugin.config;
 
+import javax.xml.namespace.QName;
+import javax.xml.stream.XMLStreamConstants;
+import javax.xml.stream.XMLStreamException;
+import javax.xml.stream.XMLStreamReader;
+import java.util.Collections;
+import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
 import org.jboss.galleon.ProvisioningDescriptionException;
 import org.jboss.galleon.config.ConfigModel;
 import org.jboss.galleon.util.CollectionUtils;
@@ -28,19 +39,7 @@ import org.jboss.staxmapper.XMLExtendedStreamReader;
 import org.wildfly.galleon.plugin.WildFlyPackageTask;
 import org.wildfly.galleon.plugin.WildFlyPackageTasks;
 
-import javax.xml.namespace.QName;
-import javax.xml.stream.XMLStreamConstants;
-import javax.xml.stream.XMLStreamException;
-import javax.xml.stream.XMLStreamReader;
-
-import static org.wildfly.galleon.plugin.config.WildFlyPackageTasksParser.NAMESPACE_3_0;
-
-import java.util.Collections;
-import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import static org.wildfly.galleon.plugin.config.WildFlyPackageTasksParser.NAMESPACE_3_1;
 
 /**
  * Parses the WildFly-based feature pack build config file (i.e. the config file that is
@@ -51,7 +50,7 @@ import java.util.Set;
  * @author Alexey Loubyansky
  * @author Emmanuel Hugonnet
  */
-class WildFlyPackageTasksParser30 implements XMLElementReader<WildFlyPackageTasks.Builder> {
+class WildFlyPackageTasksParser31 implements XMLElementReader<WildFlyPackageTasks.Builder> {
 
     enum Element {
 
@@ -82,32 +81,32 @@ class WildFlyPackageTasksParser30 implements XMLElementReader<WildFlyPackageTask
 
         static {
             Map<QName, Element> elementsMap = new HashMap<>(19);
-            elementsMap.put(new QName(NAMESPACE_3_0, Element.CONFIG.getLocalName()), Element.CONFIG);
-            elementsMap.put(new QName(NAMESPACE_3_0, Element.COPY_ARTIFACT.getLocalName()), Element.COPY_ARTIFACT);
-            elementsMap.put(new QName(NAMESPACE_3_0, Element.COPY_PATH.getLocalName()), Element.COPY_PATH);
-            elementsMap.put(new QName(NAMESPACE_3_0, Element.DELETE.getLocalName()), Element.DELETE);
-            elementsMap.put(new QName(NAMESPACE_3_0, Element.EXAMPLE_CONFIGS.getLocalName()), Element.EXAMPLE_CONFIGS);
-            elementsMap.put(new QName(NAMESPACE_3_0, Element.FILE_APPENDER.getLocalName()), Element.FILE_APPENDER);
-            elementsMap.put(new QName(NAMESPACE_3_0, Element.FILE_PERMISSIONS.getLocalName()), Element.FILE_PERMISSIONS);
-            elementsMap.put(new QName(NAMESPACE_3_0, Element.FILTER.getLocalName()), Element.FILTER);
-            elementsMap.put(new QName(NAMESPACE_3_0, Element.LINE.getLocalName()), Element.LINE);
-            elementsMap.put(new QName(NAMESPACE_3_0, Element.LINE_ENDINGS.getLocalName()), Element.LINE_ENDINGS);
-            elementsMap.put(new QName(NAMESPACE_3_0, Element.MKDIR.getLocalName()), Element.MKDIR);
-            elementsMap.put(new QName(NAMESPACE_3_0, Element.PARAM.getLocalName()), Element.PARAM);
-            elementsMap.put(new QName(NAMESPACE_3_0, Element.PARAMS.getLocalName()), Element.PARAMS);
-            elementsMap.put(new QName(NAMESPACE_3_0, Element.PERMISSION.getLocalName()), Element.PERMISSION);
-            elementsMap.put(new QName(NAMESPACE_3_0, Element.TASKS.getLocalName()), Element.TASKS);
-            elementsMap.put(new QName(NAMESPACE_3_0, Element.TRANSFORM.getLocalName()), Element.TRANSFORM);
-            elementsMap.put(new QName(NAMESPACE_3_0, Element.UNIX.getLocalName()), Element.UNIX);
-            elementsMap.put(new QName(NAMESPACE_3_0, Element.WINDOWS.getLocalName()), Element.WINDOWS);
-            elementsMap.put(new QName(NAMESPACE_3_0, Element.XML_MERGE.getLocalName()), Element.XML_MERGE);
+            elementsMap.put(new QName(NAMESPACE_3_1, Element.CONFIG.getLocalName()), Element.CONFIG);
+            elementsMap.put(new QName(NAMESPACE_3_1, Element.COPY_ARTIFACT.getLocalName()), Element.COPY_ARTIFACT);
+            elementsMap.put(new QName(NAMESPACE_3_1, Element.COPY_PATH.getLocalName()), Element.COPY_PATH);
+            elementsMap.put(new QName(NAMESPACE_3_1, Element.DELETE.getLocalName()), Element.DELETE);
+            elementsMap.put(new QName(NAMESPACE_3_1, Element.EXAMPLE_CONFIGS.getLocalName()), Element.EXAMPLE_CONFIGS);
+            elementsMap.put(new QName(NAMESPACE_3_1, Element.FILE_APPENDER.getLocalName()), Element.FILE_APPENDER);
+            elementsMap.put(new QName(NAMESPACE_3_1, Element.FILE_PERMISSIONS.getLocalName()), Element.FILE_PERMISSIONS);
+            elementsMap.put(new QName(NAMESPACE_3_1, Element.FILTER.getLocalName()), Element.FILTER);
+            elementsMap.put(new QName(NAMESPACE_3_1, Element.LINE.getLocalName()), Element.LINE);
+            elementsMap.put(new QName(NAMESPACE_3_1, Element.LINE_ENDINGS.getLocalName()), Element.LINE_ENDINGS);
+            elementsMap.put(new QName(NAMESPACE_3_1, Element.MKDIR.getLocalName()), Element.MKDIR);
+            elementsMap.put(new QName(NAMESPACE_3_1, Element.PARAM.getLocalName()), Element.PARAM);
+            elementsMap.put(new QName(NAMESPACE_3_1, Element.PARAMS.getLocalName()), Element.PARAMS);
+            elementsMap.put(new QName(NAMESPACE_3_1, Element.PERMISSION.getLocalName()), Element.PERMISSION);
+            elementsMap.put(new QName(NAMESPACE_3_1, Element.TASKS.getLocalName()), Element.TASKS);
+            elementsMap.put(new QName(NAMESPACE_3_1, Element.TRANSFORM.getLocalName()), Element.TRANSFORM);
+            elementsMap.put(new QName(NAMESPACE_3_1, Element.UNIX.getLocalName()), Element.UNIX);
+            elementsMap.put(new QName(NAMESPACE_3_1, Element.WINDOWS.getLocalName()), Element.WINDOWS);
+            elementsMap.put(new QName(NAMESPACE_3_1, Element.XML_MERGE.getLocalName()), Element.XML_MERGE);
             elements = elementsMap;
         }
 
         static Element of(QName qName) {
             QName name;
             if (qName.getNamespaceURI().equals("")) {
-                name = new QName(NAMESPACE_3_0, qName.getLocalPart());
+                name = new QName(NAMESPACE_3_1, qName.getLocalPart());
             } else {
                 name = qName;
             }
@@ -364,12 +363,24 @@ class WildFlyPackageTasksParser30 implements XMLElementReader<WildFlyPackageTask
     }
 
     private void parseLineEndings(final XMLStreamReader reader, final WildFlyPackageTasks.Builder builder) throws XMLStreamException {
+        WildFlyPackageTask.Phase phase = WildFlyPackageTask.Phase.PROCESSING;
+        for (int i=0; i<reader.getAttributeCount(); i++) {
+            final Attribute attribute = Attribute.of(reader.getAttributeName(i));
+            switch (attribute) {
+                case PHASE:
+                    phase = WildFlyPackageTask.Phase.valueOf(reader.getAttributeValue(i).toUpperCase());
+                    break;
+                default:
+                    throw ParsingUtils.unexpectedContent(reader);
+            }
+        }
+
         List<FileFilter> unixLineEndFilters = Collections.emptyList();
         List<FileFilter> windowsLineEndFilters = Collections.emptyList();
         while (reader.hasNext()) {
             switch (reader.nextTag()) {
                 case XMLStreamConstants.END_ELEMENT: {
-                    final LineEndingsTask lineEndingsTask = new LineEndingsTask(unixLineEndFilters, windowsLineEndFilters, WildFlyPackageTask.Phase.PROCESSING);
+                    final LineEndingsTask lineEndingsTask = new LineEndingsTask(unixLineEndFilters, windowsLineEndFilters, phase);
                     builder.addLineEndings(lineEndingsTask);
                     return;
                 }
