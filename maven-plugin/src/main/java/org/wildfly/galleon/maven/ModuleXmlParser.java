@@ -76,20 +76,25 @@ class ModuleXmlParser {
         final String targetName = getOptionalAttributeValue(element, "target-name", "");
         final String targetSlot = getOptionalAttributeValue(element, "target-slot", "main");
         final String name = element.getAttributeValue("name");
-        ModuleIdentifier targetModuleId = new ModuleIdentifier(targetName, targetSlot);
+        ModuleIdentifier targetModuleId = getModuleIdentifier(targetName, targetSlot);
         Set<ModuleIdentifier> aliases = targetToAlias.get(targetModuleId);
         if (aliases == null) {
             aliases = new HashSet<>();
             targetToAlias.put(targetModuleId, aliases);
         }
-        ModuleIdentifier aliasModuleId;
-        if (name.indexOf(':') < 0) {
-            final String slot = getOptionalAttributeValue(element, "slot", "main");
-            aliasModuleId = new ModuleIdentifier(name, slot);
-        } else {
-            aliasModuleId = ModuleIdentifier.fromString(name);
-        }
+        final String slot = getOptionalAttributeValue(element, "slot", "main");
+        ModuleIdentifier aliasModuleId = getModuleIdentifier(name, slot);
         aliases.add(aliasModuleId);
+    }
+
+    private static ModuleIdentifier getModuleIdentifier(String name, String slot) {
+        ModuleIdentifier moduleId;
+        if (name.indexOf(':') < 0) {
+            moduleId = new ModuleIdentifier(name, slot);
+        } else {
+            moduleId = ModuleIdentifier.fromString(name);
+        }
+        return moduleId;
     }
 
     private static ModuleParseResult parse(final Reader r, Map<ModuleIdentifier, Set<ModuleIdentifier>> targetToAlias) throws IOException, ParsingException {
@@ -108,7 +113,7 @@ class ModuleXmlParser {
     private static void parseModule(Element element, ModuleParseResult result, Map<ModuleIdentifier, Set<ModuleIdentifier>> targetToAlias) throws ParsingException {
         String name = element.getAttributeValue("name");
         String slot = getOptionalAttributeValue(element, "slot", "main");
-        result.identifier = new ModuleIdentifier(name, slot);
+        result.identifier = getModuleIdentifier(name, slot);
         final Attribute versionAttribute = element.getAttribute("version");
         if (versionAttribute != null) {
             result.versionArtifactName = parseOptionalArtifactName(versionAttribute.getValue(), versionAttribute);
@@ -135,8 +140,8 @@ class ModuleXmlParser {
         final String targetSlot = getOptionalAttributeValue(element, "target-slot", "main");
         final String name = element.getAttributeValue("name");
         final String slot = getOptionalAttributeValue(element, "slot", "main");
-        ModuleIdentifier moduleId = new ModuleIdentifier(targetName, targetSlot);
-        result.identifier = new ModuleIdentifier(name, slot);
+        ModuleIdentifier moduleId = getModuleIdentifier(targetName, targetSlot);
+        result.identifier = getModuleIdentifier(name, slot);
         result.dependencies.add(new ModuleParseResult.ModuleDependency(moduleId, false, Collections.emptyMap()));
     }
 
@@ -146,13 +151,8 @@ class ModuleXmlParser {
         for (int i = 0; i < size; i ++) {
             final Element moduleElement = modules.get(i);
             final String name = getOptionalAttributeValue(moduleElement, "name", "");
-            final ModuleIdentifier moduleId;
-            if(name.indexOf(':') < 0) {
-                final String slot = getOptionalAttributeValue(moduleElement, "slot", "main");
-                moduleId = new ModuleIdentifier(name, slot);
-            } else {
-                moduleId = ModuleIdentifier.fromString(name);
-            }
+            final String slot = getOptionalAttributeValue(moduleElement, "slot", "main");
+            final ModuleIdentifier moduleId = getModuleIdentifier(name, slot);
             final boolean optional = Boolean.parseBoolean(getOptionalAttributeValue(moduleElement, "optional", "false"));
 
             final Element properties = moduleElement.getFirstChildElement("properties", moduleElement.getNamespaceURI());
