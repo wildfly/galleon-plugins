@@ -724,7 +724,14 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     private void packageModules(FeaturePackDescription.Builder fpBuilder,
             Path resourcesDir, Map<String, Path> moduleXmlByPkgName, PackageSpec.Builder modulesAll)
             throws IOException, MojoExecutionException {
-
+        Map<ModuleIdentifier, Set<ModuleIdentifier>> targetToAlias = new HashMap<>();
+        for (Map.Entry<String, Path> module : moduleXmlByPkgName.entrySet()) {
+            try {
+                ModuleXmlParser.populateAlias(module.getValue(), WfConstants.UTF8, targetToAlias);
+            } catch (ParsingException e) {
+                throw new IOException(Errors.parseXml(module.getValue()), e);
+            }
+        }
         for (Map.Entry<String, Path> module : moduleXmlByPkgName.entrySet()) {
             final String packageName = module.getKey();
             final Path moduleXml = module.getValue();
@@ -737,7 +744,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             final PackageSpec.Builder pkgSpecBuilder = PackageSpec.builder(packageName);
             final ModuleParseResult parsedModule;
             try {
-                parsedModule = ModuleXmlParser.parse(targetXml, WfConstants.UTF8);
+                parsedModule = ModuleXmlParser.parse(targetXml, WfConstants.UTF8, targetToAlias);
                 if (!parsedModule.dependencies.isEmpty()) {
                     for (ModuleParseResult.ModuleDependency moduleDep : parsedModule.dependencies) {
                         final ModuleIdentifier moduleId = moduleDep.getModuleId();
