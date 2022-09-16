@@ -30,7 +30,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -48,13 +50,54 @@ class ModuleXmlParser {
      */
     private static final Pattern JBOSS_MODULES_VALID_PATTERN = Pattern.compile("^([-_a-zA-Z0-9.]+):([-_a-zA-Z0-9.]+):([-_a-zA-Z0-9.]+)(?::([-_a-zA-Z0-9.]+))?$");
 
-    static ModuleParseResult parse(final Path file, String encoding) throws IOException, ParsingException {
+    static ModuleParseResult parse(final Path file, String encoding, Map<ModuleIdentifier, Set<ModuleIdentifier>> targetToAlias) throws IOException, ParsingException {
         try(Reader is = Files.newBufferedReader(file, Charset.forName(encoding))) {
-            return parse(is);
+            return parse(is, targetToAlias);
         }
     }
 
-    private static ModuleParseResult parse(final Reader r) throws IOException, ParsingException {
+    static void populateAlias(final Path file, String encoding, Map<ModuleIdentifier, Set<ModuleIdentifier>> targetToAlias) throws IOException, ParsingException {
+        try(Reader is = Files.newBufferedReader(file, Charset.forName(encoding))) {
+            populateAlias(is, targetToAlias);
+        }
+    }
+
+    private static void populateAlias(final Reader r, Map<ModuleIdentifier, Set<ModuleIdentifier>> targetToAlias) throws IOException, ParsingException {
+        Builder builder = new Builder(false);
+        final Document document = builder.build(r);
+        ModuleParseResult result = new ModuleParseResult(document);
+        final Element rootElement = document.getRootElement();
+        if (rootElement.getLocalName().equals("module-alias")) {
+            populateModuleAlias(rootElement, targetToAlias);
+        }
+    }
+
+    private static void populateModuleAlias(Element element, Map<ModuleIdentifier, Set<ModuleIdentifier>> targetToAlias) {
+        final String targetName = getOptionalAttributeValue(element, "target-name", "");
+        final String targetSlot = getOptionalAttributeValue(element, "target-slot", "main");
+        final String name = element.getAttributeValue("name");
+        ModuleIdentifier targetModuleId = getModuleIdentifier(targetName, targetSlot);
+        Set<ModuleIdentifier> aliases = targetToAlias.get(targetModuleId);
+        if (aliases == null) {
+            aliases = new HashSet<>();
+            targetToAlias.put(targetModuleId, aliases);
+        }
+        final String slot = getOptionalAttributeValue(element, "slot", "main");
+        ModuleIdentifier aliasModuleId = getModuleIdentifier(name, slot);
+        aliases.add(aliasModuleId);
+    }
+
+    private static ModuleIdentifier getModuleIdentifier(String name, String slot) {
+        ModuleIdentifier moduleId;
+        if (name.indexOf(':') < 0) {
+            moduleId = new ModuleIdentifier(name, slot);
+        } else {
+            moduleId = ModuleIdentifier.fromString(name);
+        }
+        return moduleId;
+    }
+
+    private static ModuleParseResult parse(final Reader r, Map<ModuleIdentifier, Set<ModuleIdentifier>> targetToAlias) throws IOException, ParsingException {
         Builder builder = new Builder(false);
         final Document document = builder.build(r);
         ModuleParseResult result = new ModuleParseResult(document);
@@ -62,15 +105,15 @@ class ModuleXmlParser {
         if (rootElement.getLocalName().equals("module-alias")) {
             parseModuleAlias(rootElement, result);
         } else if (rootElement.getLocalName().equals("module")) {
-            parseModule(rootElement, result);
+            parseModule(rootElement, result, targetToAlias);
         }
         return result;
     }
 
-    private static void parseModule(Element element, ModuleParseResult result) throws ParsingException {
+    private static void parseModule(Element element, ModuleParseResult result, Map<ModuleIdentifier, Set<ModuleIdentifier>> targetToAlias) throws ParsingException {
         String name = element.getAttributeValue("name");
         String slot = getOptionalAttributeValue(element, "slot", "main");
-        result.identifier = new ModuleIdentifier(name, slot);
+        result.identifier = getModuleIdentifier(name, slot);
         final Attribute versionAttribute = element.getAttribute("version");
         if (versionAttribute != null) {
             result.versionArtifactName = parseOptionalArtifactName(versionAttribute.getValue(), versionAttribute);
@@ -79,6 +122,12 @@ class ModuleXmlParser {
         if (dependencies != null) parseDependencies(dependencies, result);
         final Element resources = element.getFirstChildElement("resources", element.getNamespaceURI());
         if (resources != null) parseResources(resources, result);
+        Set<ModuleIdentifier> aliases = targetToAlias.get(result.identifier);
+        if (aliases != null) {
+            for (ModuleIdentifier alias : aliases) {
+                result.dependencies.add(new ModuleParseResult.ModuleDependency(alias, false, Collections.emptyMap()));
+            }
+        }
     }
 
     private static String getOptionalAttributeValue(Element element, String name, String defVal) {
@@ -91,8 +140,8 @@ class ModuleXmlParser {
         final String targetSlot = getOptionalAttributeValue(element, "target-slot", "main");
         final String name = element.getAttributeValue("name");
         final String slot = getOptionalAttributeValue(element, "slot", "main");
-        ModuleIdentifier moduleId = new ModuleIdentifier(targetName, targetSlot);
-        result.identifier = new ModuleIdentifier(name, slot);
+        ModuleIdentifier moduleId = getModuleIdentifier(targetName, targetSlot);
+        result.identifier = getModuleIdentifier(name, slot);
         result.dependencies.add(new ModuleParseResult.ModuleDependency(moduleId, false, Collections.emptyMap()));
     }
 
@@ -102,13 +151,8 @@ class ModuleXmlParser {
         for (int i = 0; i < size; i ++) {
             final Element moduleElement = modules.get(i);
             final String name = getOptionalAttributeValue(moduleElement, "name", "");
-            final ModuleIdentifier moduleId;
-            if(name.indexOf(':') < 0) {
-                final String slot = getOptionalAttributeValue(moduleElement, "slot", "main");
-                moduleId = new ModuleIdentifier(name, slot);
-            } else {
-                moduleId = ModuleIdentifier.fromString(name);
-            }
+            final String slot = getOptionalAttributeValue(moduleElement, "slot", "main");
+            final ModuleIdentifier moduleId = getModuleIdentifier(name, slot);
             final boolean optional = Boolean.parseBoolean(getOptionalAttributeValue(moduleElement, "optional", "false"));
 
             final Element properties = moduleElement.getFirstChildElement("properties", moduleElement.getNamespaceURI());
