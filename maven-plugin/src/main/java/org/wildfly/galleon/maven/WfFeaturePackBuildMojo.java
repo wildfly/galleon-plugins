@@ -167,9 +167,6 @@ public class WfFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
 
         if(buildConfig.hasStandaloneExtensions() || buildConfig.hasDomainExtensions() || buildConfig.hasHostExtensions()) {
             new FeatureSpecGeneratorInvoker(this).execute();
-        } else {
-            // Jakarta Transformation would occur in order to  generate a list of excluded artifacts
-            transformOnlyArtifactDependencies(buildConfig);
         }
 
         FeaturePackLocation fpl = buildConfig.getProducer();

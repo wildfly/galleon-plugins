@@ -26,8 +26,7 @@ import org.jboss.galleon.universe.maven.MavenUniverseException;
 /**
  * A Template processor that process templates when provisioning thin server. In
  * this case module.xml artifacts are updated with a version.
- * The installer is in charge to compute the correct version to be referenced. Artifact version could be modified
- * in case of Jakarta transformation.
+ * The installer is in charge to compute the correct version to be referenced.
  *
  * @author jdenise
  */

@@ -146,8 +146,6 @@ public class UserFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
         if (Files.exists(srcModulesDir)) {
             addModulePackages(srcModulesDir, fpBuilder, resources);
         }
-        // Jakarta Transformation occurs to only generate a list of excluded artifacts
-        transformOnlyArtifactDependencies(buildConfig);
 
         buildFeaturePack(fpBuilder, buildConfig);
     }

@@ -38,6 +38,10 @@
       <artifactId>wildfly-galleon-plugins</artifactId>
     </dependency>
     <dependency>
+      <groupId>org.jboss.galleon</groupId>
+      <artifactId>galleon-core</artifactId>
+    </dependency>
+    <dependency>
       <groupId>org.wildfly.core</groupId>
       <artifactId>wildfly-embedded</artifactId>
       <scope>provided</scope>
