@@ -28,7 +28,7 @@ import org.wildfly.galleon.plugin.WfInstallPlugin.ArtifactResolver;
 
 /**
  * An artifact installer captures the logic required to install an artifact during provisioning.
- * It handles the kind of server (thin vs fat) and possible transformation that could occur to artifact during provisioning.
+ * It handles the kind of server (thin vs fat).
  *
  * The artifacts in scope are: JBoss Modules modules artifacts and artifacts copied with the CopyArtifact
  * task.
@@ -47,8 +47,7 @@ abstract class AbstractArtifactInstaller {
         this.generatedMavenRepo = generatedMavenRepo;
     }
 
-    abstract String installArtifactFat(MavenArtifact artifact, Path targetDir,
-            Path localCache) throws IOException,
+    abstract String installArtifactFat(MavenArtifact artifact, Path targetDir) throws IOException,
             ProvisioningException;
 
     abstract String installArtifactThin(MavenArtifact artifact) throws IOException,

@@ -127,7 +127,6 @@ public class FeatureSpecGeneratorInvoker {
     private WildFlyPackageTasksParser tasksParser;
     private ProvisioningLayoutFactory layoutFactory;
     private ProvisioningLayout<FeaturePackLayout> configLayout;
-    private final JakartaTransformation jakartaTransformation;
     FeatureSpecGeneratorInvoker(WfFeaturePackBuildMojo mojo) throws MojoExecutionException {
         this.project = mojo.project;
         this.session = mojo.session;
@@ -140,7 +139,6 @@ public class FeatureSpecGeneratorInvoker {
         this.wildflyHome = mojo.wildflyHome.toPath();
         this.moduleTemplatesDir = mojo.moduleTemplatesDir.toPath();
         this.log = mojo.getLog();
-        this.jakartaTransformation = mojo.getJakartaTransformation();
     }
 
     public void execute() throws MojoExecutionException, MojoFailureException {
@@ -230,14 +228,6 @@ public class FeatureSpecGeneratorInvoker {
                 } catch (Exception e) {
                     throw new MojoExecutionException("Failed to process " + moduleTemplatesDir.resolve(entry.getKey()), e);
                 }
-                if (jakartaTransformation.isJakartaTransformEnabled()) {
-                    for (Artifact toTransform : entry.getValue().values()) {
-                        if (!toTransform.isResolved()) {
-                            toTransform = findArtifact(new ArtifactItem(toTransform));
-                        }
-                        jakartaTransformation.transform(toTransform);
-                    }
-                }
             }
             for (Artifact art : hardcodedArtifacts) {
                 findArtifact(art);
@@ -247,8 +237,7 @@ public class FeatureSpecGeneratorInvoker {
         addBasicConfigs();
 
         final String originalMavenRepoLocal = System.getProperty(MAVEN_REPO_LOCAL);
-        System.setProperty(MAVEN_REPO_LOCAL,
-                jakartaTransformation.isJakartaTransformEnabled() ? jakartaTransformation.getJakartaTransformMavenRepo().toAbsolutePath().toString() : session.getSettings().getLocalRepository());
+        System.setProperty(MAVEN_REPO_LOCAL, session.getSettings().getLocalRepository());
         debug("Generating feature specs using local maven repo %s", System.getProperty(MAVEN_REPO_LOCAL));
         final ClassLoader originalCl = Thread.currentThread().getContextClassLoader();
         URLClassLoader newCl = null;
@@ -698,11 +687,8 @@ public class FeatureSpecGeneratorInvoker {
             debug("Resolving artifact %s:%s:%s", artifact.getGroupId(), artifact.getArtifactId(), artifact.getVersion());
             ArtifactResult result = artifactResolver.resolveArtifact(buildingRequest, artifact);
             Artifact retVal = result != null ? result.getArtifact() : artifact;
-            if (jakartaTransformation.isJakartaTransformEnabled()) {
-                jakartaTransformation.transform(retVal);
-            }
             return retVal;
-        } catch (ArtifactResolverException | IOException e) {
+        } catch (ArtifactResolverException e) {
             throw new MojoExecutionException("Couldn't resolve artifact: " + e.getMessage(), e);
         }
     }

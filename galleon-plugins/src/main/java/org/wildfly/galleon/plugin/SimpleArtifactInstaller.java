@@ -38,7 +38,7 @@ class SimpleArtifactInstaller extends AbstractArtifactInstaller {
     }
 
     @Override
-    String installArtifactFat(MavenArtifact artifact, Path targetDir, Path localCache) throws IOException,
+    String installArtifactFat(MavenArtifact artifact, Path targetDir) throws IOException,
             MavenUniverseException, ProvisioningException {
         Files.copy(artifact.getPath(), targetDir.resolve(artifact.getArtifactFileName()), StandardCopyOption.REPLACE_EXISTING);
         return artifact.getArtifactFileName();

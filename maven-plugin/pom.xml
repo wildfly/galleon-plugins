@@ -109,10 +109,6 @@
       <artifactId>wildfly-galleon-plugins</artifactId>
     </dependency>
     <dependency>
-      <groupId>${project.groupId}</groupId>
-      <artifactId>transformer</artifactId>
-    </dependency>
-    <dependency>
       <groupId>org.jboss.galleon</groupId>
       <artifactId>galleon-maven-plugin</artifactId>
     </dependency>
