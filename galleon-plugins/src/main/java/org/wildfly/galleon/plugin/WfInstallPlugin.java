@@ -45,6 +45,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -58,6 +59,7 @@ import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.stream.StreamSource;
 
 import nu.xom.Elements;
+import org.apache.commons.lang3.StringUtils;
 import org.jboss.galleon.Errors;
 import org.jboss.galleon.MessageWriter;
 import org.jboss.galleon.ProvisioningException;
@@ -96,6 +98,8 @@ import org.wildfly.galleon.plugin.config.XslTransform;
  */
 public class WfInstallPlugin extends ProvisioningPluginWithOptions implements InstallPlugin {
 
+    private Optional<ArtifactRecorder> artifactRecorder;
+
     interface ArtifactResolver {
         void resolve(MavenArtifact artifact) throws ProvisioningException;
     }
@@ -119,6 +123,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             .build();
     private static final ProvisioningOption OPTION_OVERRIDDEN_ARTIFACTS = ProvisioningOption.builder("jboss-overridden-artifacts").setPersistent(true).build();
     private static final ProvisioningOption OPTION_BULK_RESOLVE_ARTIFACTS = ProvisioningOption.builder("jboss-bulk-resolve-artifacts").setBooleanValueSet().build();
+    private static final ProvisioningOption OPTION_RECORD_ARTIFACTS = ProvisioningOption.builder("jboss-resolved-artifacts-cache")
+            .build();
     private ProvisioningRuntime runtime;
     MessageWriter log;
 
@@ -163,7 +169,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     protected List<ProvisioningOption> initPluginOptions() {
         return Arrays.asList(OPTION_MVN_DIST, OPTION_DUMP_CONFIG_SCRIPTS,
                              OPTION_FORK_EMBEDDED, OPTION_MVN_REPO,
-                             OPTION_OVERRIDDEN_ARTIFACTS, OPTION_BULK_RESOLVE_ARTIFACTS);
+                             OPTION_OVERRIDDEN_ARTIFACTS, OPTION_BULK_RESOLVE_ARTIFACTS,
+                             OPTION_RECORD_ARTIFACTS);
     }
 
     public ProvisioningRuntime getRuntime() {
@@ -232,6 +239,20 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         this.runtime = runtime;
         log = runtime.getMessageWriter();
         log.verbose("WildFly Galleon Installation Plugin");
+
+        if (runtime.isOptionSet(OPTION_RECORD_ARTIFACTS)) {
+            final String pathValue = runtime.getOptionValue(OPTION_RECORD_ARTIFACTS);
+            if (!StringUtils.isEmpty(pathValue)) {
+                try {
+                    log.verbose("Starting artifact log");
+                    artifactRecorder = Optional.of(new ArtifactRecorder(runtime.getStagedDir(), Path.of(pathValue)));
+                } catch (IOException e) {
+                    throw new ProvisioningException("Unable to create artifact.log", e);
+                }
+            }
+        } else {
+            artifactRecorder = Optional.empty();
+        }
 
         this.bulkResolveArtifacts = isBulkResolveArtifacts();
 
@@ -303,7 +324,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         // We must create resolver and installer at this point, prior to process the packges.
         // The CopyArtifact tasks could need the resolver and installer we are instantiating there.
         artifactResolver = this::resolveMaven;
-        artifactInstaller = new SimpleArtifactInstaller(artifactResolver, generatedMavenRepo);
+        artifactInstaller = new SimpleArtifactInstaller(artifactResolver, generatedMavenRepo, artifactRecorder);
 
         final ProvisioningLayoutFactory layoutFactory = runtime.getLayout().getFactory();
         pkgProgressTracker = layoutFactory.getProgressTracker(ProvisioningLayoutFactory.TRACK_PACKAGES);
@@ -894,7 +915,17 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             log.verbose("Copying artifact %s to %s", jarSrc, jarTarget);
             if (copyArtifact.isExtract()) {
                 Utils.extractArtifact(jarSrc, jarTarget, copyArtifact);
+                if (artifactRecorder.isPresent()) {
+                    artifactRecorder.get().cache(artifact, jarSrc);
+                }
             } else {
+                if (artifactRecorder.isPresent()) {
+                    try {
+                        artifactRecorder.get().record(artifact, jarTarget);
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
                 IoUtils.copy(jarSrc, jarTarget);
             }
             if(schemaGroups.contains(artifact.getGroupId())) {
