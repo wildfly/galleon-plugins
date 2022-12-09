@@ -3,7 +3,9 @@
 
 = WildFly Galleon Plugins
 
-toc::[]
+link:https://github.com/wildfly/galleon[Galleon] provisioning plugins and Maven plugin to build WildFly feature-packs. 
+
+Complete documentation can be found link:https://docs.wildfly.org/galleon-plugins/[there].
 
 = Project Modules
 
