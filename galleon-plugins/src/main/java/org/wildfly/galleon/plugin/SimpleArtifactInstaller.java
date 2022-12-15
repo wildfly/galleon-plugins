@@ -20,6 +20,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.Optional;
+
 import org.jboss.galleon.ProvisioningException;
 import org.jboss.galleon.universe.maven.MavenArtifact;
 import org.jboss.galleon.universe.maven.MavenUniverseException;
@@ -33,13 +35,19 @@ import org.wildfly.galleon.plugin.WfInstallPlugin.ArtifactResolver;
  */
 class SimpleArtifactInstaller extends AbstractArtifactInstaller {
 
-    SimpleArtifactInstaller(ArtifactResolver resolver, Path generatedMavenRepo) {
+    private final Optional<ArtifactRecorder> artifactRecorder;
+
+    SimpleArtifactInstaller(ArtifactResolver resolver, Path generatedMavenRepo, Optional<ArtifactRecorder> artifactRecorder) {
         super(resolver, generatedMavenRepo);
+        this.artifactRecorder = artifactRecorder;
     }
 
     @Override
     String installArtifactFat(MavenArtifact artifact, Path targetDir) throws IOException,
             MavenUniverseException, ProvisioningException {
+        if (artifactRecorder.isPresent()) {
+            artifactRecorder.get().record(artifact, targetDir.resolve(artifact.getArtifactFileName()));
+        }
         Files.copy(artifact.getPath(), targetDir.resolve(artifact.getArtifactFileName()), StandardCopyOption.REPLACE_EXISTING);
         return artifact.getArtifactFileName();
     }
