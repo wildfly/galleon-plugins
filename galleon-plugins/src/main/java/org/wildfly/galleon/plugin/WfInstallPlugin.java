@@ -17,6 +17,7 @@
 package org.wildfly.galleon.plugin;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -59,7 +60,6 @@ import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.stream.StreamSource;
 
 import nu.xom.Elements;
-import org.apache.commons.lang3.StringUtils;
 import org.jboss.galleon.Errors;
 import org.jboss.galleon.MessageWriter;
 import org.jboss.galleon.ProvisioningException;
@@ -124,6 +124,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private static final ProvisioningOption OPTION_OVERRIDDEN_ARTIFACTS = ProvisioningOption.builder("jboss-overridden-artifacts").setPersistent(true).build();
     private static final ProvisioningOption OPTION_BULK_RESOLVE_ARTIFACTS = ProvisioningOption.builder("jboss-bulk-resolve-artifacts").setBooleanValueSet().build();
     private static final ProvisioningOption OPTION_RECORD_ARTIFACTS = ProvisioningOption.builder("jboss-resolved-artifacts-cache")
+            .setDefaultValue(".installation" + File.separator + ".cache")
             .build();
     private ProvisioningRuntime runtime;
     MessageWriter log;
@@ -242,7 +243,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
         if (runtime.isOptionSet(OPTION_RECORD_ARTIFACTS)) {
             final String pathValue = runtime.getOptionValue(OPTION_RECORD_ARTIFACTS);
-            if (!StringUtils.isEmpty(pathValue)) {
+            if (pathValue != null && !pathValue.isEmpty()) {
                 try {
                     log.verbose("Starting artifact log");
                     artifactRecorder = Optional.of(new ArtifactRecorder(runtime.getStagedDir(), Path.of(pathValue)));
