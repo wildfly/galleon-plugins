@@ -94,9 +94,10 @@ import org.jboss.galleon.util.ZipUtils;
 import org.jboss.galleon.xml.FeaturePackXmlWriter;
 import org.jboss.galleon.xml.PackageXmlParser;
 import org.jboss.galleon.xml.PackageXmlWriter;
-import org.wildfly.channel.Channel;
-import org.wildfly.channel.ChannelMapper;
-import org.wildfly.channel.ChannelRequirement;
+import org.wildfly.channel.ChannelManifest;
+import org.wildfly.channel.ChannelManifestMapper;
+import org.wildfly.channel.ManifestRequirement;
+import org.wildfly.channel.MavenCoordinate;
 import org.wildfly.galleon.maven.build.tasks.ResourcesTask;
 import org.wildfly.galleon.plugin.ArtifactCoords;
 import org.wildfly.galleon.plugin.WfConstants;
@@ -116,9 +117,6 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
 
     static final String ARTIFACT_LIST_CLASSIFIER = "artifact-list";
     static final String ARTIFACT_LIST_EXTENSION = "txt";
-
-    static final String CHANNEL_CLASSIFIER = "channel";
-    static final String CHANNEL_EXTENSION = "yaml";
 
     static boolean isProvided(String module) {
         return module.startsWith("java.")
@@ -165,18 +163,18 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     protected Map<String, String> taskProps = Collections.emptyMap();
 
     /**
-     * Generates a channel YAML definition when the feature-pack is produced.
-     * Any dependency from the feature pack is declared as a stream in the channel.
+     * Generates a channel manifest YAML definition when the feature-pack is produced.
+     * Any dependency from the feature pack is declared as a stream in the channel manifest.
      */
-    @Parameter(alias = "generate-channel", required = false, defaultValue = "false")
-    protected boolean channelGenerated;
+    @Parameter(alias = "generate-channel-manifest", required = false, defaultValue = "false")
+    protected boolean generateChannelManifest;
 
     /**
-     * Add any feature-pack dependency as a required channel in the channel YAML definition.
-     * This parameter has no effect if "generate-channel" is false.
+     * Add any feature-pack dependency as a required manifest in the manifest YAML definition.
+     * This parameter has no effect if "generate-channel-manifest" is false.
      */
-    @Parameter(alias = "add-feature-packs-as-required-channels", required = false, defaultValue = "true")
-    protected boolean addFeaturePacksAsRequiredChannels;
+    @Parameter(alias = "add-feature-packs-as-required-manifests", required = false, defaultValue = "true")
+    protected boolean addFeaturePacksAsRequiredManifests;
 
     @Component
     protected RepositorySystem repoSystem;
@@ -368,13 +366,13 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                                 debug("Attaching feature-pack artifact list %s as a project artifact", offLinerTarget);
                                 Files.write(offLinerTarget, builder.build().getBytes());
                                 projectHelper.attachArtifact(project, ARTIFACT_LIST_EXTENSION, ARTIFACT_LIST_CLASSIFIER, offLinerTarget.toFile());
-                                if (channelGenerated) {
-                                    final Path channelTarget = Paths.get(project.getBuild().getDirectory()).resolve(artifactId + '-'
-                                            + versionDir.getFileName() + "-" + CHANNEL_CLASSIFIER + "." + CHANNEL_EXTENSION);
-                                    debug("Attaching channel definition %s as a project artifact", channelTarget);
-                                    String channel = createYAMLChannel(buildConfig);
-                                    Files.write(channelTarget, channel.getBytes());
-                                    projectHelper.attachArtifact(project, CHANNEL_EXTENSION, CHANNEL_CLASSIFIER, channelTarget.toFile());
+                                if (generateChannelManifest) {
+                                    final Path channelManifestTarget = Paths.get(project.getBuild().getDirectory()).resolve(artifactId + '-'
+                                            + versionDir.getFileName() + "-" + ChannelManifest.CLASSIFIER + "." + ChannelManifest.EXTENSION);
+                                    debug("Attaching channel manifest definition %s as a project artifact", channelManifestTarget);
+                                    String channelManifest = createYAMLChannelManifest(buildConfig);
+                                    Files.write(channelManifestTarget, channelManifest.getBytes());
+                                    projectHelper.attachArtifact(project, ChannelManifest.EXTENSION, ChannelManifest.CLASSIFIER, channelManifestTarget.toFile());
                                 }
                             }
                         }
@@ -387,12 +385,12 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     }
 
     /**
-     * Create a YAML Channel that defines streams for all the feature-pack dependencies.
-     * The feature-pack itself is added to the channel's streams.
+     * Create a YAML Channel Manifest that defines streams for all the feature-pack
+     * dependencies. The feature-pack itself is added to the channel's streams.
      */
-    String createYAMLChannel(WildFlyFeaturePackBuild buildConfig) throws IOException {
-        ArrayList<ChannelRequirement> channelRequirements = new ArrayList<>();
-        if (addFeaturePacksAsRequiredChannels && !buildConfig.getDependencies().isEmpty()) {
+    String createYAMLChannelManifest(WildFlyFeaturePackBuild buildConfig) throws IOException {
+        ArrayList<ManifestRequirement> manifestRequirements = new ArrayList<>();
+        if (addFeaturePacksAsRequiredManifests && !buildConfig.getDependencies().isEmpty()) {
             for (ArtifactCoords.Gav gav : new TreeSet<>(buildConfig.getDependencies().keySet())) {
                 project.getDependencies().stream()
                         .filter(dep ->
@@ -401,7 +399,8 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                                         && "zip".equals(dep.getType()))
                         .findFirst()
                         .ifPresent( fp ->
-                                channelRequirements.add(new ChannelRequirement(fp.getGroupId(), fp.getArtifactId(), fp.getVersion())));
+                                manifestRequirements.add(new ManifestRequirement(fp.getGroupId() +":"+fp.getArtifactId(),
+                                        new MavenCoordinate(fp.getGroupId(), fp.getArtifactId(), fp.getVersion()))));
             }
         }
         // append all feature-pack artifacts dependencies as streams (except zip and pom dependencies)
@@ -412,12 +411,12 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         // add a stream for this feature pack
         streams.add(new org.wildfly.channel.Stream(project.getGroupId(), project.getArtifactId(), project.getVersion()));
 
-        Channel channel = new Channel(format("Channel for %s feature pack.", project.getArtifact()),
+        ChannelManifest channelManifest = new ChannelManifest(format("Manifest for %s feature pack.", project.getArtifact()),
+                project.getGroupId() + ":" + project.getArtifactId(),
                 format("Generated by org.wildfly.galleon-plugins:wildfly-galleon-maven-plugin at %s", Clock.systemUTC().instant()),
-               null,
-               channelRequirements,
-               streams);
-       return ChannelMapper.toYaml(channel);
+                manifestRequirements,
+                streams);
+        return ChannelManifestMapper.toYaml(channelManifest);
     }
 
     private void addConfigPackages(final Path configDir, final Path packagesDir, final FeaturePackDescription.Builder fpBuilder) throws MojoExecutionException {
