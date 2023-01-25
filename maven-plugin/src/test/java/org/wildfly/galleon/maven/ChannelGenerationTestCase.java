@@ -24,15 +24,14 @@ import static org.wildfly.galleon.plugin.ArtifactCoords.newGav;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
-import java.util.List;
 
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.artifact.DefaultArtifact;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.project.MavenProject;
 import org.junit.Test;
-import org.wildfly.channel.Channel;
-import org.wildfly.channel.ChannelMapper;
+import org.wildfly.channel.ChannelManifest;
+import org.wildfly.channel.ChannelManifestMapper;
 
 public class ChannelGenerationTestCase {
 
@@ -67,33 +66,28 @@ public class ChannelGenerationTestCase {
         Field f1 = mojo.getClass().getSuperclass().getDeclaredField("project");
         f1.setAccessible(true);
         f1.set(mojo, project);
-        Field f2 = mojo.getClass().getSuperclass().getDeclaredField("addFeaturePacksAsRequiredChannels");
+        Field f2 = mojo.getClass().getSuperclass().getDeclaredField("addFeaturePacksAsRequiredManifests");
         f2.setAccessible(true);
         f2.set(mojo, Boolean.TRUE);
 
-        String yaml = mojo.createYAMLChannel(fp);
-
-        List<Channel> channels = ChannelMapper.fromString(yaml);
-        assertEquals(1, channels.size());
-        Channel channel = channels.get(0);
-
-        assertEquals(1, channel.getChannelRequirements().size());
-        assertChannelContainsRequirements(channel, "org.wildfly", "wildfly-ee-galleon-pack", "27.0.0.Final");
-
-        assertEquals(2, channel.getStreams().size());
-        assertChannelContainsStream(channel, "org.wildfly", "wildfly-galleon-pack", "27.0.0.Final");
-        assertChannelContainsStream(channel, "org.eclipse.microprofile.config", "microprofile-config-api", "2.0");
+        String yamlChannelManifest = mojo.createYAMLChannelManifest(fp);
+        ChannelManifest channelManifest = ChannelManifestMapper.fromString(yamlChannelManifest);
+        assertEquals(2, channelManifest.getStreams().size());
+        assertEquals(1, channelManifest.getManifestRequirements().size());
+        assertChannelManifestContainsRequirements(channelManifest, "org.wildfly", "wildfly-ee-galleon-pack", "27.0.0.Final");
+        assertChannelManifestContainsStream(channelManifest, "org.wildfly", "wildfly-galleon-pack", "27.0.0.Final");
+        assertChannelManifestContainsStream(channelManifest, "org.eclipse.microprofile.config", "microprofile-config-api", "2.0");
     }
 
-    private static void assertChannelContainsStream(Channel channel, String groupId, String artifactId, String version) {
+    private static void assertChannelManifestContainsStream(ChannelManifest channel, String groupId, String artifactId, String version) {
         channel.getStreams().stream()
                 .filter(s -> groupId.equals(s.getGroupId()) && artifactId.equals(s.getArtifactId()) && version.equals(s.getVersion()))
                 .findFirst().orElseThrow();
     }
 
-    private static void assertChannelContainsRequirements(Channel channel, String groupId, String artifactId, String version) {
-        channel.getChannelRequirements().stream()
-                .filter(s -> groupId.equals(s.getGroupId()) && artifactId.equals(s.getArtifactId()) && version.equals(s.getVersion()))
+    private static void assertChannelManifestContainsRequirements(ChannelManifest manifest, String groupId, String artifactId, String version) {
+        manifest.getManifestRequirements().stream()
+                .filter(s -> groupId.equals(s.getGroupId()) && artifactId.equals(s.getArtifactId()))
                 .findFirst().orElseThrow();
     }
 }
