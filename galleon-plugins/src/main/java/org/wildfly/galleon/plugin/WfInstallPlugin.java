@@ -118,6 +118,20 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private static final ProvisioningOption OPTION_FORK_EMBEDDED = ProvisioningOption.builder("jboss-fork-embedded")
             .setBooleanValueSet()
             .build();
+
+    /**
+     * If present, indicates whether the existing System Properties will be reset to the default set provided by
+     * ForkedEmbeddedUtil.RESETTABLE_EMBEDDED_SYS_PROPERTIES. The format of this configuration is a comma separated list of
+     * system properties to add or remove from this default Set.
+     *
+     * If the property starts with '-', it means the property will be removed from the set, otherwise, the property will be added.
+     * Values are added or removed from the default Set in the same order as they have been specified in this configuration option.
+     *
+     * @see @see org.wildfly.galleon.plugin.server.ForkedEmbeddedUtil
+     */
+    private static final ProvisioningOption OPTION_RESET_EMBEDDED_SYSTEM_PROPERTIES = ProvisioningOption.builder("jboss-reset-embedded-system-properties")
+            .build();
+
     private static final ProvisioningOption OPTION_MVN_REPO = ProvisioningOption.builder("jboss-maven-repo")
             .setPersistent(false)
             .build();
@@ -170,6 +184,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     protected List<ProvisioningOption> initPluginOptions() {
         return Arrays.asList(OPTION_MVN_DIST, OPTION_DUMP_CONFIG_SCRIPTS,
                              OPTION_FORK_EMBEDDED, OPTION_MVN_REPO,
+                             OPTION_RESET_EMBEDDED_SYSTEM_PROPERTIES,
                              OPTION_OVERRIDDEN_ARTIFACTS, OPTION_BULK_RESOLVE_ARTIFACTS,
                              OPTION_RECORD_ARTIFACTS);
     }
@@ -207,6 +222,14 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
     private boolean isForkEmbedded(ProvisioningRuntime runtime) throws ProvisioningException {
         return getBooleanOption(OPTION_FORK_EMBEDDED);
+    }
+
+    private String isResetEmbeddedSystemProperties() throws ProvisioningException {
+        if (!runtime.isOptionSet(OPTION_RESET_EMBEDDED_SYSTEM_PROPERTIES)) {
+            return null;
+        }
+        final String value = runtime.getOptionValue(OPTION_RESET_EMBEDDED_SYSTEM_PROPERTIES);
+        return value == null ? "" : value;
     }
 
     private boolean getBooleanOption(ProvisioningOption option) throws ProvisioningException {
@@ -643,10 +666,11 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         try {
             final Class<?> configHandlerCls = configGenCl.loadClass(CONFIG_GEN_CLASS);
             final Constructor<?> ctor = configHandlerCls.getConstructor();
-            final Method m = configHandlerCls.getMethod(CONFIG_GEN_METHOD, ProvisioningRuntime.class, boolean.class);
+            final Method m = configHandlerCls.getMethod(CONFIG_GEN_METHOD, ProvisioningRuntime.class, boolean.class, String.class);
             final Object generator = ctor.newInstance();
-            boolean forkEmbedded = isForkEmbedded(runtime);
-            m.invoke(generator, runtime, forkEmbedded);
+            final boolean forkEmbedded = isForkEmbedded(runtime);
+            final String resetEmbeddedSystemProperties = isResetEmbeddedSystemProperties();
+            m.invoke(generator, runtime, forkEmbedded, resetEmbeddedSystemProperties);
             if(startTime > 0) {
                 log.print(Errors.tookTime("WildFly configuration generation", startTime));
             }
