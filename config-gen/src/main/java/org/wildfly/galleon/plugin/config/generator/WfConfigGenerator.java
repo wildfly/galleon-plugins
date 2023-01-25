@@ -21,9 +21,12 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.jboss.galleon.Errors;
 import org.jboss.galleon.MessageWriter;
@@ -44,15 +47,83 @@ public class WfConfigGenerator extends BaseConfigGenerator {
 
     private MessageWriter messageWriter;
 
-    public void generate(ProvisioningRuntime runtime, boolean forkEmbedded) throws ProvisioningException {
+    private static Set<String> RESETTABLE_EMBEDDED_SYS_PROPERTIES = Set.of("jboss.home.dir",
+            "jboss.modules.dir",
+            "jboss.bundles.dir",
+            "jboss.server.base.dir",
+            "jboss.server.config.dir",
+            "jboss.server.data.dir",
+            "jboss.server.content.dir",
+            "jboss.server.deploy.dir",
+            "jboss.server.log.dir",
+            "jboss.server.temp.dir",
+            "jboss.controller.temp.dir",
+            "jboss.node.name",
+            "jboss.server.name",
+            "jboss.host.name",
+            "jboss.qualified.host.name",
+            "org.jboss.server.bootstrap.maxThreads",
+            "jboss.server.default.config",
+            "jboss.server.management.uuid",
+            "jboss.server.persist.config",
+            "jboss.domain.base.dir",
+            "jboss.domain.config.dir",
+            "jboss.domain.data.dir",
+            "jboss.domain.content.dir",
+            "jboss.domain.deployment.dir",
+            "jboss.domain.log.dir",
+            "jboss.domain.servers.dir",
+            "jboss.domain.temp.dir",
+            "jboss.domain.default.config",
+            "jboss.host.default.config",
+            "jboss.host.management.uuid",
+            "jboss.modules.system.pkgs",
+            "modules.path",
+            "javax.management.builder.initial"
+    );
+
+    public static Set<String> computeResettableSysProps(String resetSysProps) {
+        final Set<String> result = new HashSet<>();
+        result.addAll(RESETTABLE_EMBEDDED_SYS_PROPERTIES);
+
+        final String[] sysPropKeys = resetSysProps.split(",");
+        for (String sysPropKey : sysPropKeys) {
+            String trim = sysPropKey.trim();
+            if (!"".equals(trim)) {
+                if (trim.startsWith("-")) {
+                    result.remove(trim);
+                } else {
+                    result.add(trim);
+                }
+            }
+        }
+
+        return Collections.unmodifiableSet(result);
+    }
+
+    public void generate(ProvisioningRuntime runtime, boolean forkEmbedded, String resetSystemProperties) throws ProvisioningException {
         this.messageWriter = runtime.getMessageWriter();
         this.forkEmbedded = forkEmbedded;
+        this.resetSysProps = resetSystemProperties;
         this.jbossHome = runtime.getStagedDir().toString();
-        final Map<?, ?> originalProps = forkEmbedded ? null : new HashMap<>(System.getProperties());
+        final Map<Object, Object> originalProps = new HashMap<>(System.getProperties());
+        final Map<Object, Object> resetProps = new HashMap<>();
         try {
+            if (resetSysProps != null) {
+                final Set<String> resettableList = computeResettableSysProps(resetSysProps);
+                for (Map.Entry<Object, Object> prop : System.getProperties().entrySet()) {
+                    if (resettableList.contains(prop.getKey().toString())) {
+                        resetProps.put(prop.getKey(), prop.getValue());
+                        System.clearProperty(prop.getKey().toString());
+                    }
+                }
+            }
             doGenerate(runtime);
         } finally {
             cleanup(originalProps);
+            for (Map.Entry<Object, Object> prop : resetProps.entrySet()) {
+                System.setProperty(prop.getKey().toString(), prop.getValue().toString());
+            }
         }
     }
 
