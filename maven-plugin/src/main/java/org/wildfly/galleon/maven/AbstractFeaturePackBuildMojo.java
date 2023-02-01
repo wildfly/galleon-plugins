@@ -166,7 +166,8 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
      * Generates a channel manifest YAML definition when the feature-pack is produced.
      * Any dependency from the feature pack is declared as a stream in the channel manifest.
      */
-    @Parameter(alias = "generate-channel-manifest", required = false, defaultValue = "false")
+    @Parameter(alias = "generate-channel-manifest", required = false, defaultValue = "false",
+            property = "wildfly.feature.pack.generate-channel-manifest")
     protected boolean generateChannelManifest;
 
     /**
