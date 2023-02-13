@@ -58,10 +58,6 @@ public class WfDiffPlugin implements StateDiffPlugin {
         log.print("WildFly State Diff Plugin (experimental)");
 
         final ProvisioningLayout<?> layout = diffProvider.getProvisioningLayout();
-        final Path configGenJar = layout.getResource("wildfly/wildfly-config-gen.jar");
-        if(!Files.exists(configGenJar)) {
-            throw new ProvisioningException(Errors.pathDoesNotExist(configGenJar));
-        }
 
         final PropertyResolver propertyResolver = getPropertyResolver(layout);
 
@@ -70,9 +66,9 @@ public class WfDiffPlugin implements StateDiffPlugin {
 
         final URL[] cp = new URL[4];
         try {
-            cp[0] = configGenJar.toUri().toURL();
-            cp[1] = resolve(homeEntry.getPath(), "jboss-modules.jar").toUri().toURL();
             final RepositoryArtifactResolver maven = layout.getFactory().getUniverseResolver().getArtifactResolver("repository.maven");
+            cp[0] = maven.resolve(toArtifactCoords("org.wildfly.galleon-plugins:wildfly-config-gen", propertyResolver)).toUri().toURL();
+            cp[1] = resolve(homeEntry.getPath(), "jboss-modules.jar").toUri().toURL();
             cp[2] = maven.resolve(toArtifactCoords("org.wildfly.core:wildfly-cli::client", propertyResolver)).toUri().toURL();
             cp[3] = maven.resolve(toArtifactCoords("org.wildfly.core:wildfly-launcher", propertyResolver)).toUri().toURL();
         } catch (IOException e) {
