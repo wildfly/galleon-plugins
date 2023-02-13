@@ -105,7 +105,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     }
 
     private static final String CONFIG_GEN_METHOD = "generate";
-    private static final String CONFIG_GEN_PATH = "wildfly/wildfly-config-gen.jar";
+    private static final String CONFIG_GEN_GA = "org.wildfly.galleon-plugins:wildfly-config-gen";
     private static final String CONFIG_GEN_CLASS = "org.wildfly.galleon.plugin.config.generator.WfConfigGenerator";
     private static final String CLI_SCRIPT_RUNNER_CLASS = "org.wildfly.galleon.plugin.config.generator.CliScriptRunner";
     private static final String CLI_SCRIPT_RUNNER_METHOD = "runCliScript";
@@ -398,15 +398,13 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             for (FeaturePackRuntime fp : runtime.getFeaturePacks()) {
                 final Path finalizeCli = fp.getResource(WfConstants.WILDFLY, WfConstants.SCRIPTS, "finalize.cli");
                 if (Files.exists(finalizeCli)) {
-                    final Path configGenJar = runtime.getResource(CONFIG_GEN_PATH);
-                    if (!Files.exists(configGenJar)) {
-                        throw new ProvisioningException(Errors.pathDoesNotExist(configGenJar));
-                    }
                     final URL[] cp = new URL[2];
                     try {
-                        MavenArtifact artifact = Utils.toArtifactCoords(mergedArtifactVersions, "org.wildfly.core:wildfly-launcher", false, channelArtifactResolution);
+                        MavenArtifact artifact = Utils.toArtifactCoords(mergedArtifactVersions, CONFIG_GEN_GA, false, channelArtifactResolution);
                         artifactResolver.resolve(artifact);
-                        cp[0] = configGenJar.toUri().toURL();
+                        cp[0] = artifact.getPath().toUri().toURL();
+                        artifact = Utils.toArtifactCoords(mergedArtifactVersions, "org.wildfly.core:wildfly-launcher", false, channelArtifactResolution);
+                        artifactResolver.resolve(artifact);
                         cp[1] = artifact.getPath().toUri().toURL();
                     } catch (IOException e) {
                         throw new ProvisioningException("Failed to init classpath to run CLI finalize script for " + runtime.getStagedDir(), e);
@@ -636,15 +634,13 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
 
         final long startTime = runtime.isLogTime() ? System.nanoTime() : -1;
-        final Path configGenJar = runtime.getResource(CONFIG_GEN_PATH);
-        if(!Files.exists(configGenJar)) {
-            throw new ProvisioningException(Errors.pathDoesNotExist(configGenJar));
-        }
 
         final URL[] cp = new URL[3];
         try {
-            cp[0] = configGenJar.toUri().toURL();
-            MavenArtifact artifact = Utils.toArtifactCoords(mergedArtifactVersions, "org.jboss.modules:jboss-modules", false, channelArtifactResolution);
+            MavenArtifact artifact = Utils.toArtifactCoords(mergedArtifactVersions, CONFIG_GEN_GA, false, channelArtifactResolution);
+            artifactResolver.resolve(artifact);
+            cp[0] = artifact.getPath().toUri().toURL();
+            artifact = Utils.toArtifactCoords(mergedArtifactVersions, "org.jboss.modules:jboss-modules", false, channelArtifactResolution);
             artifactResolver.resolve(artifact);
             cp[1] = artifact.getPath().toUri().toURL();
             artifact = Utils.toArtifactCoords(mergedArtifactVersions, "org.wildfly.core:wildfly-cli::client", false, channelArtifactResolution);
