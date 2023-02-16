@@ -639,6 +639,9 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         try {
             MavenArtifact artifact = Utils.toArtifactCoords(mergedArtifactVersions, CONFIG_GEN_GA, false, channelArtifactResolution);
             artifactResolver.resolve(artifact);
+            if (artifactRecorder.isPresent()) {
+                artifactRecorder.get().cache(artifact, artifact.getPath());
+            }
             cp[0] = artifact.getPath().toUri().toURL();
             artifact = Utils.toArtifactCoords(mergedArtifactVersions, "org.jboss.modules:jboss-modules", false, channelArtifactResolution);
             artifactResolver.resolve(artifact);
