@@ -164,14 +164,15 @@ public class WfConfigGenerator extends BaseConfigGenerator {
                 config.handle(configHandler);
                 progressTracker.processed(config);
             }
-            progressTracker.complete();
         }
 
         if(forkEmbedded) {
+            progressTracker.processing(null);
             scriptWriter.close();
             scriptWriter = null;
             ForkedEmbeddedUtil.fork(new ForkedConfigGenerator(), jbossHome, script.toString());
         }
+        progressTracker.complete();
     }
 
     private void cleanup(Map<?, ?> originalProps) {
