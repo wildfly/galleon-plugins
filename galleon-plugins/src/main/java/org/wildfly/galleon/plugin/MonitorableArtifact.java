@@ -118,7 +118,10 @@ class MonitorableArtifact extends MavenArtifact {
 
     @Override
     public MavenArtifact setPath(Path localArtifact) {
+        tracker.processing(delegate);
+        final MavenArtifact res = delegate.setPath(localArtifact);
         tracker.processed(delegate);
-        return delegate.setPath(localArtifact);
+
+        return res;
     }
 }
