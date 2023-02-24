@@ -1,8 +1,10 @@
 ## Introduction
 
-WildFly Galleon Plugins project includes Galleon and Maven plugin implementations that are dedicated to 
+WildFly Galleon Plugins project includes Galleon plugin and Maven plugin implementations that are dedicated to 
 building feature-packs (including generation of feature specs, packages and other resources) for WildFly releases and provisioning of WildFly-based distributions. 
 These plugins can also be used by projects that integrate into or extend WildFly.
+
+### Maven plugins
 
 This Maven tooling allows to build feature-packs that can be combined with WildFly feature-packs to produce customized WildFly server installations.
 
@@ -13,3 +15,130 @@ implement new WidFly subsystems and expose new server capabilities.
 
 * `build-user-feature-pack`: A goal to be used by WildFly server users in order to define new Layers, new JBoss Modules, ... that depend on existing WildFly 
 subsystems and capabilities.
+
+### Galleon plugins
+
+During provisioning, a WildFly specific Galleon plugin is executed to install the WildFly server.
+This plugin can be configured with a set of options in order to tune the WildFly server installation.
+The way to provide these options is tool specific.
+
+* For the link:https://github.com/wildfly/galleon/[Galleon] CLI command line tool: the options are exposed using completion (TAB key) for the `install` command.
+Options can also be set in the `provisioning.xml` file when using the `provision` command. A `provisioning.xml` file example:
+```
+<installation xmlns="urn:jboss:galleon:provisioning:3.0">
+    <feature-pack location="wildfly@maven(org.jboss.universe:community-universe):current"/>
+    <options>
+        <option name="jboss-fork-embedded" value="false"/>
+        <option name="jboss-maven-dist"/>
+    </options>
+</installation>
+```
+* For the link:https://github.com/wildfly/galleon/[Galleon] Maven plugin configuration: The `<plugin-options>` element contains the options as XML elements.
+For example:
+```
+<configuration>
+...
+ <plugin-options>
+  <jboss-fork-embedded>true</jboss-fork-embedded>
+ </plugin-options>
+...
+</configuration>
+```
+
+* For the link:https://github.com/wildfly/wildfly-maven-plugin/[WildFly Maven plugin] configuration: The `<galleon-options>` element contains the options as XML elements.
+For example:
+```
+<configuration>
+...
+ <galleon-options>
+  <jboss-fork-embedded>true</jboss-fork-embedded>
+ </galleon-options>
+...
+</configuration>
+```
+
+* For the link:https://github.com/wildfly-extras/wildfly-jar-maven-plugin/[WildFly Bootable JAR Maven plugin] configuration: The `<plugin-options>` element contains the options as XML elements.
+For example:
+```
+<configuration>
+...
+ <plugin-options>
+  <jboss-fork-embedded>true</jboss-fork-embedded>
+ </plugin-options>
+...
+</configuration>
+```
+
+* For the link:https://github.com/wildfly-extras/prospero[prospero] tool, you can define a `provisioning.xml` file that contains the options.
+A `provisioning.xml` file example:
+```
+<installation xmlns="urn:jboss:galleon:provisioning:3.0">
+    <feature-pack location="wildfly@maven(org.jboss.universe:community-universe):current"/>
+    <options>
+        <option name="jboss-fork-embedded" value="false"/>
+        <option name="jboss-maven-dist"/>
+    </options>
+</installation>
+```
+
+#### Installation Plugin options
+
+[cols="1,2,3,4"]
+
+|===
+|Option 
+|Type
+|Default value
+|Description 
+
+|jboss-bulk-resolve-artifacts
+|Boolean
+|false
+|Maven artifacts that are needed for the WildFly server installation are resolved in a bulk operation instead of 
+being resolved individually. That can speed-up the provisioning time.
+
+|jboss-dump-config-scripts
+|String
+|NONE
+|A path to a directory in which WildFly CLI script files used to generate the server configurations are stored.
+
+|jboss-fork-embedded
+|Boolean
+|false
+|Fork in a separate process the generation of the server configuration files. Server configuration generation implies the usage of a WildFly Embedded server.
+It is advised to set this env variable to true, specially when having multiple executions of the provisioning inside the 
+same process (e.g.: multiple executions of Galleon\|WildFly\|Bootable JAR Maven plugins).
+
+|jboss-maven-dist
+|Boolean
+|false
+|Provision a thin WildFly server installation with JBoss Modules modules jar resolved from Maven local cache 
+and not copied to the `modules` directory.
+
+|jboss-maven-repo
+|String
+|NONE
+|A path to a directory in which all the resolved Maven artifacts jars and associated pom files are stored. 
+The generated directory complies with the filesystem layout of a Maven repository. This respository can then be used as the local cache 
+of a thin WildFly server (see `jboss-maven-dist` option). 
+
+|jboss-overridden-artifacts
+|'\|' separated list of maven coordinates in the following syntax: GroupId:ArtifactId:Version:[Classifier:]Extension
+|NONE
+|A list of Maven artifact coordinates used to override the artifact versions that are defined in the provisioned WildFly feature-pack.
+For example, to override undertow-core: `io.undertow:undertow-core:2.3.1.Final::jar`
+
+|jboss-reset-embedded-system-properties
+|Comma-separated list of String
+|NONE
+|When executing a forked process to generate the server configuration, all system properties defined in the parent process are inherited by the forked process.
+Setting this property to an empty value will reset the system properties used by WildFly server during startup.
+To reset WildFly specific system properties and some additional properties, add to the comma-separated list the names of system property to reset.
+To not reset a WildFly specific system property, add the property name prefixed with `-` to the list.
+
+|jboss-resolved-artifacts-cache
+|String
+|NONE
+|A path to a directory where to cache the resolved Maven artifacts that are not part of the server installation (feature-packs, Galleon plugins, ...).
+NOTE: This option is specific to the usage of the link:https://github.com/wildfly-extras/prospero[prospero] provisioning tool.
+|=== 
