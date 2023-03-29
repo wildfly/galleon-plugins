@@ -46,12 +46,14 @@ abstract class AbstractModuleTemplateProcessor {
         String coordsStr;
         private MavenArtifact artifact;
         private final Attribute attribute;
-
-        ModuleArtifact(Element element,
+        private final ModuleTemplate template;
+        ModuleArtifact(ModuleTemplate template,
+                       Element element,
                        Map<String, String> versionProps,
                        MessageWriter log,
                        AbstractArtifactInstaller installer,
                        boolean channelArtifactResolution) {
+            this.template = template;
             this.versionProps = versionProps;
             this.log = log;
             this.installer = installer;
@@ -87,6 +89,9 @@ abstract class AbstractModuleTemplateProcessor {
                 artifact = getUnresolvedArtifact();
                 log.verbose("Resolving %s", artifact);
                 try {
+                    if (artifact == null) {
+                        throw new IOException("Unknown artifact in module " + template.getName());
+                    }
                     installer.getArtifactResolver().resolve(artifact);
                     if (channelArtifactResolution) {
                         log.verbose("Resolved %s", artifact);
@@ -187,7 +192,7 @@ abstract class AbstractModuleTemplateProcessor {
         }
         final int artifactCount = artifacts.size();
         for (int i = 0; i < artifactCount; i++) {
-            final ModuleArtifact moduleArtifact = new ModuleArtifact(artifacts.get(i), versionProps, getLog(), installer, channelArtifactResolution);
+            final ModuleArtifact moduleArtifact = new ModuleArtifact(template, artifacts.get(i), versionProps, getLog(), installer, channelArtifactResolution);
             if (moduleArtifact.hasMavenArtifact()) {
                 Path artifactPath = moduleArtifact.getMavenArtifact().getPath();
                 processArtifact(moduleArtifact);
