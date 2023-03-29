@@ -53,6 +53,10 @@ class ModuleTemplate {
         this.targetPath = targetPath;
     }
 
+    String getName() {
+        return rootElement.getAttributeValue("name");
+    }
+
     Element getRootElement() {
         return rootElement;
     }

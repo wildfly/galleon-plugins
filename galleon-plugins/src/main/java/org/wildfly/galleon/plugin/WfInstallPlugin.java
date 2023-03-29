@@ -495,7 +495,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
         final int artifactCount = artifacts.size();
         for (int i = 0; i < artifactCount; i++) {
-            final AbstractModuleTemplateProcessor.ModuleArtifact moduleArtifact = new AbstractModuleTemplateProcessor.ModuleArtifact(artifacts.get(i), versionProps, log, artifactInstaller, channelArtifactResolution);
+            final AbstractModuleTemplateProcessor.ModuleArtifact moduleArtifact = new AbstractModuleTemplateProcessor.ModuleArtifact(moduleTemplate, artifacts.get(i), versionProps, log, artifactInstaller, channelArtifactResolution);
             final MavenArtifact mavenArtifact = moduleArtifact.getUnresolvedArtifact();
             if (mavenArtifact != null) {
                 final MavenArtifact key = new MavenArtifact();
