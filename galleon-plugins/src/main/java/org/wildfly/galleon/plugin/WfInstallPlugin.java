@@ -185,6 +185,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private final Map<MavenArtifact, MavenArtifact> artifactCache = new HashMap<>();
     private final Map<Path, ModuleTemplate> moduleTemplateCache = new HashMap<>();
 
+    private Map<String, String> resolvedVersionsProperties = new HashMap<>();
+
     @Override
     protected List<ProvisioningOption> initPluginOptions() {
         return Arrays.asList(OPTION_MVN_DIST, OPTION_DUMP_CONFIG_SCRIPTS,
@@ -791,6 +793,15 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         if (!Files.exists(src)) {
             throw new ProvisioningException(Errors.pathDoesNotExist(src));
         }
+        // Copy the path to handle replacements
+        Path tmp = runtime.getTmpPath().resolve(src.getFileName());
+        try {
+            PropertyResolver versionsResolver = new MapPropertyResolver(resolvedVersionsProperties);
+            PropertyReplacer.copy(src, tmp, versionsResolver, "Not Installed");
+            Files.copy(tmp, src, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException ex) {
+            throw new ProvisioningException(ex);
+        }
         final Path output = runtime.getStagedDir().resolve(xslt.getOutput());
         if (Files.exists(output)) {
             throw new ProvisioningException(Errors.pathAlreadyExists(output));
@@ -1045,7 +1056,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
                             @Override
                             public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-                                PropertyReplacer.copy(file, target.resolve(src.relativize(file).toString()), mergedTaskPropsResolver);
+                                PropertyReplacer.copy(file, target.resolve(src.relativize(file).toString()), mergedTaskPropsResolver,
+                                        null);
                                 return FileVisitResult.CONTINUE;
                             }
                         });
@@ -1108,6 +1120,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         } else {
             maven.resolve(artifact);
         }
+        // These properties are present in *-licenses.xml and must be replaced by the resolved ones.
+        resolvedVersionsProperties.put("version."+artifact.getGroupId()+"."+artifact.getArtifactId(), artifact.getVersion());
     }
 
     boolean isOverriddenArtifact(MavenArtifact artifact) throws ProvisioningException {
