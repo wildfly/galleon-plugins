@@ -77,10 +77,10 @@
     <version.org.codehaus.mojo.xml-maven-plugin>1.0.1</version.org.codehaus.mojo.xml-maven-plugin>
     <version.org.codehaus.plexus.plexus-utils>3.1.0</version.org.codehaus.plexus.plexus-utils>
     <version.org.eclipse.aether>1.1.0</version.org.eclipse.aether>
-    <version.org.jboss.galleon>5.0.8.Final</version.org.jboss.galleon>
+    <version.org.jboss.galleon>5.0.9.Final</version.org.jboss.galleon>
     <version.org.jboss.dmr>1.5.0.Final</version.org.jboss.dmr>
     
-    <version.org.wildfly.channel>1.0.0.Beta4</version.org.wildfly.channel>
+    <version.org.wildfly.channel>1.0.0.Beta6</version.org.wildfly.channel>
     <version.org.wildfly.core.wildfly-core>19.0.1.Final</version.org.wildfly.core.wildfly-core>
     <version.org.wildfly.maven.plugins>2.0.0.Final</version.org.wildfly.maven.plugins>
     <version.org.jboss.logging>3.3.1.Final</version.org.jboss.logging>
