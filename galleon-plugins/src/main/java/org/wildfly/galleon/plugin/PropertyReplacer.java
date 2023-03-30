@@ -39,17 +39,18 @@ public class PropertyReplacer {
     private static final int RESOLVED = 3;
     private static final int DEFAULT = 4;
 
-    public static void copy(final Path src, final Path target, PropertyResolver resolver) throws IOException {
+    public static void copy(final Path src, final Path target, PropertyResolver resolver, String failureReplacement) throws IOException {
         if(!Files.exists(target.getParent())) {
             Files.createDirectories(target.getParent());
         }
         try(BufferedReader reader = Files.newBufferedReader(src);
                 BufferedWriter writer = Files.newBufferedWriter(target)) {
-            copy(reader, writer, resolver);
+            copy(reader, writer, resolver, failureReplacement);
         }
     }
 
-    public static void copy(final Reader reader, Writer writer, PropertyResolver properties) throws IOException {
+    public static void copy(final Reader reader, Writer writer, PropertyResolver properties,
+            String failureReplacement) throws IOException {
         int state = INITIAL;
         final StringBuilder buf = new StringBuilder();
         int ch = reader.read();
@@ -106,7 +107,12 @@ public class PropertyReplacer {
                                 } else if (ch == ',') {
                                     state = DEFAULT;
                                 } else {
-                                    throw new IllegalStateException("Failed to resolve property: " + buf);
+                                    if(failureReplacement != null) {
+                                        writer.write(failureReplacement);
+                                        state = ch == '}' ? INITIAL : RESOLVED;
+                                    } else {
+                                        throw new IllegalStateException("Failed to resolve property: " + buf);
+                                    }
                                 }
                             }
                             buf.setLength(0);
