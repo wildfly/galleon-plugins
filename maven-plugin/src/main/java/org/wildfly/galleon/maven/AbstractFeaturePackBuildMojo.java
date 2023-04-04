@@ -101,6 +101,7 @@ import org.wildfly.channel.MavenCoordinate;
 import org.wildfly.galleon.maven.build.tasks.ResourcesTask;
 import org.wildfly.galleon.plugin.ArtifactCoords;
 import org.wildfly.galleon.plugin.WfConstants;
+import org.wildfly.galleon.plugin.WildFlyChannelResolutionMode;
 
 /**
  * This Maven mojo creates a WildFly style feature-pack archive from the
@@ -176,6 +177,18 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
      */
     @Parameter(alias = "add-feature-packs-as-required-manifests", required = false, defaultValue = "true")
     protected boolean addFeaturePacksAsRequiredManifests;
+
+    /**
+     * Feature-pack WildFly channel resolution mode when WildFly channels are configured in the provisioning tooling used to
+     * provision this feature-pack.
+     * "NOT_REQUIRED" means that the feature-pack and artifacts can be resolved without WildFly channels.
+     * "REQUIRED" means that the feature-pack and all its artifacts must be only resolved from WildFly channels.
+     * "REQUIRED_FP_ONLY" means that only the feature-pack must be only resolved from WildFly channels.
+     * Referenced artifacts can be resolved outside of configured WildFly channels.
+     */
+    @Parameter(alias = "wildfly-channel-resolution-mode", required = false, defaultValue = "NOT_REQUIRED",
+            property = "wildfly.feature.pack.require.channel.resolution")
+    protected WildFlyChannelResolutionMode wildflyChannelResolutionMode;
 
     @Component
     protected RepositorySystem repoSystem;
@@ -290,6 +303,12 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             getArtifactVersions().remove(gav.getGroupId(), gav.getArtifactId());
         }
 
+        // WildFly channels configuration
+        try (OutputStream out = Files.newOutputStream(resourcesWildFly.resolve(WfConstants.WILDFLY_CHANNEL_PROPS))) {
+            getWildFlyChannelProperties().store(out, "WildFly channel properties");
+        } catch (IOException e) {
+            throw new MojoExecutionException("Failed to store WildFly channel properties", e);
+        }
         // Copy resources from src.
         try {
             Path srcArtifacts = resourcesDir.resolve(Constants.RESOURCES);
@@ -486,6 +505,12 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         if (!taskProps.isEmpty()) {
             properties.putAll(taskProps);
         }
+        return properties;
+    }
+
+    private Properties getWildFlyChannelProperties() throws MojoExecutionException {
+        final Properties properties = new Properties();
+        properties.put(WfConstants.WILDFLY_CHANNEL_RESOLUTION_PROP, wildflyChannelResolutionMode.toString());
         return properties;
     }
 
