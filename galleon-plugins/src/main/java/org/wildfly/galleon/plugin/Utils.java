@@ -98,8 +98,12 @@ public class Utils {
         return val.toString().equals(value);
     }
 
-    public static MavenArtifact toArtifactCoords(Map<String, String> versionProps, String str, boolean optional, boolean channelArtifactResolution) throws ProvisioningException {
+    public static MavenArtifact toArtifactCoords(Map<String, String> versionProps, String str, boolean optional,
+            boolean channelArtifactResolution, boolean requireChannel) throws ProvisioningException {
         final MavenArtifact artifact = new MavenArtifact();
+        if (requireChannel) {
+            artifact.addMetadata(WfInstallPlugin.REQUIRES_CHANNEL_FOR_ARTIFACT_RESOLUTION_PROPERTY, "true");
+        }
         artifact.setExtension(MavenArtifact.EXT_JAR);
         resolveArtifact(str, artifact, channelArtifactResolution);
         if(artifact.getGroupId() == null && artifact.getArtifactId() == null) {
@@ -115,7 +119,12 @@ public class Utils {
                 if (optional) {
                     return null;
                 }
-                throw new ProvisioningException("Failed to resolve the version of " + artifact.getGroupId() + ':' + artifact.getArtifactId());
+                if (channelArtifactResolution) {
+                    // No version defined in feature-pack, version would be retrieved from channel.
+                    return artifact;
+                } else {
+                    throw new ProvisioningException("Failed to resolve the version of " + artifact.getGroupId() + ':' + artifact.getArtifactId());
+                }
             }
             MavenArtifact resolvedArtifact = new MavenArtifact();
             resolveArtifact(resolvedStr, resolvedArtifact, channelArtifactResolution);

@@ -33,8 +33,9 @@ import org.jboss.galleon.universe.maven.MavenUniverseException;
 class ThinModuleTemplateProcessor extends AbstractModuleTemplateProcessor {
 
     ThinModuleTemplateProcessor(WfInstallPlugin plugin,
-            AbstractArtifactInstaller installer, Path targetPath, ModuleTemplate template, Map<String, String> versionProps, boolean channelArtifactResolution) {
-        super(plugin, installer, targetPath, template, versionProps, channelArtifactResolution);
+            AbstractArtifactInstaller installer, Path targetPath, ModuleTemplate template, Map<String, String> versionProps,
+            boolean channelArtifactResolution, boolean requireChannel) {
+        super(plugin, installer, targetPath, template, versionProps, channelArtifactResolution, requireChannel);
     }
 
     @Override

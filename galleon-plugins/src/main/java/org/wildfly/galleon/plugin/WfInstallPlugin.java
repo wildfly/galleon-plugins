@@ -100,6 +100,8 @@ import org.wildfly.galleon.plugin.config.XslTransform;
  */
 public class WfInstallPlugin extends ProvisioningPluginWithOptions implements InstallPlugin {
 
+    // If tooling used for provisioning has wildfly channels setup, the artifacts must be resolved from the channel
+    public static final String REQUIRES_CHANNEL_FOR_ARTIFACT_RESOLUTION_PROPERTY = "org.wildfly.plugins.galleon.all.artifact.requires.channel.resolution";
     private static final String TRACK_MODULES_BUILD = "JBMODULES";
     private static final String TRACK_COPY_CONFIGS = "JBCOPYCONFIGS";
     private static final String TRACK_ARTIFACTS_RESOLVE = "JB_ARTIFACTS_RESOLVE";
@@ -185,7 +187,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private final Map<MavenArtifact, MavenArtifact> artifactCache = new HashMap<>();
     private final Map<Path, ModuleTemplate> moduleTemplateCache = new HashMap<>();
 
-    private Map<String, String> resolvedVersionsProperties = new HashMap<>();
+    private final Map<String, String> resolvedVersionsProperties = new HashMap<>();
+    private Map<ProducerSpec, WildFlyChannelResolutionMode> channelResolutionModes = new LinkedHashMap<>();
 
     @Override
     protected List<ProvisioningOption> initPluginOptions() {
@@ -328,6 +331,15 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 mergedTaskProps.putAll(fpProps);
             }
 
+            final Path channelsPropsPath = wfRes.resolve(WfConstants.WILDFLY_CHANNEL_PROPS);
+            if(Files.exists(channelsPropsPath)) {
+                final Map<String, String> channelProps = Utils.readProperties(channelsPropsPath);
+                String mode = channelProps.get(WfConstants.WILDFLY_CHANNEL_RESOLUTION_PROP);
+                if (mode != null) {
+                    channelResolutionModes = CollectionUtils.put(channelResolutionModes, fp.getFPID().getProducer(), WildFlyChannelResolutionMode.valueOf(mode));
+                }
+            }
+
             if(fp.containsPackage(WfConstants.DOCS_SCHEMA)) {
                 final Path schemaGroupsTxt = fp.getPackage(WfConstants.DOCS_SCHEMA).getResource(
                         WfConstants.PM, WfConstants.WILDFLY, WfConstants.SCHEMA_GROUPS_TXT);
@@ -410,10 +422,10 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 if (Files.exists(finalizeCli)) {
                     final URL[] cp = new URL[2];
                     try {
-                        MavenArtifact artifact = Utils.toArtifactCoords(mergedArtifactVersions, CONFIG_GEN_GA, false, channelArtifactResolution);
+                        MavenArtifact artifact = Utils.toArtifactCoords(mergedArtifactVersions, CONFIG_GEN_GA, false, channelArtifactResolution, true);
                         artifactResolver.resolve(artifact);
                         cp[0] = artifact.getPath().toUri().toURL();
-                        artifact = Utils.toArtifactCoords(mergedArtifactVersions, "org.wildfly.core:wildfly-launcher", false, channelArtifactResolution);
+                        artifact = Utils.toArtifactCoords(mergedArtifactVersions, "org.wildfly.core:wildfly-launcher", false, channelArtifactResolution, true);
                         artifactResolver.resolve(artifact);
                         cp[1] = artifact.getPath().toUri().toURL();
                     } catch (IOException e) {
@@ -497,7 +509,9 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
         final int artifactCount = artifacts.size();
         for (int i = 0; i < artifactCount; i++) {
-            final AbstractModuleTemplateProcessor.ModuleArtifact moduleArtifact = new AbstractModuleTemplateProcessor.ModuleArtifact(moduleTemplate, artifacts.get(i), versionProps, log, artifactInstaller, channelArtifactResolution);
+            final AbstractModuleTemplateProcessor.ModuleArtifact moduleArtifact = new AbstractModuleTemplateProcessor.ModuleArtifact(moduleTemplate,
+                    artifacts.get(i), versionProps, log, artifactInstaller, channelArtifactResolution,
+                    requireChannel(pkg.getFeaturePackRuntime().getFPID().getProducer()));
             final MavenArtifact mavenArtifact = moduleArtifact.getUnresolvedArtifact();
             if (mavenArtifact != null) {
                 final MavenArtifact key = new MavenArtifact();
@@ -686,16 +700,16 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
         final URL[] cp = new URL[3];
         try {
-            MavenArtifact artifact = Utils.toArtifactCoords(mergedArtifactVersions, CONFIG_GEN_GA, false, channelArtifactResolution);
+            MavenArtifact artifact = Utils.toArtifactCoords(mergedArtifactVersions, CONFIG_GEN_GA, false, channelArtifactResolution, true);
             artifactResolver.resolve(artifact);
             if (artifactRecorder.isPresent()) {
                 artifactRecorder.get().cache(artifact, artifact.getPath());
             }
             cp[0] = artifact.getPath().toUri().toURL();
-            artifact = Utils.toArtifactCoords(mergedArtifactVersions, "org.jboss.modules:jboss-modules", false, channelArtifactResolution);
+            artifact = Utils.toArtifactCoords(mergedArtifactVersions, "org.jboss.modules:jboss-modules", false, channelArtifactResolution, true);
             artifactResolver.resolve(artifact);
             cp[1] = artifact.getPath().toUri().toURL();
-            artifact = Utils.toArtifactCoords(mergedArtifactVersions, "org.wildfly.core:wildfly-cli::client", false, channelArtifactResolution);
+            artifact = Utils.toArtifactCoords(mergedArtifactVersions, "org.wildfly.core:wildfly-cli::client", false, channelArtifactResolution, true);
             artifactResolver.resolve(artifact);
             cp[2] = artifact.getPath().toUri().toURL();
         } catch (IOException e) {
@@ -931,9 +945,12 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                     artifactInstaller,
                     moduleXmlRelativePath,
                     moduleTemplate,
-                    versionProps, channelArtifactResolution);
+                    versionProps, channelArtifactResolution,
+                    requireChannel(pkg.getFeaturePackRuntime().getFPID().getProducer()));
         } else {
-            processor = new FatModuleTemplateProcessor(this, artifactInstaller, targetDir, moduleTemplate, versionProps, channelArtifactResolution);
+            processor = new FatModuleTemplateProcessor(this, artifactInstaller,
+                    targetDir, moduleTemplate, versionProps,
+                    channelArtifactResolution,requireChannel(pkg.getFeaturePackRuntime().getFPID().getProducer()));
         }
         processor.process();
         moduleTemplate.store();
@@ -965,10 +982,20 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
     }
 
+    private boolean requireChannel(ProducerSpec spec) {
+        WildFlyChannelResolutionMode mode = channelResolutionModes.get(spec);
+        boolean requireChannel = false;
+        if(mode != null) {
+            requireChannel = WildFlyChannelResolutionMode.REQUIRED.equals(mode);
+        }
+        return requireChannel;
+    }
+
     public void copyArtifact(CopyArtifact copyArtifact, PackageRuntime pkg) throws ProvisioningException {
         final MavenArtifact artifact = Utils.toArtifactCoords(copyArtifact.isFeaturePackVersion() ? fpArtifactVersions.get(pkg.getFeaturePackRuntime().getFPID().getProducer())
                         : mergedArtifactVersions,
-                copyArtifact.getArtifact(), copyArtifact.isOptional(), channelArtifactResolution);
+                copyArtifact.getArtifact(), copyArtifact.isOptional(),
+                channelArtifactResolution, requireChannel(pkg.getFeaturePackRuntime().getFPID().getProducer()));
         if(artifact == null) {
             return;
         }

@@ -62,6 +62,8 @@ public interface WfConstants {
     String UTF8 = "UTF-8";
     String VALUE = "value";
     String WILDFLY = "wildfly";
+    String WILDFLY_CHANNEL_PROPS = "wildfly-channel.properties";
+    String WILDFLY_CHANNEL_RESOLUTION_PROP = "resolution";
     String WILDFLY_TASKS_PROPS = "wildfly-tasks.properties";
     String WILDFLY_TASKS_XML = "wildfly-tasks.xml";
 

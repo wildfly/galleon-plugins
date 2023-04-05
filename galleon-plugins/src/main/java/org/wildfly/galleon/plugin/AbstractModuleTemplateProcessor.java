@@ -47,12 +47,14 @@ abstract class AbstractModuleTemplateProcessor {
         private MavenArtifact artifact;
         private final Attribute attribute;
         private final ModuleTemplate template;
+        private final boolean requireChannel;
         ModuleArtifact(ModuleTemplate template,
                        Element element,
                        Map<String, String> versionProps,
                        MessageWriter log,
                        AbstractArtifactInstaller installer,
-                       boolean channelArtifactResolution) {
+                       boolean channelArtifactResolution,
+                       boolean requireChannel) {
             this.template = template;
             this.versionProps = versionProps;
             this.log = log;
@@ -71,6 +73,7 @@ abstract class AbstractModuleTemplateProcessor {
                 }
                 coordsStr = this.versionProps.get(coordsStr);
             }
+            this.requireChannel = requireChannel;
         }
 
         MavenArtifact getUnresolvedArtifact() throws IOException {
@@ -78,7 +81,7 @@ abstract class AbstractModuleTemplateProcessor {
                 return null;
             }
             try {
-                return Utils.toArtifactCoords(this.versionProps, coordsStr, false, channelArtifactResolution);
+                return Utils.toArtifactCoords(this.versionProps, coordsStr, false, channelArtifactResolution, requireChannel);
             } catch (ProvisioningException e) {
                 throw new IOException("Failed to resolve full coordinates for " + coordsStr, e);
             }
@@ -129,15 +132,18 @@ abstract class AbstractModuleTemplateProcessor {
     private final AbstractArtifactInstaller installer;
     private final Path targetDir;
     private final boolean channelArtifactResolution;
+    private final boolean requireChannel;
 
     AbstractModuleTemplateProcessor(WfInstallPlugin plugin, AbstractArtifactInstaller installer, Path targetPath,
-            ModuleTemplate template, Map<String, String> versionProps, boolean channelArtifactResolution) {
+            ModuleTemplate template, Map<String, String> versionProps, boolean channelArtifactResolution,
+                       boolean requireChannel) {
         this.template = template;
         this.versionProps = versionProps;
         this.plugin = plugin;
         this.installer = installer;
         this.targetDir = targetPath.getParent();
         this.channelArtifactResolution = channelArtifactResolution;
+        this.requireChannel = requireChannel;
     }
 
     AbstractArtifactInstaller getInstaller() {
@@ -177,7 +183,7 @@ abstract class AbstractModuleTemplateProcessor {
                 } else {
                     artifactName = exprBody;
                 }
-                final MavenArtifact artifact = Utils.toArtifactCoords(versionProps, artifactName, false, channelArtifactResolution);
+                final MavenArtifact artifact = Utils.toArtifactCoords(versionProps, artifactName, false, channelArtifactResolution, requireChannel);
                 if (artifact != null) {
                     versionAttribute.setValue(artifact.getVersion());
                 }
@@ -192,7 +198,7 @@ abstract class AbstractModuleTemplateProcessor {
         }
         final int artifactCount = artifacts.size();
         for (int i = 0; i < artifactCount; i++) {
-            final ModuleArtifact moduleArtifact = new ModuleArtifact(template, artifacts.get(i), versionProps, getLog(), installer, channelArtifactResolution);
+            final ModuleArtifact moduleArtifact = new ModuleArtifact(template, artifacts.get(i), versionProps, getLog(), installer, channelArtifactResolution, requireChannel);
             if (moduleArtifact.hasMavenArtifact()) {
                 Path artifactPath = moduleArtifact.getMavenArtifact().getPath();
                 processArtifact(moduleArtifact);
