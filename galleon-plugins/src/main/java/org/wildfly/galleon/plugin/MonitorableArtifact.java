@@ -5,6 +5,7 @@ import org.jboss.galleon.universe.maven.MavenArtifact;
 import org.jboss.galleon.universe.maven.MavenUniverseException;
 
 import java.nio.file.Path;
+import java.util.Map;
 
 class MonitorableArtifact extends MavenArtifact {
 
@@ -99,6 +100,16 @@ class MonitorableArtifact extends MavenArtifact {
     @Override
     public String getCoordsAsString() {
         return delegate.getCoordsAsString();
+    }
+
+    @Override
+    public Map<String, String> getMetadata() {
+        return delegate.getMetadata();
+    }
+
+    @Override
+    public void addMetadata(String key, String value) {
+        delegate.addMetadata(key, value);
     }
 
     @Override
