@@ -116,7 +116,10 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private static final String CONFIG_GEN_CLASS = "org.wildfly.galleon.plugin.config.generator.WfConfigGenerator";
     private static final String CLI_SCRIPT_RUNNER_CLASS = "org.wildfly.galleon.plugin.config.generator.CliScriptRunner";
     private static final String CLI_SCRIPT_RUNNER_METHOD = "runCliScript";
+    private static final String JBOSS_MODULES_GA = "org.jboss.modules:jboss-modules";
     private static final String MAVEN_REPO_LOCAL = "maven.repo.local";
+    private static final String WILDFLY_CLI_GA = "org.wildfly.core:wildfly-cli";
+    private static final String WILDFLY_LAUNCHER_GA = "org.wildfly.core:wildfly-launcher";
 
     private static final ProvisioningOption OPTION_MVN_DIST = ProvisioningOption.builder("jboss-maven-dist")
             .setBooleanValueSet()
@@ -189,6 +192,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
     private final Map<String, String> resolvedVersionsProperties = new HashMap<>();
     private Map<ProducerSpec, WildFlyChannelResolutionMode> channelResolutionModes = new LinkedHashMap<>();
+    private Map<String, ProducerSpec> gaToProducer = new HashMap<>();
 
     @Override
     protected List<ProvisioningOption> initPluginOptions() {
@@ -321,6 +325,23 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                     }
                 }
                 fpArtifactVersions.put(fp.getFPID().getProducer(), versionProps);
+                // Handle artifacts that are directly resolved from the plugin
+                // org.wildfly.core:wildfly-launcher
+                // org.jboss.modules:jboss-modules
+                // org.wildfly.core:wildfly-cli
+                // org.wildfly.galleon-plugins:wildfly-config-gen
+                if (versionProps.containsKey(CONFIG_GEN_GA)) {
+                    gaToProducer.put(CONFIG_GEN_GA, fp.getFPID().getProducer());
+                }
+                if (versionProps.containsKey(WILDFLY_CLI_GA)) {
+                    gaToProducer.put(WILDFLY_CLI_GA, fp.getFPID().getProducer());
+                }
+                if (versionProps.containsKey(WILDFLY_LAUNCHER_GA)) {
+                    gaToProducer.put(WILDFLY_LAUNCHER_GA, fp.getFPID().getProducer());
+                }
+                if (versionProps.containsKey(JBOSS_MODULES_GA)) {
+                    gaToProducer.put(JBOSS_MODULES_GA, fp.getFPID().getProducer());
+                }
                 mergedArtifactVersions.putAll(versionProps);
             }
 
@@ -422,10 +443,12 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 if (Files.exists(finalizeCli)) {
                     final URL[] cp = new URL[2];
                     try {
-                        MavenArtifact artifact = Utils.toArtifactCoords(mergedArtifactVersions, CONFIG_GEN_GA, false, channelArtifactResolution, true);
+                        MavenArtifact artifact = Utils.toArtifactCoords(mergedArtifactVersions, CONFIG_GEN_GA,
+                                false, channelArtifactResolution, requireChannel(gaToProducer.get(CONFIG_GEN_GA)));
                         artifactResolver.resolve(artifact);
                         cp[0] = artifact.getPath().toUri().toURL();
-                        artifact = Utils.toArtifactCoords(mergedArtifactVersions, "org.wildfly.core:wildfly-launcher", false, channelArtifactResolution, true);
+                        artifact = Utils.toArtifactCoords(mergedArtifactVersions, WILDFLY_LAUNCHER_GA,
+                                false, channelArtifactResolution, requireChannel(gaToProducer.get(WILDFLY_LAUNCHER_GA)));
                         artifactResolver.resolve(artifact);
                         cp[1] = artifact.getPath().toUri().toURL();
                     } catch (IOException e) {
@@ -700,16 +723,19 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
         final URL[] cp = new URL[3];
         try {
-            MavenArtifact artifact = Utils.toArtifactCoords(mergedArtifactVersions, CONFIG_GEN_GA, false, channelArtifactResolution, true);
+            MavenArtifact artifact = Utils.toArtifactCoords(mergedArtifactVersions, CONFIG_GEN_GA,
+                    false, channelArtifactResolution, requireChannel(gaToProducer.get(CONFIG_GEN_GA)));
             artifactResolver.resolve(artifact);
             if (artifactRecorder.isPresent()) {
                 artifactRecorder.get().cache(artifact, artifact.getPath());
             }
             cp[0] = artifact.getPath().toUri().toURL();
-            artifact = Utils.toArtifactCoords(mergedArtifactVersions, "org.jboss.modules:jboss-modules", false, channelArtifactResolution, true);
+            artifact = Utils.toArtifactCoords(mergedArtifactVersions, JBOSS_MODULES_GA,
+                    false, channelArtifactResolution, requireChannel(gaToProducer.get(JBOSS_MODULES_GA)));
             artifactResolver.resolve(artifact);
             cp[1] = artifact.getPath().toUri().toURL();
-            artifact = Utils.toArtifactCoords(mergedArtifactVersions, "org.wildfly.core:wildfly-cli::client", false, channelArtifactResolution, true);
+            artifact = Utils.toArtifactCoords(mergedArtifactVersions, WILDFLY_CLI_GA+"::client",
+                    false, channelArtifactResolution, requireChannel(gaToProducer.get(WILDFLY_CLI_GA)));
             artifactResolver.resolve(artifact);
             cp[2] = artifact.getPath().toUri().toURL();
         } catch (IOException e) {
