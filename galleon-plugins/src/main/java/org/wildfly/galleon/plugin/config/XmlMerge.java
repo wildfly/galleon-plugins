@@ -96,7 +96,7 @@ public class XmlMerge implements WildFlyPackageTask {
                     if(buf.length() > 0) {
                         buf.append(',');
                     }
-                    buf.append(p.toString());
+                    buf.append(p.toUri().toString());
                 }
             }
         } catch (IOException e) {
