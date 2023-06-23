@@ -57,21 +57,7 @@ public class ForkedProcessRunner {
 
       } catch (Throwable t) {
          System.err.println("Forked embedded process has failed with the following error:");
-         final StringBuilder buf = new StringBuilder();
-         while(t != null) {
-            buf.setLength(0);
-            buf.append(t.getClass().getName());
-            if(t.getMessage() != null) {
-               buf.append(": ").append(t.getMessage());
-            }
-            System.err.println(buf.toString());
-            for(StackTraceElement e : t.getStackTrace()) {
-               buf.setLength(0);
-               buf.append("\tat ").append(e.toString());
-               System.err.println(buf.toString());
-            }
-            t = t.getCause();
-         }
+         t.printStackTrace(System.err);
          System.exit(1);
       }
    }
