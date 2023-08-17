@@ -498,6 +498,14 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             provisionExampleConfigs();
         }
 
+        if (artifactRecorder.isPresent()) {
+            try {
+                artifactRecorder.get().writeCacheManifest();
+            } catch (IOException e) {
+                throw new ProvisioningException("Unable to record provisioned artifacts", e);
+            }
+        }
+
         if (startTime > 0) {
             log.print(Errors.tookTime("Overall WildFly Galleon Plugin", startTime));
         }
