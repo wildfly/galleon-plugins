@@ -24,14 +24,16 @@ import org.jboss.galleon.util.IoUtils;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
+import java.util.HashMap;
+import java.util.Map;
 
 public class ArtifactRecorder {
-    private static final String ARTIFACT_LIST_FILE = "artifacts.txt";
+    protected static final String ARTIFACT_LIST_FILE = "artifacts.txt";
     private static final String SEPARATOR = "::";
     private final Path stagedDir;
     private final Path cacheDir;
     private final Path artifactList;
+    private final HashMap<String, Path> cachedArtifacts = new HashMap<>();
 
     public ArtifactRecorder(Path stagedDir, Path cacheDir) throws IOException {
         this.stagedDir = stagedDir;
@@ -56,16 +58,53 @@ public class ArtifactRecorder {
         Files.createFile(artifactList);
     }
 
+    /**
+     * adds the artifact's coordinates to the artifacts list.
+     *
+     * If the artifact is recorded twice, the most recent {@code target} is used. If the artifact was recorded with a jar
+     * cached in {@code cacheDir} and is recorded again pointing to the external jar, the external jar will be used and
+     * cached copy will be removed.
+     *
+     * @param artifact
+     * @param target
+     * @throws IOException
+     */
     public void record(MavenArtifact artifact, Path target) throws IOException {
-        final String hash = HashUtils.hashFile(artifact.getPath());
-        Files.writeString(artifactList,
-                artifact.getCoordsAsString() + SEPARATOR + hash + SEPARATOR + stagedDir.relativize(target) + System.lineSeparator(),
-                StandardOpenOption.APPEND);
+        final String coord = artifact.getCoordsAsString();
+        if (cachedArtifacts.containsKey(coord)) {
+            // if the artifact file was cached and the new target points to a different file, remove the old cached file
+            final Path cachedPath = cachedArtifacts.get(coord);
+            if (cachedPath.toAbsolutePath().startsWith(cacheDir) && !cachedPath.equals(target)) {
+                Files.delete(cachedPath);
+            }
+        }
+        cachedArtifacts.put(coord, target);
     }
 
+    /**
+     * save a copy of {@code jarSrc} in the {@code cacheDir} and record it using {@link ArtifactRecorder#record(MavenArtifact, Path)}
+     *
+     * @param artifact
+     * @param jarSrc
+     * @throws MavenUniverseException
+     * @throws IOException
+     */
     public void cache(MavenArtifact artifact, Path jarSrc) throws MavenUniverseException, IOException {
         IoUtils.copy(jarSrc, cacheDir.resolve(artifact.getArtifactFileName()));
 
         record(artifact, cacheDir.resolve(artifact.getArtifactFileName()));
+    }
+
+    /**
+     * persist list of recorded artifacts in cacheDir/{@value ArtifactRecorder#ARTIFACT_LIST_FILE}
+     * @throws IOException
+     */
+    public void writeCacheManifest() throws IOException {
+        final StringBuilder sb = new StringBuilder();
+        for (Map.Entry<String, Path> entry : cachedArtifacts.entrySet()) {
+            final String hash = HashUtils.hashFile(entry.getValue());
+            sb.append(entry.getKey()).append(SEPARATOR).append(hash).append(SEPARATOR).append(stagedDir.relativize(entry.getValue())).append("\n");
+        }
+        Files.writeString(artifactList, sb.toString());
     }
 }
