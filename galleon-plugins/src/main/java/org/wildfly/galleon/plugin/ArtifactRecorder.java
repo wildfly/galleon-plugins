@@ -21,6 +21,7 @@ import org.jboss.galleon.universe.maven.MavenUniverseException;
 import org.jboss.galleon.util.HashUtils;
 import org.jboss.galleon.util.IoUtils;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -103,7 +104,9 @@ public class ArtifactRecorder {
         final StringBuilder sb = new StringBuilder();
         for (Map.Entry<String, Path> entry : cachedArtifacts.entrySet()) {
             final String hash = HashUtils.hashFile(entry.getValue());
-            sb.append(entry.getKey()).append(SEPARATOR).append(hash).append(SEPARATOR).append(stagedDir.relativize(entry.getValue())).append("\n");
+            final Path relativePath = stagedDir.relativize(entry.getValue());
+            final String universalPath = relativePath.toString().replace(File.separatorChar, '/');
+            sb.append(entry.getKey()).append(SEPARATOR).append(hash).append(SEPARATOR).append(universalPath).append("\n");
         }
         Files.writeString(artifactList, sb.toString());
     }
