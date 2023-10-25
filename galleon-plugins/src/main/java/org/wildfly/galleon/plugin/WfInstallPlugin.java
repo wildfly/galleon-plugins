@@ -113,6 +113,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
     private static final String CONFIG_GEN_METHOD = "generate";
     private static final String CONFIG_GEN_GA = "org.wildfly.galleon-plugins:wildfly-config-gen";
+    private static final String GALLEON_PLUGINS_GA = "org.wildfly.galleon-plugins:wildfly-galleon-plugins";
     private static final String CONFIG_GEN_CLASS = "org.wildfly.galleon.plugin.config.generator.WfConfigGenerator";
     private static final String CLI_SCRIPT_RUNNER_CLASS = "org.wildfly.galleon.plugin.config.generator.CliScriptRunner";
     private static final String CLI_SCRIPT_RUNNER_METHOD = "runCliScript";
@@ -330,8 +331,12 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 // org.jboss.modules:jboss-modules
                 // org.wildfly.core:wildfly-cli
                 // org.wildfly.galleon-plugins:wildfly-config-gen
+                // org.wildfly.galleon-plugins:wildfly-galleon-plugins
                 if (versionProps.containsKey(CONFIG_GEN_GA)) {
                     gaToProducer.put(CONFIG_GEN_GA, fp.getFPID().getProducer());
+                }
+                if (versionProps.containsKey(GALLEON_PLUGINS_GA)) {
+                    gaToProducer.put(GALLEON_PLUGINS_GA, fp.getFPID().getProducer());
                 }
                 if (versionProps.containsKey(WILDFLY_CLI_GA)) {
                     gaToProducer.put(WILDFLY_CLI_GA, fp.getFPID().getProducer());
@@ -388,6 +393,14 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         // The CopyArtifact tasks could need the resolver and installer we are instantiating there.
         artifactResolver = this::resolveMaven;
         artifactInstaller = new SimpleArtifactInstaller(artifactResolver, generatedMavenRepo, artifactRecorder);
+
+        // Resolution of provisioning artifacts that we would need in the generated licenses.
+        MavenArtifact configGen = Utils.toArtifactCoords(mergedArtifactVersions, CONFIG_GEN_GA,
+                false, channelArtifactResolution, requireChannel(gaToProducer.get(CONFIG_GEN_GA)));
+        artifactResolver.resolve(configGen);
+        MavenArtifact plugin = Utils.toArtifactCoords(mergedArtifactVersions, GALLEON_PLUGINS_GA,
+                false, channelArtifactResolution, requireChannel(gaToProducer.get(GALLEON_PLUGINS_GA)));
+        artifactResolver.resolve(plugin);
 
         final ProvisioningLayoutFactory layoutFactory = runtime.getLayout().getFactory();
         pkgProgressTracker = layoutFactory.getProgressTracker(ProvisioningLayoutFactory.TRACK_PACKAGES);
