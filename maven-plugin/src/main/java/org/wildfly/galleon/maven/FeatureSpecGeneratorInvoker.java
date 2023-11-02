@@ -632,8 +632,10 @@ public class FeatureSpecGeneratorInvoker {
                         throws IOException {
                         if (WfConstants.MODULE_XML.equals(file.getFileName().toString())) {
                             final String relativePath = source.relativize(file).toString();
-                            moduleTemplates.put(relativePath, fpArtifacts);
-                            Files.copy(file, moduleTemplatesDir.resolve(relativePath), StandardCopyOption.REPLACE_EXISTING);
+                            Path nativeCopy = Files.copy(file, moduleTemplatesDir.resolve(relativePath), StandardCopyOption.REPLACE_EXISTING);
+                            // Use the native FS path as the map key, not the source path, which may be from ZipFileSystem
+                            // and won't match the path of the actual template file we just wrote
+                            moduleTemplates.put(moduleTemplatesDir.relativize(nativeCopy).toString(), fpArtifacts);
                         } else {
                             final Path target = wildflyHome.resolve(MODULES).resolve(source.relativize(file).toString());
                             Files.createDirectories(target.getParent());
