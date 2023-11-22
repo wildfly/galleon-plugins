@@ -23,7 +23,7 @@
   <parent>
     <groupId>org.wildfly.galleon-plugins</groupId>
     <artifactId>wildfly-provisioning-parent</artifactId>
-    <version>6.5.4.Final-SNAPSHOT</version>
+    <version>7.0.0.Beta1-SNAPSHOT</version>
   </parent>
 
   <artifactId>wildfly-galleon-maven-plugin</artifactId>
@@ -114,6 +114,10 @@
     <dependency>
       <groupId>org.jboss.galleon</groupId>
       <artifactId>galleon-maven-universe</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.jboss.galleon</groupId>
+      <artifactId>galleon-core</artifactId>
     </dependency>
     <dependency>
       <groupId>${project.groupId}</groupId>

@@ -381,6 +381,12 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                                 if (Files.exists(target)) {
                                     IoUtils.recursiveDelete(target);
                                 }
+                                try {
+                                    //Validate that we can parse this feature-pack...
+                                    FeaturePackDescriber.describeFeaturePack(versionDir,"UTF-8");
+                                } catch (ProvisioningDescriptionException ex) {
+                                    throw new RuntimeException(ex);
+                                }
                                 ZipUtils.zip(versionDir, target);
                                 debug("Attaching feature-pack %s as a project artifact", target);
                                 projectHelper.attachArtifact(project, "zip", target.toFile());
