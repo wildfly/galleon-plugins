@@ -28,7 +28,7 @@
 
   <groupId>org.wildfly.galleon-plugins</groupId>
   <artifactId>wildfly-provisioning-parent</artifactId>
-  <version>7.0.0.Beta1</version>
+  <version>7.0.0.Beta2-SNAPSHOT</version>
   <packaging>pom</packaging>
 
   <name>WildFly Galleon Plugins Parent</name>
@@ -510,6 +510,6 @@
     <connection>scm:git:${galleon-plugins.repo.scm.connection}</connection>
     <developerConnection>scm:git:${galleon-plugins.repo.scm.connection}</developerConnection>
     <url>${galleon-plugins.repo.scm.url}</url>
-    <tag>7.0.0.Beta1</tag>
+    <tag>HEAD</tag>
   </scm>
 </project>
