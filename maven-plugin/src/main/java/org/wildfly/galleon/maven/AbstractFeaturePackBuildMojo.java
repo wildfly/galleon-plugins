@@ -190,6 +190,10 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             property = "wildfly.feature.pack.require.channel.resolution")
     protected WildFlyChannelResolutionMode wildflyChannelResolutionMode;
 
+    @Parameter(alias = "deploy-channel-manifest", required = false, defaultValue = "true",
+            property = "wildfly.feature.pack.deploy-channel-manifest")
+    protected boolean deployChannelManifest;
+
     @Component
     protected RepositorySystem repoSystem;
 
@@ -401,7 +405,9 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                                     debug("Attaching channel manifest definition %s as a project artifact", channelManifestTarget);
                                     String channelManifest = createYAMLChannelManifest(buildConfig);
                                     Files.write(channelManifestTarget, channelManifest.getBytes());
-                                    projectHelper.attachArtifact(project, ChannelManifest.EXTENSION, ChannelManifest.CLASSIFIER, channelManifestTarget.toFile());
+                                    if (deployChannelManifest) {
+                                        projectHelper.attachArtifact(project, ChannelManifest.EXTENSION, ChannelManifest.CLASSIFIER, channelManifestTarget.toFile());
+                                    }
                                 }
                             }
                         }
