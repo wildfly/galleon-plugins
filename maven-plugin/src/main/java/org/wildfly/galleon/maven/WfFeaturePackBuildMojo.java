@@ -140,6 +140,14 @@ public class WfFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
     @Parameter(alias = "feature-specs-output", defaultValue = "${project.build.directory}/resources/features", required = true)
     protected File featureSpecsOutput;
 
+    /**
+     * The minimum stability level of the WildFly processes used to generate feature specs.
+     * Set this if you need to generate feature specs for features with a lower stability level
+     * than the default level of the WildFly process being used for feature-spec generation.
+     */
+    @Parameter(alias = "minimum-stability", required = false)
+    protected String minimumStability;
+
     private WildFlyFeaturePackBuild buildConfig;
     private Map<String, PackageSpec.Builder> extendedPackages = Collections.emptyMap();
 

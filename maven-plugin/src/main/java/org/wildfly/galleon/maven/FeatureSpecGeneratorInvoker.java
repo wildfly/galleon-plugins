@@ -123,6 +123,7 @@ public class FeatureSpecGeneratorInvoker {
     private Set<String> domainExtensions = Collections.emptySet();
     private Set<String> hostExtensions = Collections.emptySet();
     private List<Path> layersConfs = Collections.emptyList();
+    private String minimumStability;
 
     private WildFlyPackageTasksParser tasksParser;
     private ProvisioningLayoutFactory layoutFactory;
@@ -138,6 +139,7 @@ public class FeatureSpecGeneratorInvoker {
         this.forkEmbedded = mojo.forkEmbedded;
         this.wildflyHome = mojo.wildflyHome.toPath();
         this.moduleTemplatesDir = mojo.moduleTemplatesDir.toPath();
+        this.minimumStability = mojo.minimumStability;
         this.log = mojo.getLog();
     }
 
@@ -252,8 +254,7 @@ public class FeatureSpecGeneratorInvoker {
             }
             final Class<?> specGenCls = (newCl == null ? originalCl : newCl).loadClass("org.wildfly.galleon.plugin.featurespec.generator.FeatureSpecGenerator");
             final Method specGenMethod = specGenCls.getMethod("generateSpecs");
-            return (int) specGenMethod.invoke(specGenCls.getConstructor(String.class, Path.class, Map.class, boolean.class, boolean.class)
-                    .newInstance(wildflyHome.toString(), featureSpecsOutput.toPath(), inheritedFeatureSpecs, forkEmbedded, log.isDebugEnabled()));
+            return (int) specGenMethod.invoke(getFeaturePackGenerator(specGenCls));
         } catch(InvocationTargetException e) {
             throw new MojoExecutionException("Feature spec generator failed", e.getCause());
         } catch (Throwable e) {
@@ -717,6 +718,22 @@ public class FeatureSpecGeneratorInvoker {
     private void debug(String format, Object... args) {
         if (log.isDebugEnabled()) {
             log.debug(String.format(format, args));
+        }
+    }
+
+    private Object getFeaturePackGenerator(Class<?> specGenCls) throws NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
+        debug("Creating a feature spec generator for stability %s using %s", minimumStability, specGenCls);
+        try {
+            return specGenCls.getConstructor(String.class, Path.class, Map.class, String.class, boolean.class, boolean.class)
+                    .newInstance(wildflyHome.toString(), featureSpecsOutput.toPath(), inheritedFeatureSpecs, minimumStability, forkEmbedded, log.isDebugEnabled());
+        } catch (NoSuchMethodException e) {
+            if (minimumStability != null && !minimumStability.isEmpty()) {
+                return specGenCls.getConstructor(String.class, Path.class, Map.class, boolean.class, boolean.class)
+                        .newInstance(wildflyHome.toString(), featureSpecsOutput.toPath(), inheritedFeatureSpecs, forkEmbedded, log.isDebugEnabled());
+            } else {
+                // We've been configured to use a stability but the generator class does not support it
+                throw e;
+            }
         }
     }
 }
