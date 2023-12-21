@@ -151,6 +151,12 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private static final ProvisioningOption OPTION_RECORD_ARTIFACTS = ProvisioningOption.builder("jboss-resolved-artifacts-cache")
             .setDefaultValue(".installation" + File.separator + ".cache")
             .build();
+    private static final ProvisioningOption OPTION_STABILITY_LEVEL = ProvisioningOption.builder("jboss-stability-level")
+            .addToValueSet("experimental")
+            .addToValueSet("preview")
+            .addToValueSet("community")
+            .addToValueSet("default")
+            .build();
     private ProvisioningRuntime runtime;
     MessageWriter log;
 
@@ -201,7 +207,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                              OPTION_FORK_EMBEDDED, OPTION_MVN_REPO,
                              OPTION_RESET_EMBEDDED_SYSTEM_PROPERTIES,
                              OPTION_OVERRIDDEN_ARTIFACTS, OPTION_BULK_RESOLVE_ARTIFACTS,
-                             OPTION_RECORD_ARTIFACTS);
+                             OPTION_RECORD_ARTIFACTS, OPTION_STABILITY_LEVEL);
     }
 
     public ProvisioningRuntime getRuntime() {
@@ -244,6 +250,14 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             return null;
         }
         final String value = runtime.getOptionValue(OPTION_RESET_EMBEDDED_SYSTEM_PROPERTIES);
+        return value == null ? "" : value;
+    }
+
+    private String getStabilityLevel() throws ProvisioningException {
+        if (!runtime.isOptionSet(OPTION_STABILITY_LEVEL)) {
+            return "";
+        }
+        final String value = runtime.getOptionValue(OPTION_STABILITY_LEVEL);
         return value == null ? "" : value;
     }
 
@@ -775,11 +789,11 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         try {
             final Class<?> configHandlerCls = configGenCl.loadClass(CONFIG_GEN_CLASS);
             final Constructor<?> ctor = configHandlerCls.getConstructor();
-            final Method m = configHandlerCls.getMethod(CONFIG_GEN_METHOD, ProvisioningRuntime.class, boolean.class, String.class);
             final Object generator = ctor.newInstance();
             final boolean forkEmbedded = isForkEmbedded(runtime);
             final String resetEmbeddedSystemProperties = isResetEmbeddedSystemProperties();
-            m.invoke(generator, runtime, forkEmbedded, resetEmbeddedSystemProperties);
+            final String stabilityLevel = getStabilityLevel();
+            invokeConfigGenerator(configHandlerCls, generator, forkEmbedded, resetEmbeddedSystemProperties, stabilityLevel);
             if(startTime > 0) {
                 log.print(Errors.tookTime("WildFly configuration generation", startTime));
             }
@@ -1200,5 +1214,20 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
     boolean isOverriddenArtifact(MavenArtifact artifact) throws ProvisioningException {
         return Utils.containsArtifact(overriddenArtifactVersions, artifact);
+    }
+
+    private void invokeConfigGenerator(Class<?> configHandlerCls, Object generator, boolean forkEmbedded,
+                                       String resetEmbeddedSystemProperties, String stabilityLevel)
+            throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
+        try {
+            final Method m = configHandlerCls.getMethod(CONFIG_GEN_METHOD, ProvisioningRuntime.class, boolean.class, String.class, String.class);
+            m.invoke(generator, runtime, forkEmbedded, resetEmbeddedSystemProperties, stabilityLevel);
+        } catch (NoSuchMethodException e) {
+            if (stabilityLevel != null && !stabilityLevel.isEmpty()) {
+                throw e;
+            }
+            final Method m = configHandlerCls.getMethod(CONFIG_GEN_METHOD, ProvisioningRuntime.class, boolean.class, String.class);
+            m.invoke(generator, runtime, forkEmbedded, resetEmbeddedSystemProperties);
+        }
     }
 }

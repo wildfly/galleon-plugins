@@ -57,6 +57,7 @@ public abstract class BaseConfigGenerator {
    protected String jbossHome;
    protected boolean forkEmbedded;
    protected String resetSysProps;
+   protected String stabilityLevel;
 
    protected Path script;
    protected PrintWriter scriptWriter;
