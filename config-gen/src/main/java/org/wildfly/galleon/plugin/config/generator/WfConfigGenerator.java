@@ -101,11 +101,12 @@ public class WfConfigGenerator extends BaseConfigGenerator {
         return Collections.unmodifiableSet(result);
     }
 
-    public void generate(ProvisioningRuntime runtime, boolean forkEmbedded, String resetSystemProperties) throws ProvisioningException {
+    public void generate(ProvisioningRuntime runtime, boolean forkEmbedded, String resetSystemProperties, String stabilityLevel) throws ProvisioningException {
         this.messageWriter = runtime.getMessageWriter();
         this.forkEmbedded = forkEmbedded;
         this.resetSysProps = resetSystemProperties;
         this.jbossHome = runtime.getStagedDir().toString();
+        this.stabilityLevel = stabilityLevel;
         final Map<Object, Object> originalProps = new HashMap<>(System.getProperties());
         final Map<Object, Object> resetProps = new HashMap<>();
         try {

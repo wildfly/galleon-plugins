@@ -591,6 +591,9 @@ public class WfProvisionedConfigHandler implements ProvisionedConfigHandler, Aut
             embeddedArgs.add(configNameProp);
             embeddedArgs.add(config.getName());
         }
+        if (configGen.stabilityLevel != null && !configGen.stabilityLevel.isEmpty()) {
+            embeddedArgs.add("--stability=" + configGen.stabilityLevel);
+        }
         return embeddedArgs.toArray(new String[embeddedArgs.size()]);
     }
 
