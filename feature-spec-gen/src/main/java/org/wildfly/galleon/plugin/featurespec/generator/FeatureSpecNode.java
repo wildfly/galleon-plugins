@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Red Hat, Inc. and/or its affiliates
+ * Copyright 2016-2024 Red Hat, Inc. and/or its affiliates
  * and other contributors as indicated by the @author tags.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -377,7 +377,10 @@ class FeatureSpecNode {
         if(branchId != null) {
             builder.addAnnotation(FeatureAnnotation.featureBranch(branchId));
         }
-
+        if(descr.hasDefined("stability")) {
+            String stability = descr.get("stability").asString();
+            builder.setStability(stability);
+        }
         if (descr.hasDefined("requires")) {
             for (ModelNode capability : descr.require("requires").asList()) {
                 builder.requiresCapability(capability.get("name").asString(), capability.hasDefined("optional") && capability.get("optional").asBoolean());
@@ -450,6 +453,9 @@ class FeatureSpecNode {
                 featureParamSpecBuilder.setDefaultValue(param.hasDefined("default") ? convertToCli(param.get("default").asString()) : null);
                 if (param.hasDefined("type")) {
                     featureParamSpecBuilder.setType(param.get("type").asString());
+                }
+                if (param.hasDefined("stability")) {
+                    featureParamSpecBuilder.setStability(param.get("stability").asString());
                 }
                 builder.addParam(featureParamSpecBuilder.build());
             }

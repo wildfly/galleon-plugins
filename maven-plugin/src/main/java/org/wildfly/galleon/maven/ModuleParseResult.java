@@ -17,6 +17,7 @@
 package org.wildfly.galleon.maven;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -33,9 +34,26 @@ class ModuleParseResult {
     final Document document;
     ModuleIdentifier identifier;
     ArtifactName versionArtifactName;
+    private final Map<String, String> props = new HashMap<>();
 
     ModuleParseResult(final Document document) {
         this.document = document;
+    }
+
+    boolean hasProperties() {
+        return !props.isEmpty();
+    }
+
+    boolean hasProperty(String name) {
+        return props.containsKey(name);
+    }
+
+    String getProperty(String name) {
+        return props.get(name);
+    }
+
+    Map<String, String> getProperties() {
+        return props;
     }
 
     List<ModuleDependency> getDependencies() {

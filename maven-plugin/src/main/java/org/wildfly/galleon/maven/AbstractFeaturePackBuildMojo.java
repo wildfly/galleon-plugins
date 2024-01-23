@@ -76,6 +76,7 @@ import org.jboss.galleon.Constants;
 import org.jboss.galleon.Errors;
 import org.jboss.galleon.ProvisioningDescriptionException;
 import org.jboss.galleon.ProvisioningException;
+import org.jboss.galleon.Stability;
 import org.jboss.galleon.config.ConfigModel;
 import org.jboss.galleon.config.FeaturePackConfig;
 import org.jboss.galleon.layout.FeaturePackDescriber;
@@ -203,6 +204,14 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     @Component
     private MavenProjectHelper projectHelper;
 
+    /**
+     * The minimum stability level of the WildFly processes used to generate feature specs.
+     * Set this if you need to generate feature specs for features with a lower stability level
+     * than the default level of the WildFly process being used for feature-spec generation.
+     */
+    @Parameter(alias = "minimum-stability", required = false)
+    protected String minimumStability;
+
     private MavenProjectArtifactVersions artifactVersions;
 
     private Map<String, FeaturePackDescription> fpDependencies = Collections.emptyMap();
@@ -213,10 +222,12 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     private Path resourcesWildFly;
     private Path fpResourcesDir;
     private Path resourcesDir;
+    private Stability stability;
 
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
         try {
+            stability = minimumStability == null ? null : Stability.fromString(minimumStability);
             artifactVersions = MavenProjectArtifactVersions.getInstance(project);
             doExecute();
         } catch (RuntimeException | Error | MojoExecutionException | MojoFailureException e) {
@@ -367,6 +378,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
 
         final FeaturePackDescription fpLayout;
         try {
+            fpBuilder.getSpecBuilder().setMinStability(stability);
             fpLayout = fpBuilder.build();
             FeaturePackXmlWriter.getInstance().write(fpLayout.getSpec(), getFpDir().resolve(Constants.FEATURE_PACK_XML));
         } catch (XMLStreamException | IOException | ProvisioningDescriptionException e) {
@@ -705,16 +717,26 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         for (Map.Entry<String, Path> module : moduleXmlByPkgName.entrySet()) {
             final String packageName = module.getKey();
             final Path moduleXml = module.getValue();
-
             final Path packageDir = getPackagesDir().resolve(packageName);
-            final Path targetXml = packageDir.resolve(WfConstants.PM).resolve(WfConstants.WILDFLY).resolve(WfConstants.MODULE).resolve(resourcesDir.relativize(moduleXml));
-            mkdirs(targetXml.getParent());
-            IoUtils.copy(moduleXml.getParent(), targetXml.getParent());
-
             final PackageSpec.Builder pkgSpecBuilder = PackageSpec.builder(packageName);
             final ModuleParseResult parsedModule;
             try {
-                parsedModule = ModuleXmlParser.parse(targetXml, WfConstants.UTF8, targetToAlias);
+                parsedModule = ModuleXmlParser.parse(moduleXml, WfConstants.UTF8, targetToAlias);
+                String packageStability = parsedModule.getProperty("org.jboss.stability");
+                if (packageStability != null) {
+                    Stability stab = Stability.fromString(packageStability);
+                    if (stability != null && !stability.enables(stab)) {
+                        getLog().warn("JBoss Modules module " + parsedModule.getIdentifier() + " is not included in the feature-pack. "
+                                + "Package stability '" +
+                                packageStability + "' is not enabled by the '" + stability +
+                                "' stability level that is the feature-pack minimum stability level.");
+                        continue;
+                    }
+                    pkgSpecBuilder.setStability(stab);
+                }
+                final Path targetXml = packageDir.resolve(WfConstants.PM).resolve(WfConstants.WILDFLY).resolve(WfConstants.MODULE).resolve(resourcesDir.relativize(moduleXml));
+                mkdirs(targetXml.getParent());
+                IoUtils.copy(moduleXml.getParent(), targetXml.getParent());
                 if (!parsedModule.dependencies.isEmpty()) {
                     for (ModuleParseResult.ModuleDependency moduleDep : parsedModule.dependencies) {
                         final ModuleIdentifier moduleId = moduleDep.getModuleId();
@@ -763,7 +785,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                     }
                 }
             } catch (ParsingException e) {
-                throw new IOException(Errors.parseXml(targetXml), e);
+                throw new IOException(Errors.parseXml(moduleXml), e);
             }
 
             final PackageSpec pkgSpec = pkgSpecBuilder

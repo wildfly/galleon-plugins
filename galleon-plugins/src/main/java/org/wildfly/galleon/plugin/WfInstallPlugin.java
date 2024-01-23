@@ -151,12 +151,6 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private static final ProvisioningOption OPTION_RECORD_ARTIFACTS = ProvisioningOption.builder("jboss-resolved-artifacts-cache")
             .setDefaultValue(".installation" + File.separator + ".cache")
             .build();
-    private static final ProvisioningOption OPTION_STABILITY_LEVEL = ProvisioningOption.builder("jboss-stability-level")
-            .addToValueSet("experimental")
-            .addToValueSet("preview")
-            .addToValueSet("community")
-            .addToValueSet("default")
-            .build();
     private ProvisioningRuntime runtime;
     MessageWriter log;
 
@@ -207,7 +201,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                              OPTION_FORK_EMBEDDED, OPTION_MVN_REPO,
                              OPTION_RESET_EMBEDDED_SYSTEM_PROPERTIES,
                              OPTION_OVERRIDDEN_ARTIFACTS, OPTION_BULK_RESOLVE_ARTIFACTS,
-                             OPTION_RECORD_ARTIFACTS, OPTION_STABILITY_LEVEL);
+                             OPTION_RECORD_ARTIFACTS);
     }
 
     public ProvisioningRuntime getRuntime() {
@@ -254,10 +248,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     }
 
     private String getStabilityLevel() throws ProvisioningException {
-        if (!runtime.isOptionSet(OPTION_STABILITY_LEVEL)) {
-            return "";
-        }
-        final String value = runtime.getOptionValue(OPTION_STABILITY_LEVEL);
+        final String value = runtime.getLowestStability();
         return value == null ? "" : value;
     }
 
