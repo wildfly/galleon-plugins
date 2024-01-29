@@ -34,10 +34,6 @@
 
   <dependencies>
     <dependency>
-      <groupId>io.smallrye</groupId>
-      <artifactId>jandex</artifactId>
-    </dependency>
-    <dependency>
       <groupId>org.jboss.galleon</groupId>
       <artifactId>galleon-core</artifactId>
       <scope>provided</scope>
