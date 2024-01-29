@@ -92,7 +92,7 @@
     <linkXRef>false</linkXRef>
     <version.org.wildfly.checkstyle-config>1.0.8.Final</version.org.wildfly.checkstyle-config>
     <version.org.wildfly.extras.batavia>1.0.12.Final</version.org.wildfly.extras.batavia>
-    <version.org.jboss.staxmapper>1.1.0.Final</version.org.jboss.staxmapper>
+    <version.org.jboss.staxmapper>1.5.0.Final</version.org.jboss.staxmapper>
 
     <!-- license-maven-plugin configuration -->
     <license.failIfMissing>true</license.failIfMissing>
