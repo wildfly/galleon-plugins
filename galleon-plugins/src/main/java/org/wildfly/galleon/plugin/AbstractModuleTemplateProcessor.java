@@ -42,7 +42,6 @@ abstract class AbstractModuleTemplateProcessor {
         private final MessageWriter log;
         private final AbstractArtifactInstaller installer;
         private final boolean channelArtifactResolution;
-        boolean jandex;
         String coordsStr;
         private MavenArtifact artifact;
         private final Attribute attribute;
@@ -68,7 +67,6 @@ abstract class AbstractModuleTemplateProcessor {
                 coordsStr = coordsStr.substring(2, coordsStr.length() - 1);
                 final int optionsIndex = coordsStr.indexOf('?');
                 if (optionsIndex >= 0) {
-                    jandex = coordsStr.indexOf("jandex", optionsIndex) >= 0;
                     coordsStr = coordsStr.substring(0, optionsIndex);
                 }
                 coordsStr = this.versionProps.get(coordsStr);
@@ -108,10 +106,6 @@ abstract class AbstractModuleTemplateProcessor {
 
         boolean hasMavenArtifact() throws IOException {
             return getMavenArtifact() != null;
-        }
-
-        boolean isJandex() {
-            return jandex;
         }
 
         void updateFatArtifact(String finalFileName) {

@@ -42,7 +42,6 @@ class ThinModuleTemplateProcessor extends AbstractModuleTemplateProcessor {
     protected void processArtifact(ModuleArtifact moduleArtifact) throws IOException, MavenUniverseException, ProvisioningException {
         MavenArtifact artifact = moduleArtifact.getMavenArtifact();
         String installedVersion = getInstaller().installArtifactThin(artifact);
-        // ignore jandex variable, just resolve coordinates to a string
         final StringBuilder buf = new StringBuilder();
         buf.append(artifact.getGroupId());
         buf.append(':');

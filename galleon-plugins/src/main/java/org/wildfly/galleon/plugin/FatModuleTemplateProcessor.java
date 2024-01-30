@@ -16,8 +16,6 @@
  */
 package org.wildfly.galleon.plugin;
 
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Map;
@@ -42,20 +40,7 @@ class FatModuleTemplateProcessor extends AbstractModuleTemplateProcessor {
 
     @Override
     protected void processArtifact(ModuleArtifact artifact) throws IOException, MavenUniverseException, ProvisioningException {
-        final Path artifactPath = artifact.getMavenArtifact().getPath();
-        final String artifactFileName = artifactPath.getFileName().toString();
-        String finalFileName;
-
-        if (artifact.isJandex()) {
-            final int lastDot = artifactFileName.lastIndexOf(".");
-            final File target = new File(getTargetDir().toFile(),
-                    new StringBuilder().append(artifactFileName.substring(0, lastDot)).append("-jandex")
-                            .append(artifactFileName.substring(lastDot)).toString());
-            JandexIndexer.createIndex(artifactPath.toFile(), new FileOutputStream(target), getLog());
-            finalFileName = target.getName();
-        } else {
-            finalFileName = getInstaller().installArtifactFat(artifact.getMavenArtifact(), getTargetDir());
-        }
+        String finalFileName = getInstaller().installArtifactFat(artifact.getMavenArtifact(), getTargetDir());
         artifact.updateFatArtifact(finalFileName);
     }
 }
