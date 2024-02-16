@@ -118,6 +118,11 @@ class ModuleXmlParser {
         if (versionAttribute != null) {
             result.versionArtifactName = parseOptionalArtifactName(versionAttribute.getValue(), versionAttribute);
         }
+        final Element props = element.getFirstChildElement("properties", element.getNamespaceURI());
+        if (props != null) {
+            Map<String, String> properties = parseProperties(props);
+            result.getProperties().putAll(properties);
+        }
         final Element dependencies = element.getFirstChildElement("dependencies", element.getNamespaceURI());
         if (dependencies != null) parseDependencies(dependencies, result);
         final Element resources = element.getFirstChildElement("resources", element.getNamespaceURI());
