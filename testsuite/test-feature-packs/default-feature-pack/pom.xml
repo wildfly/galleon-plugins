@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+~ Copyright The WildFly Authors
+~ SPDX-License-Identifier: Apache-2.0
+-->
+
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.wildfly.galleon-plugins</groupId>
+    <artifactId>wildfly-galleon-plugins-test-feature-packs</artifactId>
+    <version>7.0.0.Beta4-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>default-feature-pack</artifactId>
+
+  <name>WildFly Galleon Plugins Test Default Feature Pack</name>
+  <packaging>pom</packaging>
+  <description>WildFly Galleon Plugins Test Default Feature Pack</description>
+
+
+  <properties>
+    <!-- Don't deploy the testsuite modules -->
+    <maven.deploy.skip>true</maven.deploy.skip>
+    <common.resources.directory>${basedir}/../common/target/resources</common.resources.directory>
+    <featurepack.producer>org.wildfly.galleon-plugins:default-feature-pack</featurepack.producer>
+  </properties>
+
+  <dependencies>
+    <!-- feature pack dependencies -->
+    <dependency>
+      <groupId>org.wildfly.galleon-plugins</groupId>
+      <artifactId>wildfly-galleon-plugins</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.wildfly.galleon-plugins</groupId>
+      <artifactId>wildfly-config-gen</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.wildfly.core</groupId>
+      <artifactId>wildfly-core-galleon-pack</artifactId>
+      <type>zip</type>
+    </dependency>
+    <dependency>
+      <groupId>org.wildfly.galleon-plugins</groupId>
+      <artifactId>test-subsystem-experimental</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.wildfly.galleon-plugins</groupId>
+      <artifactId>test-subsystem-preview</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.wildfly.galleon-plugins</groupId>
+      <artifactId>test-subsystem-community</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.wildfly.galleon-plugins</groupId>
+      <artifactId>test-subsystem-default</artifactId>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-resources-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>copy-common-feature-pack-resources</id>
+            <phase>process-resources</phase>
+            <goals>
+              <goal>copy-resources</goal>
+            </goals>
+            <configuration>
+              <delimiters>
+                <delimiter>${*}</delimiter>
+                <delimiter>@</delimiter>
+              </delimiters>
+              <outputDirectory>${basedir}/target/resources</outputDirectory>
+              <resources>
+                <resource>
+                  <filtering>true</filtering>
+                  <directory>${common.resources.directory}</directory>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
+          <execution>
+            <id>copy-resources</id>
+            <phase>process-resources</phase>
+            <goals>
+              <goal>copy-resources</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${basedir}/target/resources</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>${basedir}/src/main/resources</directory>
+                </resource>
+              </resources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.wildfly.galleon-plugins</groupId>
+        <artifactId>wildfly-galleon-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>feature-pack-build</id>
+            <goals>
+              <goal>build-feature-pack</goal>
+            </goals>
+            <phase>compile</phase>
+            <configuration>
+              <config-file>target/resources/build/wildfly-feature-pack-build.xml</config-file>
+              <minimumStability>default</minimumStability>
+              <release-name>Test</release-name>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

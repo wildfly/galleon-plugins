@@ -85,6 +85,7 @@ import org.jboss.galleon.maven.plugin.FpMavenErrors;
 import org.jboss.galleon.maven.plugin.util.MavenArtifactRepositoryManager;
 import org.jboss.galleon.spec.FeaturePackPlugin;
 import org.jboss.galleon.spec.FeaturePackSpec;
+import org.jboss.galleon.spec.FeatureSpec;
 import org.jboss.galleon.spec.PackageDependencySpec;
 import org.jboss.galleon.spec.PackageSpec;
 import org.jboss.galleon.universe.FeaturePackLocation;
@@ -93,6 +94,7 @@ import org.jboss.galleon.util.IoUtils;
 import org.jboss.galleon.util.StringUtils;
 import org.jboss.galleon.util.ZipUtils;
 import org.jboss.galleon.xml.FeaturePackXmlWriter;
+import org.jboss.galleon.xml.FeatureSpecXmlParser;
 import org.jboss.galleon.xml.PackageXmlParser;
 import org.jboss.galleon.xml.PackageXmlWriter;
 import org.wildfly.channel.ChannelManifest;
@@ -349,7 +351,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         Util.copyIfExists(resourcesDir, fpDir, Constants.LAYERS);
         Util.copyIfExists(resourcesDir, fpDir, Constants.CONFIGS);
 
-        Util.copyDirIfExists(resourcesDir.resolve(Constants.FEATURES), fpDir.resolve(Constants.FEATURES));
+        addFeatures(resourcesDir.resolve(Constants.FEATURES), fpDir.resolve(Constants.FEATURES));
         Util.copyDirIfExists(resourcesDir.resolve(Constants.FEATURE_GROUPS), fpDir.resolve(Constants.FEATURE_GROUPS));
 
         final Path resourcesWildFly = getWildFlyResourcesDir();
@@ -475,13 +477,6 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                 final Path packageDir = packagesDir.resolve(configPackage.getFileName());
                 final Path packageFile = packageDir.resolve(Constants.PACKAGE_XML);
                 final Path packageXml = configPackage.resolve(Constants.PACKAGE_XML);
-                if (Files.exists(packageFile) && Files.exists(packageXml)) {
-                    warn("File " + packageFile + " already exists, replacing with " + packageXml);
-                }
-                if (!Files.exists(packageDir)) {
-                    Util.mkdirs(packageDir);
-                }
-                IoUtils.copy(configPackage, packageDir);
 
                 if (Files.exists(packageXml)) {
                     final PackageSpec pkgSpec;
@@ -492,11 +487,67 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                             throw new MojoExecutionException("Failed to parse " + packageXml, e);
                         }
                     }
+                    Stability packageStability = pkgSpec.getStability();
+                    if (packageStability != null) {
+                        if (stability != null && !stability.enables(packageStability)) {
+                            getLog().warn("Package " + pkgSpec.getName() + " is not included in the feature-pack. "
+                                    + "Package stability '"
+                                    + packageStability + "' is not enabled by the '" + stability
+                                    + "' stability level that is the feature-pack minimum stability level.");
+                            continue;
+                        }
+                    }
                     fpBuilder.addPackage(pkgSpec);
                 }
+
+                if (Files.exists(packageFile) && Files.exists(packageXml)) {
+                    warn("File " + packageFile + " already exists, replacing with " + packageXml);
+                }
+                if (!Files.exists(packageDir)) {
+                    Util.mkdirs(packageDir);
+                }
+                IoUtils.copy(configPackage, packageDir);
             }
         } catch (IOException e) {
             throw new MojoExecutionException("Failed to process config packages", e);
+        }
+    }
+    private void addFeatures(final Path configDir, final Path featuresDir) throws MojoExecutionException {
+        if (!Files.exists(configDir)) {
+            return;
+        }
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(configDir)) {
+            for (Path configFeature : stream) {
+                final Path featureDir = featuresDir.resolve(configFeature.getFileName());
+                final Path featureXml = configFeature.resolve(Constants.SPEC_XML);
+                if (!Files.exists(featureXml)) {
+                    throw new MojoExecutionException("Feature spec " + featureXml + " doesn't exist ");
+                }
+                final FeatureSpec featureSpec;
+                try (BufferedReader reader = Files.newBufferedReader(featureXml)) {
+                    try {
+                        featureSpec = FeatureSpecXmlParser.getInstance().parse(reader);
+                    } catch (ProvisioningDescriptionException | XMLStreamException e) {
+                        throw new MojoExecutionException("Failed to parse " + featureXml, e);
+                    }
+                }
+                Stability featureStability = featureSpec.getStability();
+                if (featureStability != null) {
+                    if (stability != null && !stability.enables(featureStability)) {
+                        getLog().warn("Feature " + featureSpec.getName() + " is not included in the feature-pack. "
+                                + "Feature stability '"
+                                + featureStability + "' is not enabled by the '" + stability
+                                + "' stability level that is the feature-pack minimum stability level.");
+                        continue;
+                    }
+                }
+                if (!Files.exists(featureDir)) {
+                    Util.mkdirs(featureDir);
+                }
+                IoUtils.copy(configFeature, featureDir);
+            }
+        } catch (IOException e) {
+            throw new MojoExecutionException("Failed to process feature spec", e);
         }
     }
 
@@ -722,7 +773,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             final ModuleParseResult parsedModule;
             try {
                 parsedModule = ModuleXmlParser.parse(moduleXml, WfConstants.UTF8, targetToAlias);
-                String packageStability = parsedModule.getProperty("org.jboss.stability");
+                String packageStability = parsedModule.getProperty(WfConstants.JBOSS_STABILITY);
                 if (packageStability != null) {
                     Stability stab = Stability.fromString(packageStability);
                     if (stability != null && !stability.enables(stab)) {

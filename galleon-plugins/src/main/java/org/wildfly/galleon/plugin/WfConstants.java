@@ -43,6 +43,7 @@ public interface WfConstants {
     String EXTENSIONS_STANDALONE = "extensions-standalone";
     String GALLEON_PASSIVE = "galleon.passive";
     String HOST = "host";
+    String JBOSS_STABILITY = "jboss.stability";
     String LAYOUT = "layout";
     String LAYERS = "layers";
     String LAYERS_CONF = "layers.conf";
