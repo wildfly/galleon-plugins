@@ -1,0 +1,33 @@
+<!--
+~ Copyright The WildFly Authors
+~ SPDX-License-Identifier: Apache-2.0
+~
+-->
+<!-- TODO Rename this module to something matching your chosen subsystem name -->
+<module xmlns="urn:jboss:module:1.9" name="org.wildfly.galleon.plugins.test.subsystem.preview">
+  <properties>
+    <property name="jboss.api" value="private"/>
+    <!-- required, otherwise packaged inside the feature-pack in all cases -->
+    <property name="jboss.stability" value="preview"/>
+  </properties>
+
+  <resources>
+    <!-- TODO Use the actual name of the subsystem artifact here -->
+    <artifact name="${org.wildfly.galleon-plugins:test-subsystem-preview}"/>
+  </resources>
+
+  <dependencies>
+    <!-- Typical module dependencies for a subsystem -->
+    <module name="org.jboss.as.controller"/>
+    <module name="org.jboss.as.server"/>
+    <module name="org.jboss.logging"/>
+    <module name="org.jboss.modules"/>
+    <module name="org.jboss.staxmapper"/>
+    <module name="org.wildfly.security.manager"/>
+    <module name="org.jboss.as.version"/>
+    <module name="org.wildfly.galleon.plugins.test.subsystem.dependency.experimental" optional="true"/>
+    <module name="org.wildfly.galleon.plugins.test.subsystem.dependency.preview"/>
+    <module name="org.wildfly.galleon.plugins.test.subsystem.dependency.community"/>
+    <module name="org.wildfly.galleon.plugins.test.subsystem.dependency.default"/>
+  </dependencies>
+</module>

@@ -48,6 +48,7 @@
     <module>maven-plugin</module>
     <module>feature-spec-gen</module>
     <module>docs</module>
+    <module>testsuite</module>
   </modules>
 
   <properties>
@@ -95,6 +96,10 @@
     <!-- license-maven-plugin configuration -->
     <license.failIfMissing>true</license.failIfMissing>
     <license.failIfUnknown>true</license.failIfUnknown>
+
+    <!-- test suite -->
+    <version.org.wildfly.common>1.6.0.Final</version.org.wildfly.common>    
+    <maven.repo.local>${settings.localRepository}</maven.repo.local>
 
     <galleon-plugins.repo.scm.connection>git@github.com:wildfly/galleon-plugins.git</galleon-plugins.repo.scm.connection>
     <galleon-plugins.repo.scm.url>https://github.com/wildfly/galleon-plugins</galleon-plugins.repo.scm.url>   
@@ -404,6 +409,89 @@
         <artifactId>maven-filtering</artifactId>
         <version>${version.org.apache.maven.shared}</version>
       </dependency>
+      
+      <!-- test suite -->
+      <dependency>
+        <groupId>org.wildfly.galleon-plugins</groupId>
+        <artifactId>preview-feature-pack</artifactId>
+        <version>${project.version}</version>
+        <type>zip</type>
+      </dependency>
+      <dependency>
+        <groupId>org.wildfly.galleon-plugins</groupId>
+        <artifactId>community-feature-pack</artifactId>
+        <version>${project.version}</version>
+        <type>zip</type>
+      </dependency>
+      <dependency>
+        <groupId>org.wildfly.galleon-plugins</groupId>
+        <artifactId>experimental-feature-pack</artifactId>
+        <version>${project.version}</version>
+        <type>zip</type>
+      </dependency>
+      <dependency>
+        <groupId>org.wildfly.galleon-plugins</groupId>
+        <artifactId>default-feature-pack</artifactId>
+        <version>${project.version}</version>
+        <type>zip</type>
+      </dependency>
+      <dependency>
+        <groupId>org.wildfly.galleon-plugins</groupId>
+        <artifactId>test-subsystem-experimental</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.wildfly.galleon-plugins</groupId>
+        <artifactId>test-subsystem-preview</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.wildfly.galleon-plugins</groupId>
+        <artifactId>test-subsystem-community</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.wildfly.galleon-plugins</groupId>
+        <artifactId>test-subsystem-default</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.wildfly.core</groupId>
+        <artifactId>wildfly-core-galleon-pack</artifactId>
+        <version>${version.org.wildfly.core.wildfly-core}</version>
+        <type>zip</type>
+      </dependency>
+
+      <dependency>
+        <groupId>org.wildfly.core</groupId>
+        <artifactId>wildfly-version</artifactId>
+        <version>${version.org.wildfly.core.wildfly-core}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.wildfly.core</groupId>
+        <artifactId>wildfly-controller</artifactId>
+        <version>${version.org.wildfly.core.wildfly-core}</version>
+        <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.wildfly.core</groupId>
+        <artifactId>wildfly-service</artifactId>
+        <version>${version.org.wildfly.core.wildfly-core}</version>
+        <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.wildfly.core</groupId>
+        <artifactId>wildfly-server</artifactId>
+        <version>${version.org.wildfly.core.wildfly-core}</version>
+        <scope>provided</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.wildfly.core</groupId>
+        <artifactId>wildfly-subsystem-test</artifactId>
+        <version>${version.org.wildfly.core.wildfly-core}</version>
+        <scope>provided</scope>
+        <type>pom</type>
+      </dependency>
     </dependencies>
   </dependencyManagement>
   <dependencies>
@@ -455,6 +543,25 @@
           <groupId>org.wildfly.extras</groupId>
           <artifactId>adoc-maven-plugin-descriptor</artifactId>
           <version>${version.adoc-maven-plugin-descriptor}</version>
+        </plugin>
+        <plugin>
+          <groupId>${project.groupId}</groupId>
+          <artifactId>wildfly-galleon-maven-plugin</artifactId>
+          <version>${project.version}</version>
+          <dependencies>
+            <!-- feature-spec-gen uses wildfly-embedded to generate the feature specs, hence the designated wildfly-embedded version must match the pack one -->
+            <dependency>
+              <groupId>org.wildfly.core</groupId>
+              <artifactId>wildfly-embedded</artifactId>
+              <version>${version.org.wildfly.core.wildfly-core}</version>
+            </dependency>
+            <!-- If you add a dependency on wildfly-embedded you need to bring your own transitives -->
+            <dependency>
+              <groupId>org.wildfly.common</groupId>
+              <artifactId>wildfly-common</artifactId>
+              <version>${version.org.wildfly.common}</version>
+            </dependency>
+          </dependencies>
         </plugin>
       </plugins>
     </pluginManagement>

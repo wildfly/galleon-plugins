@@ -1,0 +1,23 @@
+<?xml version="1.0" ?>
+
+<feature-spec xmlns="urn:jboss:galleon:feature-spec:2.0" name="foo.bar.preview" stability="preview">
+  <annotation name="jboss-op">
+    <elem name="name" value="add"/>
+    <elem name="op-params" value=""/>
+    <elem name="addr-params" value="subsystem"/>
+  </annotation>
+  <annotation name="feature-branch">
+    <elem name="id" value="subsystem.test-subsystem"/>
+  </annotation>
+  <refs>
+    <ref feature="extension" include="true"/>
+  </refs>
+  <params>
+    <param name="host" feature-id="true" default="GLN_UNDEFINED"/>
+    <param name="subsystem" feature-id="true" default="test-subsystem"/>
+    <param name="extension" default="org.wildfly.galleon.plugins.test.subsystem"/>
+  </params>
+  <packages>
+    <package name="org.wildfly.galleon.plugins.test.subsystem.dependency"/>
+  </packages>
+</feature-spec>
