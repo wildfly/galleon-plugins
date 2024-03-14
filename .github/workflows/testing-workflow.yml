@@ -1,0 +1,95 @@
+# This workflow will build a Java project with Maven
+# For more information see: https://help.github.com/actions/language-and-framework-guides/building-and-testing-java-with-maven
+
+name: WildFly galleon plugins testing
+
+on:
+  workflow_call:
+    inputs:
+      wildfly-ref:
+        description: "WildFly branch/tag"
+        required: false
+        default: "main"
+        type: string
+jobs:  
+  galleon-plugins-build:
+    name: galleon-plugins-${{ matrix.os }}-jdk${{ matrix.java }}
+    runs-on: ${{ matrix.os }}
+    outputs:
+      galleon-plugins-version: ${{ steps.version.outputs.galleon-plugins-version }}
+      galleon-version: ${{ steps.version.outputs.galleon-version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        java: ['11', '17']
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK ${{ matrix.java }}
+        uses: actions/setup-java@v3
+        with:
+          java-version: ${{ matrix.java }}
+          distribution: 'temurin'
+          cache: 'maven'
+      - name: Build and Test Galleon plugins on ${{ matrix.java }}
+        run: mvn -U -B -ntp clean install
+        shell: bash
+      - id: version
+        run: |
+          echo "galleon-plugins-version=$(mvn -B help:evaluate -Dexpression=project.version -DforceStdout -q)" >> $GITHUB_OUTPUT
+          echo "galleon-version=$(mvn -B help:evaluate -Dexpression=version.org.jboss.galleon -DforceStdout -q)" >> $GITHUB_OUTPUT
+      - name: Archive the repository
+        if: matrix.java == '11'
+        run:  |
+          cd ~
+          find ./.m2/repository -type d -name "*SNAPSHOT" -print0 | xargs -0 tar -czf ~/galleon-plugins-maven-repository.tar.gz  
+      - uses: actions/upload-artifact@v3
+        if: matrix.java == '11'
+        with:
+          name: galleon-plugins-maven-repository
+          path: ~/galleon-plugins-maven-repository.tar.gz
+          retention-days: 5
+      - name: Upload Test Reports on Failure
+        uses: actions/upload-artifact@v3
+        if: failure()
+        with:
+          name: surefire-reports-${{ matrix.os }}-${{ matrix.java }}
+          path: '**/surefire-reports/*.txt'
+
+  wildfly-build-and-test:
+    name: Linux/Windows - JDK11 and JDK17
+    uses: wildfly/wildfly/.github/workflows/shared-wildfly-build-and-test.yml@main
+    with:
+      build-arguments: '-Dversion.org.wildfly.plugin=5.0.0.Beta2 -Dversion.org.jboss.galleon=${{needs.galleon-plugins-build.outputs.galleon-version}} -Dversion.org.wildfly.galleon-plugins=${{needs.galleon-plugins-build.outputs.galleon-plugins-version}}'
+      java-versions: "['11', '17']"
+      os: "['ubuntu-latest', 'windows-latest']"
+      maven-repo-name: galleon-plugins-maven-repository
+      maven-repo-path: galleon-plugins-maven-repository.tar.gz
+      ref: ${{ inputs.wildfly-ref }}
+    needs: galleon-plugins-build
+ 
+  wildfly-build-and-test-galleon-layers:
+    name: Galleon Linux - JDK11
+    uses: wildfly/wildfly/.github/workflows/shared-wildfly-build-and-test.yml@main
+    with:
+      test-arguments: '-Dts.layers -Dts.galleon'
+      build-arguments: '-Dversion.org.wildfly.plugin=5.0.0.Beta2 -Dversion.org.jboss.galleon=${{needs.galleon-plugins-build.outputs.galleon-version}} -Dversion.org.wildfly.galleon-plugins=${{needs.galleon-plugins-build.outputs.galleon-plugins-version}}'
+      os: "['ubuntu-latest']"
+      java-versions: "['11']"
+      maven-repo-name: galleon-plugins-maven-repository
+      maven-repo-path: galleon-plugins-maven-repository.tar.gz
+      ref: ${{ inputs.wildfly-ref }}
+    needs: galleon-plugins-build
+  
+  wildfly-build-and-test-preview:
+    name: WildFly Preview - Linux- JDK17
+    uses: wildfly/wildfly/.github/workflows/shared-wildfly-build-and-test.yml@main
+    with:
+      test-arguments: '-Dts.preview'
+      build-arguments: '-Dversion.org.wildfly.plugin=5.0.0.Beta2 -Dversion.org.jboss.galleon=${{needs.galleon-plugins-build.outputs.galleon-version}} -Dversion.org.wildfly.galleon-plugins=${{needs.galleon-plugins-build.outputs.galleon-plugins-version}}'
+      java-versions: "['17']"
+      os: "['ubuntu-latest']"
+      maven-repo-name: galleon-plugins-maven-repository
+      maven-repo-path: galleon-plugins-maven-repository.tar.gz
+      ref: ${{ inputs.wildfly-ref }}
+    needs: galleon-plugins-build
