@@ -93,3 +93,40 @@ jobs:
       maven-repo-path: galleon-plugins-maven-repository.tar.gz
       ref: ${{ inputs.wildfly-ref }}
     needs: galleon-plugins-build
+  
+  datasources-build-and-test:
+    name: WildFly Datasources galleon-pack build and test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        java: ['17']
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        repository: wildfly-extras/wildfly-datasources-galleon-pack
+    - name: Set up JDK ${{ matrix.java }}
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ matrix.java }}
+        distribution: 'temurin'
+        cache: 'maven'
+    - uses: actions/download-artifact@v3
+      with:
+        name: galleon-plugins-maven-repository
+        path: .
+    - name: Extract Maven Repo
+      shell: bash
+      run: |
+         tar -xzf galleon-plugins-maven-repository.tar.gz -C ~
+    - name: Build and Test WildFly Datasources galleon-pack with SNAPSHOT build of galleon-plugins
+      run: mvn clean install -Dversion.org.wildfly.jar.plugin=11.0.0.Beta1 -Dversion.org.wildfly.galleon-plugins=${{needs.galleon-plugins-build.outputs.galleon-plugins-version}}
+      shell: bash
+    - name: Upload Test Reports on Failure
+      uses: actions/upload-artifact@v3
+      if: failure()
+      with:
+        name: surefire-reports-${{ matrix.os }}-${{ matrix.java }}
+        path: '**/surefire-reports/*.txt'
+    needs: galleon-plugins-build
