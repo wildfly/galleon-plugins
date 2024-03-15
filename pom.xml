@@ -42,7 +42,6 @@
   </licenses>
 
   <modules>
-    <module>transformer</module>
     <module>galleon-plugins</module>
     <module>config-gen</module>
     <module>maven-plugin</module>
@@ -90,7 +89,6 @@
     <!-- Checkstyle configuration -->
     <linkXRef>false</linkXRef>
     <version.org.wildfly.checkstyle-config>1.0.8.Final</version.org.wildfly.checkstyle-config>
-    <version.org.wildfly.extras.batavia>1.0.12.Final</version.org.wildfly.extras.batavia>
     <version.org.jboss.staxmapper>1.5.0.Final</version.org.jboss.staxmapper>
 
     <!-- license-maven-plugin configuration -->
@@ -371,18 +369,6 @@
         <groupId>org.wildfly.core</groupId>
         <artifactId>wildfly-launcher</artifactId>
         <version>${version.org.wildfly.core.wildfly-core}</version>
-      </dependency>
-
-      <dependency>
-        <groupId>org.wildfly.extras.batavia</groupId>
-        <artifactId>transformer-api</artifactId>
-        <version>${version.org.wildfly.extras.batavia}</version>
-      </dependency>
-
-      <dependency>
-        <groupId>org.wildfly.extras.batavia</groupId>
-        <artifactId>transformer-impl-eclipse</artifactId>
-        <version>${version.org.wildfly.extras.batavia}</version>
       </dependency>
 
       <dependency>
