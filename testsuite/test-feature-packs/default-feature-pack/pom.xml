@@ -119,6 +119,8 @@
             <configuration>
               <config-file>target/resources/build/wildfly-feature-pack-build.xml</config-file>
               <minimumStability>default</minimumStability>
+              <config-stability>default</config-stability>
+              <package-stability>default</package-stability>
               <release-name>Test</release-name>
             </configuration>
           </execution>
