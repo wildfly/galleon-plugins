@@ -248,7 +248,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     }
 
     private String getStabilityLevel() throws ProvisioningException {
-        final String value = runtime.getLowestStability();
+        final String value = runtime.getLowestConfigStability();
         return value == null ? "" : value;
     }
 

@@ -214,6 +214,27 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     @Parameter(alias = "minimum-stability", required = false)
     protected String minimumStability;
 
+    /**
+     * The default stability level used at provisioning time to generate
+     * configuration and provision packages. Can't be used when {@code config-stability} or {@code package-stability} is set.
+     */
+    @Parameter(alias = "stability", required = false)
+    protected String stability;
+
+    /**
+     * The default stability level used at provisioning time to generate
+     * configuration. Can't be used when {@code stability} is set.
+     */
+    @Parameter(alias = "config-stability", required = false)
+    protected String configStatibility;
+
+    /**
+     * The default stability level used at provisioning time when installing packages/JBoss Modules modules.
+     * Can't be used when {@code stability} is set.
+     */
+    @Parameter(alias = "package-stability", required = false)
+    protected String packageStatibility;
+
     private MavenProjectArtifactVersions artifactVersions;
 
     private Map<String, FeaturePackDescription> fpDependencies = Collections.emptyMap();
@@ -224,12 +245,27 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     private Path resourcesWildFly;
     private Path fpResourcesDir;
     private Path resourcesDir;
-    private Stability stability;
+    private Stability buildTimestability;
+    private Stability defaultConfigStability;
+    private Stability defaultPackageStability;
 
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
         try {
-            stability = minimumStability == null ? null : Stability.fromString(minimumStability);
+            buildTimestability = minimumStability == null ? null : Stability.fromString(minimumStability);
+            if (stability == null) {
+                defaultConfigStability = configStatibility == null ? null : Stability.fromString(configStatibility);
+                defaultPackageStability = packageStatibility == null ? null : Stability.fromString(packageStatibility);
+            } else {
+                if (configStatibility != null) {
+                    throw new MojoExecutionException("stability option can't be set when config-stability option is set");
+                }
+                if (packageStatibility != null) {
+                    throw new MojoExecutionException("stability option can't be set when package-stability option is set");
+                }
+                defaultConfigStability = Stability.fromString(stability);
+                defaultPackageStability = Stability.fromString(stability);
+            }
             artifactVersions = MavenProjectArtifactVersions.getInstance(project);
             doExecute();
         } catch (RuntimeException | Error | MojoExecutionException | MojoFailureException e) {
@@ -380,7 +416,8 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
 
         final FeaturePackDescription fpLayout;
         try {
-            fpBuilder.getSpecBuilder().setMinStability(stability);
+            fpBuilder.getSpecBuilder().setConfigStability(defaultConfigStability);
+            fpBuilder.getSpecBuilder().setPackageStability(defaultPackageStability);
             fpLayout = fpBuilder.build();
             FeaturePackXmlWriter.getInstance().write(fpLayout.getSpec(), getFpDir().resolve(Constants.FEATURE_PACK_XML));
         } catch (XMLStreamException | IOException | ProvisioningDescriptionException e) {
@@ -489,10 +526,10 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                     }
                     Stability packageStability = pkgSpec.getStability();
                     if (packageStability != null) {
-                        if (stability != null && !stability.enables(packageStability)) {
+                        if (buildTimestability != null && !buildTimestability.enables(packageStability)) {
                             getLog().warn("Package " + pkgSpec.getName() + " is not included in the feature-pack. "
                                     + "Package stability '"
-                                    + packageStability + "' is not enabled by the '" + stability
+                                    + packageStability + "' is not enabled by the '" + buildTimestability
                                     + "' stability level that is the feature-pack minimum stability level.");
                             continue;
                         }
@@ -533,10 +570,10 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                 }
                 Stability featureStability = featureSpec.getStability();
                 if (featureStability != null) {
-                    if (stability != null && !stability.enables(featureStability)) {
+                    if (buildTimestability != null && !buildTimestability.enables(featureStability)) {
                         getLog().warn("Feature " + featureSpec.getName() + " is not included in the feature-pack. "
                                 + "Feature stability '"
-                                + featureStability + "' is not enabled by the '" + stability
+                                + featureStability + "' is not enabled by the '" + buildTimestability
                                 + "' stability level that is the feature-pack minimum stability level.");
                         continue;
                     }
@@ -776,10 +813,10 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                 String packageStability = parsedModule.getProperty(WfConstants.JBOSS_STABILITY);
                 if (packageStability != null) {
                     Stability stab = Stability.fromString(packageStability);
-                    if (stability != null && !stability.enables(stab)) {
+                    if (buildTimestability != null && !buildTimestability.enables(stab)) {
                         getLog().warn("JBoss Modules module " + parsedModule.getIdentifier() + " is not included in the feature-pack. "
                                 + "Package stability '" +
-                                packageStability + "' is not enabled by the '" + stability +
+                                packageStability + "' is not enabled by the '" + buildTimestability +
                                 "' stability level that is the feature-pack minimum stability level.");
                         continue;
                     }

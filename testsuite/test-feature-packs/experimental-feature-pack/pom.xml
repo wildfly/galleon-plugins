@@ -119,6 +119,7 @@
             <configuration>
               <config-file>target/resources/build/wildfly-feature-pack-build.xml</config-file>
               <minimumStability>experimental</minimumStability>
+              <stability>experimental</stability>
               <release-name>Test</release-name>
             </configuration>
           </execution>

@@ -232,7 +232,8 @@
             <phase>compile</phase>
             <configuration>
               <plugin-options>
-                <stability-level>experimental</stability-level>
+                <config-stability-level>experimental</config-stability-level>
+                <package-stability-level>experimental</package-stability-level>
               </plugin-options>
               <feature-packs>
                 <feature-pack>
@@ -275,7 +276,8 @@
             <phase>compile</phase>
             <configuration>
               <plugin-options>
-                <stability-level>preview</stability-level>
+                <config-stability-level>preview</config-stability-level>
+                <package-stability-level>preview</package-stability-level>
               </plugin-options>
               <feature-packs>
                 <feature-pack>
@@ -318,7 +320,8 @@
             <phase>compile</phase>
             <configuration>
               <plugin-options>
-                <stability-level>community</stability-level>
+                <config-stability-level>community</config-stability-level>
+                <package-stability-level>community</package-stability-level>
               </plugin-options>
               <feature-packs>
                 <feature-pack>
@@ -361,7 +364,8 @@
             <phase>compile</phase>
             <configuration>
               <plugin-options>
-                <stability-level>default</stability-level>
+                <config-stability-level>default</config-stability-level>
+                <package-stability-level>default</package-stability-level>
               </plugin-options>
               <feature-packs>
                 <feature-pack>

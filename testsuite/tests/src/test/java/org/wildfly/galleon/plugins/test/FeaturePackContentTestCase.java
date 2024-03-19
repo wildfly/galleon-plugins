@@ -44,11 +44,9 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 /**
- * Check stability. 1) Check that the content of the feature-pack is valid
- * according to its minimum stability. It must not contain features and packages
- * at a lower stability level. 2) Check that what has been provisioned is
+ * Check stability. Check that what has been provisioned is
  * correct according to the stability level set at provisioning time. If no
- * stability level is provided, then the minimum stability level of the
+ * stability level is provided, then the default provisioning stability level of the
  * feature-pack has to be used.
  *
  * @author jdenise
@@ -93,9 +91,13 @@ public class FeaturePackContentTestCase {
                         Set<String> expectedFeatures = new HashSet<>();
                         System.out.println("Scanning " + fl.getFPID());
                         foundFP = true;
-                        Stability minStability = fl.getSpec().getMinStability();
-                        System.out.println("Feature-pack minimum stability " + minStability);
+                        Stability defaultConfigStability = fl.getSpec().getConfigStability();
+                        System.out.println("Feature-pack config stability " + defaultConfigStability);
+                        Stability defaultPackageStability = fl.getSpec().getPackageStability();
+                        System.out.println("Feature-pack package stability " + defaultPackageStability);
                         Path dir = fl.getDir();
+                        // The test expect that these are always equal.
+                        Stability minStability = defaultPackageStability;
                         Path packages = dir.resolve(Constants.PACKAGES);
                         try (DirectoryStream<Path> stream = Files.newDirectoryStream(packages)) {
                             for (Path packageDir : stream) {
