@@ -23,7 +23,7 @@
   <parent>
     <groupId>org.wildfly.galleon-plugins</groupId>
     <artifactId>wildfly-galleon-plugins-testsuite</artifactId>
-    <version>7.0.0.Beta5</version>
+    <version>7.0.0.Beta6-SNAPSHOT</version>
   </parent>
 
   <artifactId>wildfly-galleon-plugins-tests</artifactId>
