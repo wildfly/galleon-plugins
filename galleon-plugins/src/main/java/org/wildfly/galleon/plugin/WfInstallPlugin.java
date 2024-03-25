@@ -1084,7 +1084,9 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 }
                 IoUtils.copy(jarSrc, jarTarget);
             }
-            if(schemaGroups.contains(artifact.getGroupId())) {
+            // only attempt to extract schemas if the artifact is a zip archive
+            if(schemaGroups.contains(artifact.getGroupId())
+                    && (artifact.getExtension().equals("jar") || artifact.getExtension().equals("zip"))) {
                 extractSchemas(jarSrc);
             }
         } catch (IOException e) {
