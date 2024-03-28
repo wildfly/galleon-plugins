@@ -118,9 +118,9 @@
             <phase>compile</phase>
             <configuration>
               <config-file>target/resources/build/wildfly-feature-pack-build.xml</config-file>
-              <minimumStability>community</minimumStability>
-              <config-stability>community</config-stability>
-              <package-stability>community</package-stability>
+              <minimum-stability-level>community</minimum-stability-level>
+              <config-stability-level>community</config-stability-level>
+              <package-stability-level>community</package-stability-level>
               <release-name>Test</release-name>
             </configuration>
           </execution>

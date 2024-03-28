@@ -207,33 +207,33 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     private MavenProjectHelper projectHelper;
 
     /**
-     * The minimum stability level of the WildFly processes used to generate feature specs.
+     * The minimum stability level of the WildFly processes used to generate feature specs and include packages.
      * Set this if you need to generate feature specs for features with a lower stability level
      * than the default level of the WildFly process being used for feature-spec generation.
      */
-    @Parameter(alias = "minimum-stability", required = false)
-    protected String minimumStability;
+    @Parameter(alias = "minimum-stability-level", required = false)
+    protected String minimumStabilityLevel;
 
     /**
      * The default stability level used at provisioning time to generate
-     * configuration and provision packages. Can't be used when {@code config-stability} or {@code package-stability} is set.
+     * configuration and provision packages. Can't be used when {@code config-stability-level} or {@code package-stability-level} is set.
      */
-    @Parameter(alias = "stability", required = false)
-    protected String stability;
+    @Parameter(alias = "stability-level", required = false)
+    protected String stabilityLevel;
 
     /**
      * The default stability level used at provisioning time to generate
-     * configuration. Can't be used when {@code stability} is set.
+     * configuration. Can't be used when {@code stability-level} is set.
      */
-    @Parameter(alias = "config-stability", required = false)
-    protected String configStatibility;
+    @Parameter(alias = "config-stability-level", required = false)
+    protected String configStatibilityLevel;
 
     /**
      * The default stability level used at provisioning time when installing packages/JBoss Modules modules.
-     * Can't be used when {@code stability} is set.
+     * Can't be used when {@code stability-level} is set.
      */
-    @Parameter(alias = "package-stability", required = false)
-    protected String packageStatibility;
+    @Parameter(alias = "package-stability-level", required = false)
+    protected String packageStatibilityLevel;
 
     private MavenProjectArtifactVersions artifactVersions;
 
@@ -245,26 +245,26 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     private Path resourcesWildFly;
     private Path fpResourcesDir;
     private Path resourcesDir;
-    private Stability buildTimestability;
-    private Stability defaultConfigStability;
-    private Stability defaultPackageStability;
+    private Stability buildTimestabilityLevel;
+    private Stability defaultConfigStabilityLevel;
+    private Stability defaultPackageStabilityLevel;
 
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
         try {
-            buildTimestability = minimumStability == null ? null : Stability.fromString(minimumStability);
-            if (stability == null) {
-                defaultConfigStability = configStatibility == null ? null : Stability.fromString(configStatibility);
-                defaultPackageStability = packageStatibility == null ? null : Stability.fromString(packageStatibility);
+            buildTimestabilityLevel = minimumStabilityLevel == null ? null : Stability.fromString(minimumStabilityLevel);
+            if (stabilityLevel == null) {
+                defaultConfigStabilityLevel = configStatibilityLevel == null ? null : Stability.fromString(configStatibilityLevel);
+                defaultPackageStabilityLevel = packageStatibilityLevel == null ? null : Stability.fromString(packageStatibilityLevel);
             } else {
-                if (configStatibility != null) {
-                    throw new MojoExecutionException("stability option can't be set when config-stability option is set");
+                if (configStatibilityLevel != null) {
+                    throw new MojoExecutionException("stability option can't be set when config-stability-level option is set");
                 }
-                if (packageStatibility != null) {
-                    throw new MojoExecutionException("stability option can't be set when package-stability option is set");
+                if (packageStatibilityLevel != null) {
+                    throw new MojoExecutionException("stability option can't be set when package-stability-level option is set");
                 }
-                defaultConfigStability = Stability.fromString(stability);
-                defaultPackageStability = Stability.fromString(stability);
+                defaultConfigStabilityLevel = Stability.fromString(stabilityLevel);
+                defaultPackageStabilityLevel = Stability.fromString(stabilityLevel);
             }
             artifactVersions = MavenProjectArtifactVersions.getInstance(project);
             doExecute();
@@ -416,8 +416,8 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
 
         final FeaturePackDescription fpLayout;
         try {
-            fpBuilder.getSpecBuilder().setConfigStability(defaultConfigStability);
-            fpBuilder.getSpecBuilder().setPackageStability(defaultPackageStability);
+            fpBuilder.getSpecBuilder().setConfigStability(defaultConfigStabilityLevel);
+            fpBuilder.getSpecBuilder().setPackageStability(defaultPackageStabilityLevel);
             fpLayout = fpBuilder.build();
             FeaturePackXmlWriter.getInstance().write(fpLayout.getSpec(), getFpDir().resolve(Constants.FEATURE_PACK_XML));
         } catch (XMLStreamException | IOException | ProvisioningDescriptionException e) {
@@ -526,10 +526,10 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                     }
                     Stability packageStability = pkgSpec.getStability();
                     if (packageStability != null) {
-                        if (buildTimestability != null && !buildTimestability.enables(packageStability)) {
+                        if (buildTimestabilityLevel != null && !buildTimestabilityLevel.enables(packageStability)) {
                             getLog().warn("Package " + pkgSpec.getName() + " is not included in the feature-pack. "
                                     + "Package stability '"
-                                    + packageStability + "' is not enabled by the '" + buildTimestability
+                                    + packageStability + "' is not enabled by the '" + buildTimestabilityLevel
                                     + "' stability level that is the feature-pack minimum stability level.");
                             continue;
                         }
@@ -570,10 +570,10 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                 }
                 Stability featureStability = featureSpec.getStability();
                 if (featureStability != null) {
-                    if (buildTimestability != null && !buildTimestability.enables(featureStability)) {
+                    if (buildTimestabilityLevel != null && !buildTimestabilityLevel.enables(featureStability)) {
                         getLog().warn("Feature " + featureSpec.getName() + " is not included in the feature-pack. "
                                 + "Feature stability '"
-                                + featureStability + "' is not enabled by the '" + buildTimestability
+                                + featureStability + "' is not enabled by the '" + buildTimestabilityLevel
                                 + "' stability level that is the feature-pack minimum stability level.");
                         continue;
                     }
@@ -813,10 +813,10 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                 String packageStability = parsedModule.getProperty(WfConstants.JBOSS_STABILITY);
                 if (packageStability != null) {
                     Stability stab = Stability.fromString(packageStability);
-                    if (buildTimestability != null && !buildTimestability.enables(stab)) {
+                    if (buildTimestabilityLevel != null && !buildTimestabilityLevel.enables(stab)) {
                         getLog().warn("JBoss Modules module " + parsedModule.getIdentifier() + " is not included in the feature-pack. "
                                 + "Package stability '" +
-                                packageStability + "' is not enabled by the '" + buildTimestability +
+                                packageStability + "' is not enabled by the '" + buildTimestabilityLevel +
                                 "' stability level that is the feature-pack minimum stability level.");
                         continue;
                     }

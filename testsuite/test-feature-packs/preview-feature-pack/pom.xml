@@ -118,8 +118,8 @@
             <phase>compile</phase>
             <configuration>
               <config-file>target/resources/build/wildfly-feature-pack-build.xml</config-file>
-              <minimumStability>preview</minimumStability>
-              <stability>preview</stability>
+              <minimum-stability-level>preview</minimum-stability-level>
+              <stability-level>preview</stability-level>
               <release-name>Test</release-name>
             </configuration>
           </execution>

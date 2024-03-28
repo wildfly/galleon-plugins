@@ -118,8 +118,8 @@
             <phase>compile</phase>
             <configuration>
               <config-file>target/resources/build/wildfly-feature-pack-build.xml</config-file>
-              <minimumStability>experimental</minimumStability>
-              <stability>experimental</stability>
+              <minimum-stability-level>experimental</minimum-stability-level>
+              <stability-level>experimental</stability-level>
               <release-name>Test</release-name>
             </configuration>
           </execution>
