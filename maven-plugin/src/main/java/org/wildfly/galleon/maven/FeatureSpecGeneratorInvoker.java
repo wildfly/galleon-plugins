@@ -123,7 +123,7 @@ public class FeatureSpecGeneratorInvoker {
     private Set<String> domainExtensions = Collections.emptySet();
     private Set<String> hostExtensions = Collections.emptySet();
     private List<Path> layersConfs = Collections.emptyList();
-    private String minimumStability;
+    private String minimumStabilityLevel;
 
     private WildFlyPackageTasksParser tasksParser;
     private ProvisioningLayoutFactory layoutFactory;
@@ -139,7 +139,7 @@ public class FeatureSpecGeneratorInvoker {
         this.forkEmbedded = mojo.forkEmbedded;
         this.wildflyHome = mojo.wildflyHome.toPath();
         this.moduleTemplatesDir = mojo.moduleTemplatesDir.toPath();
-        this.minimumStability = mojo.minimumStability;
+        this.minimumStabilityLevel = mojo.minimumStabilityLevel;
         this.log = mojo.getLog();
     }
 
@@ -722,12 +722,12 @@ public class FeatureSpecGeneratorInvoker {
     }
 
     private Object getFeaturePackGenerator(Class<?> specGenCls) throws NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
-        debug("Creating a feature spec generator for stability %s using %s", minimumStability, specGenCls);
+        debug("Creating a feature spec generator for stability %s using %s", minimumStabilityLevel, specGenCls);
         try {
             return specGenCls.getConstructor(String.class, Path.class, Map.class, String.class, boolean.class, boolean.class)
-                    .newInstance(wildflyHome.toString(), featureSpecsOutput.toPath(), inheritedFeatureSpecs, minimumStability, forkEmbedded, log.isDebugEnabled());
+                    .newInstance(wildflyHome.toString(), featureSpecsOutput.toPath(), inheritedFeatureSpecs, minimumStabilityLevel, forkEmbedded, log.isDebugEnabled());
         } catch (NoSuchMethodException e) {
-            if (minimumStability != null && !minimumStability.isEmpty()) {
+            if (minimumStabilityLevel != null && !minimumStabilityLevel.isEmpty()) {
                 return specGenCls.getConstructor(String.class, Path.class, Map.class, boolean.class, boolean.class)
                         .newInstance(wildflyHome.toString(), featureSpecsOutput.toPath(), inheritedFeatureSpecs, forkEmbedded, log.isDebugEnabled());
             } else {
