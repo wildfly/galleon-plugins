@@ -266,10 +266,24 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                 defaultConfigStabilityLevel = Stability.fromString(stabilityLevel);
                 defaultPackageStabilityLevel = Stability.fromString(stabilityLevel);
             }
+            // Check that the minimum Stability level enables the stability level
+            checkStabilityLevels(buildTimestabilityLevel, defaultConfigStabilityLevel, defaultPackageStabilityLevel);
             artifactVersions = MavenProjectArtifactVersions.getInstance(project);
             doExecute();
         } catch (RuntimeException | Error | MojoExecutionException | MojoFailureException e) {
             throw e;
+        }
+    }
+
+    private static void checkStabilityLevels(Stability min, Stability config, Stability pkg) throws MojoExecutionException {
+        min = min == null ? Stability.DEFAULT : min;
+        config = config == null ? Stability.DEFAULT : config;
+        pkg = pkg == null ? Stability.DEFAULT : pkg;
+        if (!min.enables(config)) {
+            throw new MojoExecutionException("The minimum stability " + min + " doesn't enable the config stability " + config);
+        }
+        if (!min.enables(pkg)) {
+            throw new MojoExecutionException("The minimum stability " + min + " doesn't enable the package stability " + pkg);
         }
     }
 
