@@ -477,7 +477,25 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                     Path script;
                     try {
                         try {
-                            byte[] content = Files.readAllBytes(finalizeCli);
+                            String stabilityLevel = getStabilityLevel();
+                            byte[] content;
+                            if (stabilityLevel != null && !stabilityLevel.isEmpty()) {
+                                List<String> lines = Files.readAllLines(finalizeCli);
+                                StringBuilder builder = new StringBuilder();
+                                // Do we have an embed-server command?
+                                for (String l : lines) {
+                                    String trimLine = l.trim();
+                                    if (trimLine.startsWith("embed-server")) {
+                                        if (!trimLine.contains("--stability=")) {
+                                            l += " --stability=" + stabilityLevel;
+                                        }
+                                    }
+                                    builder.append(l).append(System.lineSeparator());
+                                }
+                                content = builder.toString().getBytes();
+                            } else {
+                                content = Files.readAllBytes(finalizeCli);
+                            }
                             Path tmpDir = runtime.getTmpPath();
                             if (!Files.exists(tmpDir)) {
                                 Files.createDirectory(tmpDir);
