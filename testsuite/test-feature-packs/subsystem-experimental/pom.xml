@@ -10,7 +10,7 @@
   <parent>
     <groupId>org.wildfly.galleon-plugins</groupId>
     <artifactId>wildfly-galleon-plugins-test-feature-packs</artifactId>
-    <version>7.0.0.Final</version>
+    <version>7.0.1.Final-SNAPSHOT</version>
   </parent>
 	
   <artifactId>test-subsystem-experimental</artifactId>
