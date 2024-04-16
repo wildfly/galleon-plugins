@@ -32,3 +32,4 @@ jobs:
     if: ${{ needs.check_date.outputs.should_run != 'false' }}
     with:
       wildfly-ref: ${{ inputs.wildfly-ref }}
+      wildfly-extra-args: -Dskip.preview
