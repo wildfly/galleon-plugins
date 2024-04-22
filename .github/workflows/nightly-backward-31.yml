@@ -10,6 +10,6 @@ on:
 jobs:
   test-galleon-plugins:
     name: Build test Galleon Plugins
-    uses: wildfly/galleon-plugins/.github/workflows/nightly-workflow.yml@main
+    uses: wildfly/galleon-plugins/.github/workflows/nightly-workflow-older.yml@main
     with:
       wildfly-ref: 31.0.0.Final

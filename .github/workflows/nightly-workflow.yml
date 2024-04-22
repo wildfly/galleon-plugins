@@ -1,7 +1,7 @@
 # This workflow will build a Java project with Maven
 # For more information see: https://help.github.com/actions/language-and-framework-guides/building-and-testing-java-with-maven
 
-name: WildFly galleon plugins - Nightly WildFly backward compatibility
+name: DISABLED, can re-enable for WildFly 32. WildFly galleon plugins - Nightly WildFly backward compatibility
 
 on:
   workflow_call:
@@ -32,4 +32,3 @@ jobs:
     if: ${{ needs.check_date.outputs.should_run != 'false' }}
     with:
       wildfly-ref: ${{ inputs.wildfly-ref }}
-      wildfly-extra-args: -Dskip.preview
