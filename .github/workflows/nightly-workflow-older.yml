@@ -74,6 +74,6 @@ jobs:
       - name: WildFly -Dts.layers tests
         run: |
           cd testsuite
-          mvn -B -fae clean install -Dts.layers -Dversion.org.wildfly.glow=1.0.0.Final -Dversion.org.wildfly.plugin=5.0.0.Final -Dversion.org.jboss.galleon=${{env.galleon-version}} -Dversion.org.wildfly.galleon-plugins=${{env.galleon-plugins-version}}
+          mvn -B -fae clean install -Dno.preview.integration.tests=true -Dts.layers -Dversion.org.wildfly.glow=1.0.0.Final -Dversion.org.wildfly.plugin=5.0.0.Final -Dversion.org.jboss.galleon=${{env.galleon-version}} -Dversion.org.wildfly.galleon-plugins=${{env.galleon-plugins-version}}
         shell: bash    
         working-directory: wildfly
