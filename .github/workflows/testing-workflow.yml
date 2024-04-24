@@ -60,7 +60,7 @@ jobs:
     name: Linux/Windows - JDK11 and JDK17
     uses: wildfly/wildfly/.github/workflows/shared-wildfly-build-and-test.yml@main
     with:
-      build-arguments: '-Dversion.org.jboss.galleon=${{needs.galleon-plugins-build.outputs.galleon-version}} -Dversion.org.wildfly.galleon-plugins=${{needs.galleon-plugins-build.outputs.galleon-plugins-version}}'
+      build-arguments: '-fae -Dversion.org.jboss.galleon=${{needs.galleon-plugins-build.outputs.galleon-version}} -Dversion.org.wildfly.galleon-plugins=${{needs.galleon-plugins-build.outputs.galleon-plugins-version}}'
       java-versions: "['11', '17']"
       os: "['ubuntu-latest', 'windows-latest']"
       maven-repo-name: galleon-plugins-maven-repository
@@ -72,7 +72,7 @@ jobs:
     name: Galleon Linux - JDK11
     uses: wildfly/wildfly/.github/workflows/shared-wildfly-build-and-test.yml@main
     with:
-      test-arguments: '-Dts.layers -Dts.galleon'
+      test-arguments: '-fae -Dts.layers -Dts.galleon'
       build-arguments: '-Dversion.org.jboss.galleon=${{needs.galleon-plugins-build.outputs.galleon-version}} -Dversion.org.wildfly.galleon-plugins=${{needs.galleon-plugins-build.outputs.galleon-plugins-version}}'
       os: "['ubuntu-latest']"
       java-versions: "['11']"
@@ -85,7 +85,7 @@ jobs:
     name: WildFly Preview - Linux- JDK17
     uses: wildfly/wildfly/.github/workflows/shared-wildfly-build-and-test.yml@main
     with:
-      test-arguments: '-Dts.preview'
+      test-arguments: '-fae -Dts.preview'
       build-arguments: '-Dversion.org.jboss.galleon=${{needs.galleon-plugins-build.outputs.galleon-version}} -Dversion.org.wildfly.galleon-plugins=${{needs.galleon-plugins-build.outputs.galleon-plugins-version}}'
       java-versions: "['17']"
       os: "['ubuntu-latest']"
