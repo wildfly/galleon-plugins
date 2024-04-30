@@ -111,6 +111,8 @@ public class StabilityOptionsTestCase {
                 }
                 break;
             case CONFIG:
+                // Needed, package must imply config.
+                mojo.packageStabilityLevel = Stability.EXPERIMENTAL.toString();
                 if (option) {
                     expected = Stability.COMMUNITY;
                     mojo.configStabilityLevel = expected.toString();
@@ -153,8 +155,26 @@ public class StabilityOptionsTestCase {
 
                 doTestInvalidMix(new WfFeaturePackBuildMojo(), option, override);
                 doTestInvalidMix(new UserFeaturePackBuildMojo(), option, override);
+
+                doTestInvalidPackage(new WfFeaturePackBuildMojo(), option, override);
+                doTestInvalidPackage(new UserFeaturePackBuildMojo(), option, override);
             }
         }
+    }
+
+    void doTestInvalidPackage(AbstractFeaturePackBuildMojo mojo, boolean option, boolean override) throws Exception {
+        WildFlyFeaturePackBuild.Builder builder = WildFlyFeaturePackBuild.builder();
+        if (option) {
+            mojo.minimumStabilityLevel = Stability.EXPERIMENTAL.toString();
+            mojo.packageStabilityLevel = Stability.DEFAULT.toString();
+            mojo.configStabilityLevel = Stability.COMMUNITY.toString();
+        }
+        if (override || !option) {
+            builder.setMinimumStabilityLevel(Stability.EXPERIMENTAL.toString());
+            builder.setPackageStabilityLevel(Stability.DEFAULT.toString());
+            builder.setConfigStabilityLevel(Stability.COMMUNITY.toString());
+        }
+        expectFailure(mojo, builder.build());
     }
 
     void doTestInvalidOption(AbstractFeaturePackBuildMojo mojo, boolean option, boolean override, StabilityOption kind) throws Exception {
@@ -191,10 +211,14 @@ public class StabilityOptionsTestCase {
                 if (option) {
                     mojo.stabilityLevel = Stability.COMMUNITY.toString();
                     mojo.configStabilityLevel = Stability.COMMUNITY.toString();
+                    // Needed, package must imply config.
+                    mojo.packageStabilityLevel = Stability.EXPERIMENTAL.toString();
                 }
                 if (override || !option) {
                     builder.setStabilityLevel(Stability.COMMUNITY.toString());
                     builder.setConfigStabilityLevel(Stability.COMMUNITY.toString());
+                    // Needed, package must imply config.
+                    builder.setPackageStabilityLevel(Stability.EXPERIMENTAL.toString());
                 }
                 break;
         }

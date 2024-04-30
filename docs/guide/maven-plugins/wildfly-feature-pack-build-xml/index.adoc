@@ -124,5 +124,8 @@ Stability levels can be set using the following elements:
 NOTE: Instead of using `<config-stability-level>` and `<package-stability-level>`  
 you can set the `<stability-level>` element that applies to both configurations and packages.
 
+NOTE: If the `<config-stability-level>` and the `<package-stability-level>` are set, then the level of 
+the `<package-stability-level>` must imply the level of the `<config-stability-level>`.
+
 NOTE: Stability options set in the Maven Plugin override the values set in the file.
  

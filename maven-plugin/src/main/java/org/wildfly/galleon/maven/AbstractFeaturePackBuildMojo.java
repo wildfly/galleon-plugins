@@ -234,6 +234,8 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     /**
      * The default stability level used at provisioning time when installing packages/JBoss Modules modules.
      * Can't be used when {@code stability-level} is set.
+     * If both the {@code config-stability-level} and the {@code package-stability-level} options are set,
+     * the level of the {@code package-stability-level} option must imply the level of the {@code config-stability-level} option.
      * It overrides the value set in the wildfly-feature-pack-build.xml file.
      */
     @Parameter(alias = "package-stability-level", required = false)
@@ -316,6 +318,9 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         }
         if (!min.enables(pkg)) {
             throw new MojoExecutionException("The minimum stability " + min + " doesn't enable the package stability " + pkg);
+        }
+        if (!pkg.enables(config)) {
+            throw new MojoExecutionException("The package stability " + pkg + " doesn't enable the config stability " + config);
         }
     }
 
