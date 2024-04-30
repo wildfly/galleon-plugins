@@ -210,6 +210,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
      * The minimum stability level of the WildFly processes used to generate feature specs and include packages.
      * Set this if you need to generate feature specs for features with a lower stability level
      * than the default level of the WildFly process being used for feature-spec generation.
+     * It overrides the value set in the wildfly-feature-pack-build.xml file.
      */
     @Parameter(alias = "minimum-stability-level", required = false)
     protected String minimumStabilityLevel;
@@ -217,6 +218,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     /**
      * The default stability level used at provisioning time to generate
      * configuration and provision packages. Can't be used when {@code config-stability-level} or {@code package-stability-level} is set.
+     * It overrides the value set in the wildfly-feature-pack-build.xml file.
      */
     @Parameter(alias = "stability-level", required = false)
     protected String stabilityLevel;
@@ -224,16 +226,18 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     /**
      * The default stability level used at provisioning time to generate
      * configuration. Can't be used when {@code stability-level} is set.
+     * It overrides the value set in the wildfly-feature-pack-build.xml file.
      */
     @Parameter(alias = "config-stability-level", required = false)
-    protected String configStatibilityLevel;
+    protected String configStabilityLevel;
 
     /**
      * The default stability level used at provisioning time when installing packages/JBoss Modules modules.
      * Can't be used when {@code stability-level} is set.
+     * It overrides the value set in the wildfly-feature-pack-build.xml file.
      */
     @Parameter(alias = "package-stability-level", required = false)
-    protected String packageStatibilityLevel;
+    protected String packageStabilityLevel;
 
     private MavenProjectArtifactVersions artifactVersions;
 
@@ -252,27 +256,55 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
         try {
-            buildTimestabilityLevel = minimumStabilityLevel == null ? null : Stability.fromString(minimumStabilityLevel);
-            if (stabilityLevel == null) {
-                defaultConfigStabilityLevel = configStatibilityLevel == null ? null : Stability.fromString(configStatibilityLevel);
-                defaultPackageStabilityLevel = packageStatibilityLevel == null ? null : Stability.fromString(packageStatibilityLevel);
-            } else {
-                if (configStatibilityLevel != null) {
-                    throw new MojoExecutionException("stability option can't be set when config-stability-level option is set");
-                }
-                if (packageStatibilityLevel != null) {
-                    throw new MojoExecutionException("stability option can't be set when package-stability-level option is set");
-                }
-                defaultConfigStabilityLevel = Stability.fromString(stabilityLevel);
-                defaultPackageStabilityLevel = Stability.fromString(stabilityLevel);
-            }
-            // Check that the minimum Stability level enables the stability level
-            checkStabilityLevels(buildTimestabilityLevel, defaultConfigStabilityLevel, defaultPackageStabilityLevel);
             artifactVersions = MavenProjectArtifactVersions.getInstance(project);
             doExecute();
         } catch (RuntimeException | Error | MojoExecutionException | MojoFailureException e) {
             throw e;
         }
+    }
+
+    // Stability options override the values in the buildConfig
+    protected void setStability(WildFlyFeaturePackBuild buildConfig) throws MojoExecutionException {
+        if (minimumStabilityLevel == null) {
+            minimumStabilityLevel = buildConfig.getMinimumStabilityLevel();
+        }
+        buildTimestabilityLevel = minimumStabilityLevel == null ? null : Stability.fromString(minimumStabilityLevel);
+        if (stabilityLevel == null) {
+            stabilityLevel = buildConfig.getStabilityLevel();
+        }
+        if (configStabilityLevel == null) {
+            configStabilityLevel = buildConfig.getConfigStabilityLevel();
+        }
+        if (packageStabilityLevel == null) {
+            packageStabilityLevel = buildConfig.getPackageStabilityLevel();
+        }
+        if (stabilityLevel == null) {
+            defaultConfigStabilityLevel = configStabilityLevel == null ? null : Stability.fromString(configStabilityLevel);
+            defaultPackageStabilityLevel = packageStabilityLevel == null ? null : Stability.fromString(packageStabilityLevel);
+        } else {
+            if (configStabilityLevel != null) {
+                throw new MojoExecutionException("stability option can't be set when config-stability-level option is set");
+            }
+            if (packageStabilityLevel != null) {
+                throw new MojoExecutionException("stability option can't be set when package-stability-level option is set");
+            }
+            defaultConfigStabilityLevel = Stability.fromString(stabilityLevel);
+            defaultPackageStabilityLevel = Stability.fromString(stabilityLevel);
+        }
+        // Check that the minimum Stability level enables the stability level
+        checkStabilityLevels(buildTimestabilityLevel, defaultConfigStabilityLevel, defaultPackageStabilityLevel);
+    }
+
+    protected Stability getMinimumStabilityLevel() {
+        return buildTimestabilityLevel;
+    }
+
+    protected Stability getPackageStabilityLevel() {
+        return defaultPackageStabilityLevel;
+    }
+
+    protected Stability getConfigStabilityLevel() {
+        return defaultConfigStabilityLevel;
     }
 
     private static void checkStabilityLevels(Stability min, Stability config, Stability pkg) throws MojoExecutionException {

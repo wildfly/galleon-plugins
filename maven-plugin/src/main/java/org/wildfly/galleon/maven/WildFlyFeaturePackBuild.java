@@ -53,6 +53,10 @@ public class WildFlyFeaturePackBuild {
         private List<String> domainExtensions = Collections.emptyList();
         private List<String> hostExtensions = Collections.emptyList();
         private Set<String> systemPaths = Collections.emptySet();
+        private String configStabilityLevel;
+        private String packageStabilityLevel;
+        private String minimumStabilityLevel;
+        private String stabilityLevel;
 
         private Builder() {
         }
@@ -117,6 +121,26 @@ public class WildFlyFeaturePackBuild {
             return this;
         }
 
+        public Builder setConfigStabilityLevel(String stabilityLevel) {
+            configStabilityLevel = stabilityLevel;
+            return this;
+        }
+
+        public Builder setPackageStabilityLevel(String stabilityLevel) {
+            packageStabilityLevel = stabilityLevel;
+            return this;
+        }
+
+        public Builder setMinimumStabilityLevel(String stabilityLevel) {
+            minimumStabilityLevel = stabilityLevel;
+            return this;
+        }
+
+        public Builder setStabilityLevel(String stabilityLevel) {
+            this.stabilityLevel = stabilityLevel;
+            return this;
+        }
+
         public WildFlyFeaturePackBuild build() {
             return new WildFlyFeaturePackBuild(this);
         }
@@ -142,6 +166,10 @@ public class WildFlyFeaturePackBuild {
     private final List<String> domainExtensions;
     private final List<String> hostExtensions;
     private final Set<String> systemPaths;
+    private final String configStabilityLevel;
+    private final String packageStabilityLevel;
+    private final String minimumStabilityLevel;
+    private final String stabilityLevel;
 
     private WildFlyFeaturePackBuild(Builder builder) {
         this.producer = builder.producer;
@@ -156,6 +184,10 @@ public class WildFlyFeaturePackBuild {
         this.domainExtensions = CollectionUtils.unmodifiable(builder.domainExtensions);
         this.hostExtensions = CollectionUtils.unmodifiable(builder.hostExtensions);
         this.systemPaths = CollectionUtils.unmodifiable(builder.systemPaths);
+        this.configStabilityLevel = builder.configStabilityLevel;
+        this.packageStabilityLevel = builder.packageStabilityLevel;
+        this.minimumStabilityLevel = builder.minimumStabilityLevel;
+        this.stabilityLevel = builder.stabilityLevel;
     }
 
     public FeaturePackLocation getProducer() {
@@ -240,5 +272,21 @@ public class WildFlyFeaturePackBuild {
 
     public Set<String> getSystemPaths() {
         return systemPaths;
+    }
+
+    public String getConfigStabilityLevel() {
+        return configStabilityLevel;
+    }
+
+    public String getPackageStabilityLevel() {
+        return packageStabilityLevel;
+    }
+
+    public String getMinimumStabilityLevel() {
+        return minimumStabilityLevel;
+    }
+
+    public String getStabilityLevel() {
+        return stabilityLevel;
     }
 }
