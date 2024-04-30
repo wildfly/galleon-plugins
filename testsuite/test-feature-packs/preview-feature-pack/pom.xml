@@ -117,6 +117,7 @@
             </goals>
             <phase>compile</phase>
             <configuration>
+              <forbid-lower-stability-level-package-reference>true</forbid-lower-stability-level-package-reference>
               <config-file>target/resources/build/wildfly-feature-pack-build.xml</config-file>
               <minimum-stability-level>preview</minimum-stability-level>
               <stability-level>preview</stability-level>

@@ -35,13 +35,16 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Clock;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
@@ -58,6 +61,7 @@ import org.apache.maven.execution.MavenSession;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
+import org.apache.maven.plugin.logging.Log;
 import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.project.DefaultProjectBuildingRequest;
@@ -83,6 +87,7 @@ import org.jboss.galleon.layout.FeaturePackDescriber;
 import org.jboss.galleon.layout.FeaturePackDescription;
 import org.jboss.galleon.maven.plugin.FpMavenErrors;
 import org.jboss.galleon.maven.plugin.util.MavenArtifactRepositoryManager;
+import org.jboss.galleon.spec.ConfigLayerSpec;
 import org.jboss.galleon.spec.FeaturePackPlugin;
 import org.jboss.galleon.spec.FeaturePackSpec;
 import org.jboss.galleon.spec.FeatureSpec;
@@ -232,6 +237,12 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     protected String configStabilityLevel;
 
     /**
+     * Enforce that no package at a lower stability level than the minimum-stability-level is referenced from Galleon constructs.
+     */
+    @Parameter(alias = "forbid-lower-stability-level-package-reference", required = false, defaultValue = "false")
+    protected boolean forbidLowerStatibilityLevelPackageReference;
+
+    /**
      * The default stability level used at provisioning time when installing packages/JBoss Modules modules.
      * Can't be used when {@code stability-level} is set.
      * If both the {@code config-stability-level} and the {@code package-stability-level} options are set,
@@ -254,6 +265,8 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     private Stability buildTimestabilityLevel;
     private Stability defaultConfigStabilityLevel;
     private Stability defaultPackageStabilityLevel;
+
+    private final Set<String> lowerStabilityPackages = new HashSet<>();
 
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
@@ -433,7 +446,6 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         ArtifactListBuilder builder = new ArtifactListBuilder(new MavenArtifactRepositoryManager(repoSystem,
                 noWorkspaceSession, repositories), repoSession.getLocalRepository().getBasedir().toPath(), getLog());
         buildArtifactList(builder);
-
         addConfigPackages(resourcesDir.resolve(Constants.PACKAGES), fpDir.resolve(Constants.PACKAGES), fpBuilder);
         Util.copyIfExists(resourcesDir, fpDir, Constants.LAYERS);
         Util.copyIfExists(resourcesDir, fpDir, Constants.CONFIGS);
@@ -489,8 +501,10 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                                 }
                                 try {
                                     //Validate that we can parse this feature-pack...
-                                    FeaturePackDescriber.describeFeaturePack(versionDir,"UTF-8");
-                                } catch (ProvisioningDescriptionException ex) {
+                                    FeaturePackDescription desc = FeaturePackDescriber.describeFeaturePack(versionDir, "UTF-8");
+                                    checkFeaturePackContentStability(forbidLowerStatibilityLevelPackageReference, lowerStabilityPackages,
+                                            desc.getPackages(), desc.getLayers(), desc.getFeatures(), desc.getConfigs(), getLog());
+                                } catch (Exception ex) {
                                     throw new RuntimeException(ex);
                                 }
                                 ZipUtils.zip(versionDir, target);
@@ -521,6 +535,80 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         }
     }
 
+    static void checkFeaturePackContentStability(boolean forbidLowerStatibilityLevelPackageReference,
+            Set<String> lowerStabilityPackages,
+            Collection<PackageSpec> packages,
+            Collection<ConfigLayerSpec> layers,
+            Collection<FeatureSpec> features,
+            Map<String, Map<String, ConfigModel>> configs, Log log) throws Exception {
+
+        // Validate that no packages at a lower stability level are referenced
+        for (PackageSpec spec : packages) {
+            if (spec.hasLocalPackageDeps()) {
+                for (PackageDependencySpec pds : spec.getLocalPackageDeps()) {
+                    if (lowerStabilityPackages.contains(pds.getName())) {
+                        String message = "package " + spec.getName() + " references the package " + pds.getName()
+                                + " that has not been packaged due to its stability level being lower than the feature-pack minimum stability level. You should remove this reference.";
+                        if (forbidLowerStatibilityLevelPackageReference) {
+                            throw new Exception(message);
+                        } else {
+                            log.warn(message);
+                        }
+                    }
+                }
+            }
+        }
+        for (ConfigLayerSpec spec : layers) {
+            if (spec.hasLocalPackageDeps()) {
+                for (PackageDependencySpec pds : spec.getLocalPackageDeps()) {
+                    if (lowerStabilityPackages.contains(pds.getName())) {
+                        String message = "package " + spec.getName() + " references the package " + pds.getName()
+                                + " that has not been packaged due to its stability level being lower than the feature-pack minimum stability level. You should remove this reference.";
+                        if (forbidLowerStatibilityLevelPackageReference) {
+                            throw new Exception(message);
+                        } else {
+                            log.warn(message);
+                        }
+                    }
+                }
+            }
+        }
+        for (FeatureSpec spec : features) {
+            if (spec.hasLocalPackageDeps()) {
+                for (PackageDependencySpec pds : spec.getLocalPackageDeps()) {
+                    if (lowerStabilityPackages.contains(pds.getName())) {
+                        String message = "feature " + spec.getName() + " references the package " + pds.getName()
+                                + " that has not been packaged due to its stability level being lower than the feature-pack minimum stability level. You should remove this reference.";
+                        if (forbidLowerStatibilityLevelPackageReference) {
+                            throw new Exception(message);
+                        } else {
+                            log.warn(message);
+                        }
+                    }
+                }
+            }
+        }
+        for (Entry<String, Map<String, ConfigModel>> configModel : configs.entrySet()) {
+            String modelName = configModel.getKey();
+            for (Entry<String, ConfigModel> cm : configModel.getValue().entrySet()) {
+                ConfigModel config = cm.getValue();
+                String configName = cm.getKey();
+                if (config.hasLocalPackageDeps()) {
+                    for (PackageDependencySpec pds : config.getLocalPackageDeps()) {
+                        if (lowerStabilityPackages.contains(pds.getName())) {
+                            String message = "config " + modelName + "/" + configName + " references the package " + pds.getName()
+                                    + " that has not been packaged due to its stability level being lower than the feature-pack minimum stability level. You should remove this reference.";
+                            if (forbidLowerStatibilityLevelPackageReference) {
+                                throw new Exception(message);
+                            } else {
+                                log.warn(message);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
     /**
      * Create a YAML Channel Manifest that defines streams for all the feature-pack
      * dependencies. The feature-pack itself is added to the channel's streams.
@@ -582,6 +670,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                                     + "Package stability '"
                                     + packageStability + "' is not enabled by the '" + buildTimestabilityLevel
                                     + "' stability level that is the feature-pack minimum stability level.");
+                            lowerStabilityPackages.add(pkgSpec.getName());
                             continue;
                         }
                     }
@@ -869,6 +958,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                                 + "Package stability '" +
                                 packageStability + "' is not enabled by the '" + buildTimestabilityLevel +
                                 "' stability level that is the feature-pack minimum stability level.");
+                        lowerStabilityPackages.add(packageName);
                         continue;
                     }
                     pkgSpecBuilder.setStability(stab);
