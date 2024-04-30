@@ -102,3 +102,30 @@ Feature-packs that depend on WildFly (or WildFly Core), normally, don't need to 
 <2> `copy` element under `resources` instructs to copy the specified artifact to the feature-pack `resources` directory
 
 NOTE: Both artifact coordinates above are missing versions. Although the versions could specified, in this case they will be resolved from the Maven project dependencies at the plugin execution time.
+
+##### Configuring stability levels
+
+This feature requires a minimum schema version of `3.4`. 
+
+Stability levels can be set using the following elements:
+
+[source,xml]
+----
+<stability-levels>
+  <!-- The minimum stability level of the WildFly processes used to generate feature specs and include packages. -->
+  <minimum-stability-level>[default|community|preview|experimental]</minimum-stability-level>
+  <!-- The default stability level used at provisioning time to generate configuration. -->
+  <config-stability-level>[default|community|preview|experimental]</config-stability-level>
+  <!-- The default stability level used at provisioning time when installing packages/JBoss Modules modules. -->
+  <package-stability-level>[default|community|preview|experimental]</package-stability-level>
+</stability-levels>
+----
+
+NOTE: Instead of using `<config-stability-level>` and `<package-stability-level>`  
+you can set the `<stability-level>` element that applies to both configurations and packages.
+
+NOTE: If the `<config-stability-level>` and the `<package-stability-level>` are set, then the level of 
+the `<package-stability-level>` must imply the level of the `<config-stability-level>`.
+
+NOTE: Stability options set in the Maven Plugin override the values set in the file.
+ 

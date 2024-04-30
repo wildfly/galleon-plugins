@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Red Hat, Inc. and/or its affiliates
+ * Copyright 2016-2024 Red Hat, Inc. and/or its affiliates
  * and other contributors as indicated by the @author tags.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -35,6 +35,7 @@ public class FeaturePackBuildModelParser {
     private static final QName ROOT_3_1 = new QName(FeaturePackBuildModelParser31.NAMESPACE, FeaturePackBuildModelParser31.Element.BUILD.getLocalName());
     private static final QName ROOT_3_2 = new QName(FeaturePackBuildModelParser32.NAMESPACE, FeaturePackBuildModelParser32.Element.BUILD.getLocalName());
     private static final QName ROOT_3_3 = new QName(FeaturePackBuildModelParser33.NAMESPACE, FeaturePackBuildModelParser33.Element.BUILD.getLocalName());
+    private static final QName ROOT_3_4 = new QName(FeaturePackBuildModelParser34.NAMESPACE, FeaturePackBuildModelParser34.Element.BUILD.getLocalName());
 
     private static final XMLInputFactory INPUT_FACTORY = XMLInputFactory.newInstance();
 
@@ -46,6 +47,7 @@ public class FeaturePackBuildModelParser {
         mapper.registerRootElement(ROOT_3_1, new FeaturePackBuildModelParser31());
         mapper.registerRootElement(ROOT_3_2, new FeaturePackBuildModelParser32());
         mapper.registerRootElement(ROOT_3_3, new FeaturePackBuildModelParser33());
+        mapper.registerRootElement(ROOT_3_4, new FeaturePackBuildModelParser34());
     }
 
     public WildFlyFeaturePackBuild parse(final InputStream input) throws XMLStreamException {

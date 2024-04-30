@@ -120,7 +120,7 @@ public class UserFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
 
         // feature-pack build config
         buildConfig = getBuildConfig();
-
+        setStability(buildConfig);
         FeaturePackLocation fpl = buildConfig.getProducer();
         // In case we didn't generated the config and the producer has no version.
         // If FP is a maven artifact, we don't have an Universe, set the version.
