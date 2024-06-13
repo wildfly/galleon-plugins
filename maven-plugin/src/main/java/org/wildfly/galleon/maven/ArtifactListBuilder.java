@@ -103,20 +103,29 @@ public class ArtifactListBuilder {
         debug("Add artifact %s:%s:%s", coords.getGroupId(), coords.getArtifactId(), coords.getVersion());
         Path artifactLocalPath = resolveArtifact(coords);
         ArtifactCoords pomFileCoords = new ArtifactCoords(coords.getGroupId(), coords.getArtifactId(), coords.getVersion(), null, "pom");
-        Path pomFile = resolveArtifact(pomFileCoords);
-        Model model = null;
+        Path pomFile = null;
         try {
-            model = readModel(pomFile);
+            pomFile = resolveArtifact(pomFileCoords);
         } catch(Throwable ex) {
-            throw new ProvisioningException("Exception while reading model for " + coords + ". Resolved pom file " + pomFile, ex);
+            log.warn(String.format("The POM for %s:%s:%s is missing, no dependency information available", coords.getGroupId(), coords.getArtifactId(), coords.getVersion()), ex);
         }
-        Parent artifactParent = model.getParent();
-        if (artifactParent != null) {
-            ArtifactCoords parentCoords = new ArtifactCoords(artifactParent.getGroupId(), artifactParent.getArtifactId(), artifactParent.getVersion(), null, "pom");
-            add(parentCoords);
+        if (pomFile != null) {
+            Model model = null;
+            try {
+                model = readModel(pomFile);
+            } catch(Throwable ex) {
+                throw new ProvisioningException("Exception while reading model for " + coords + ". Resolved pom file " + pomFile, ex);
+            }
+            Parent artifactParent = model.getParent();
+            if (artifactParent != null) {
+                ArtifactCoords parentCoords = new ArtifactCoords(artifactParent.getGroupId(), artifactParent.getArtifactId(), artifactParent.getVersion(), null, "pom");
+                add(parentCoords);
+            }
         }
         addArtifact(artifactLocalPath);
-        addArtifact(pomFile);
+        if (pomFile != null) {
+            addArtifact(pomFile);
+        }
         return artifactLocalPath;
     }
 
