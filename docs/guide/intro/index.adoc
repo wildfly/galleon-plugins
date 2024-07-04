@@ -1,7 +1,7 @@
 ## Introduction
 
-WildFly Galleon Plugins project includes Galleon plugin and Maven plugin implementations that are dedicated to
-building feature-packs (including generation of feature specs, packages and other resources) for WildFly releases and provisioning of WildFly-based distributions.
+WildFly Galleon Plugins project includes Galleon plugin and Maven plugin implementations that are dedicated to 
+building feature-packs (including generation of feature specs, packages and other resources) for WildFly releases and provisioning of WildFly-based distributions. 
 These plugins can also be used by projects that integrate into or extend WildFly.
 
 ### Maven plugins
@@ -10,10 +10,10 @@ This Maven tooling allows to build feature-packs that can be combined with WildF
 
 The Maven plugin "org.wildfly.galleon-plugins:wildfly-galleon-maven-plugin" exposes 2 goals:
 
-* `build-feature-pack`: A goal to be used by WildFly developers when defining WildFly feature-packs that
+* `build-feature-pack`: A goal to be used by WildFly developers when defining WildFly feature-packs that 
 implement new WidFly subsystems and expose new server capabilities.
 
-* `build-user-feature-pack`: A goal to be used by WildFly server users in order to define new Layers, new JBoss Modules, ... that depend on existing WildFly
+* `build-user-feature-pack`: A goal to be used by WildFly server users in order to define new Layers, new JBoss Modules, ... that depend on existing WildFly 
 subsystems and capabilities.
 
 ### Galleon plugins
@@ -86,15 +86,15 @@ A `provisioning.xml` file example:
 [cols="1,2,3,4"]
 
 |===
-|Option
+|Option 
 |Type
 |Default value
-|Description
+|Description 
 
 |jboss-bulk-resolve-artifacts
 |Boolean
 |false
-|Maven artifacts that are needed for the WildFly server installation are resolved in a bulk operation instead of
+|Maven artifacts that are needed for the WildFly server installation are resolved in a bulk operation instead of 
 being resolved individually. That can speed-up the provisioning time.
 
 |jboss-dump-config-scripts
@@ -106,21 +106,21 @@ being resolved individually. That can speed-up the provisioning time.
 |Boolean
 |false
 |Fork in a separate process the generation of the server configuration files. Server configuration generation implies the usage of a WildFly Embedded server.
-It is advised to set this env variable to true, specially when having multiple executions of the provisioning inside the
+It is advised to set this env variable to true, specially when having multiple executions of the provisioning inside the 
 same process (e.g.: multiple executions of Galleon\|WildFly\|Bootable JAR Maven plugins).
 
 |jboss-maven-dist
 |Boolean
 |false
-|Provision a thin WildFly server installation with JBoss Modules modules jar resolved from Maven local cache
+|Provision a thin WildFly server installation with JBoss Modules modules jar resolved from Maven local cache 
 and not copied to the `modules` directory.
 
 |jboss-maven-repo
 |String
 |NONE
-|A path to a directory in which all the resolved Maven artifacts jars and associated pom files are stored.
-The generated directory complies with the filesystem layout of a Maven repository. This respository can then be used as the local cache
-of a thin WildFly server (see `jboss-maven-dist` option).
+|A path to a directory in which all the resolved Maven artifacts jars and associated pom files are stored. 
+The generated directory complies with the filesystem layout of a Maven repository. This respository can then be used as the local cache 
+of a thin WildFly server (see `jboss-maven-dist` option). 
 
 |jboss-overridden-artifacts
 |'\|' separated list of maven coordinates in the following syntax: GroupId:ArtifactId:Version:[Classifier:]Extension
@@ -141,4 +141,4 @@ To not reset a WildFly specific system property, add the property name prefixed 
 |NONE
 |A path to a directory where to cache the resolved Maven artifacts that are not part of the server installation (feature-packs, Galleon plugins, ...).
 NOTE: This option is specific to the usage of the link:https://github.com/wildfly-extras/prospero[prospero] provisioning tool.
-|===
+|=== 
