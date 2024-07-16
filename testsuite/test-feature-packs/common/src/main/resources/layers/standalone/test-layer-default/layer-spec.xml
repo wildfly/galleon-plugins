@@ -10,4 +10,7 @@
     <param name="interface" value="test-default"/>
     <param name="inet-address" value="127.0.0.1"/>
   </feature>
+  <packages>
+    <package name="test.community.package" optional="true" valid-for-stability="community"/>
+  </packages>
 </layer-spec>

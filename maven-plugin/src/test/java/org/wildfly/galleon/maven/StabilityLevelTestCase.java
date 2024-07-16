@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.Set;
 import org.apache.maven.plugin.logging.Log;
 import org.jboss.galleon.Constants;
+import org.jboss.galleon.Stability;
 import org.jboss.galleon.config.ConfigModel;
 import org.jboss.galleon.spec.ConfigLayerSpec;
 import org.jboss.galleon.spec.FeatureSpec;
@@ -133,7 +134,8 @@ public class StabilityLevelTestCase {
             }
         };
         // No check, should pass
-        AbstractFeaturePackBuildMojo.checkFeaturePackContentStability(false,
+        AbstractFeaturePackBuildMojo.checkFeaturePackContentStability(Stability.EXPERIMENTAL,
+                false,
                 lowerStabilityPackages,
                 packages,
                 layers,
@@ -142,7 +144,8 @@ public class StabilityLevelTestCase {
                 log);
 
         // No package at lower stability level, should pass
-        AbstractFeaturePackBuildMojo.checkFeaturePackContentStability(false,
+        AbstractFeaturePackBuildMojo.checkFeaturePackContentStability(Stability.EXPERIMENTAL,
+                false,
                 Collections.emptySet(),
                 packages,
                 layers,
@@ -153,7 +156,8 @@ public class StabilityLevelTestCase {
         {
             boolean failed = false;
             try {
-                AbstractFeaturePackBuildMojo.checkFeaturePackContentStability(true,
+                AbstractFeaturePackBuildMojo.checkFeaturePackContentStability(Stability.EXPERIMENTAL,
+                        true,
                         lowerStabilityPackages,
                         packages,
                         Collections.emptySet(),
@@ -171,7 +175,8 @@ public class StabilityLevelTestCase {
         {
             boolean failed = false;
             try {
-                AbstractFeaturePackBuildMojo.checkFeaturePackContentStability(true,
+                AbstractFeaturePackBuildMojo.checkFeaturePackContentStability(Stability.EXPERIMENTAL,
+                        true,
                         lowerStabilityPackages,
                         Collections.emptySet(),
                         layers,
@@ -189,7 +194,8 @@ public class StabilityLevelTestCase {
         {
             boolean failed = false;
             try {
-                AbstractFeaturePackBuildMojo.checkFeaturePackContentStability(true,
+                AbstractFeaturePackBuildMojo.checkFeaturePackContentStability(Stability.EXPERIMENTAL,
+                        true,
                         lowerStabilityPackages,
                         Collections.emptySet(),
                         Collections.emptySet(),
@@ -207,7 +213,8 @@ public class StabilityLevelTestCase {
         {
             boolean failed = false;
             try {
-                AbstractFeaturePackBuildMojo.checkFeaturePackContentStability(true,
+                AbstractFeaturePackBuildMojo.checkFeaturePackContentStability(Stability.EXPERIMENTAL,
+                        true,
                         lowerStabilityPackages,
                         Collections.emptySet(),
                         Collections.emptySet(),
@@ -225,7 +232,8 @@ public class StabilityLevelTestCase {
         {
             boolean failed = false;
             try {
-                AbstractFeaturePackBuildMojo.checkFeaturePackContentStability(true,
+                AbstractFeaturePackBuildMojo.checkFeaturePackContentStability(Stability.EXPERIMENTAL,
+                        true,
                         lowerStabilityPackages,
                         packages,
                         layers,
