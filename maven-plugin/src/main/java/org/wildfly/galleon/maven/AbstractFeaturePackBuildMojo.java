@@ -124,6 +124,14 @@ import org.wildfly.galleon.plugin.WildFlyChannelResolutionMode;
  */
 public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
 
+    private static final String MSG_PACKAGE_NOT_INCLUDED = " This package has not been included in the feature-pack due to its stability level being lower than the feature-pack minimum stability level.";
+    private static final String MSG_PACKAGE_IGNORED = " This package dependency will be ignored at provisioning time.";
+    private static final String MSG_PACKAGE_ERROR = " This package dependency will fail at provisioning time. You should remove this package dependency or add the 'valid-for-stability' attribute to this package dependency.";
+    private static final String PACKAGE = "package";
+    private static final String FEATURE = "feature";
+    private static final String LAYER = "layer";
+    private static final String CONFIG = "config";
+
     static final String ARTIFACT_LIST_CLASSIFIER = "artifact-list";
     static final String ARTIFACT_LIST_EXTENSION = "txt";
 
@@ -502,7 +510,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                                 try {
                                     //Validate that we can parse this feature-pack...
                                     FeaturePackDescription desc = FeaturePackDescriber.describeFeaturePack(versionDir, "UTF-8");
-                                    checkFeaturePackContentStability(forbidLowerStatibilityLevelPackageReference, lowerStabilityPackages,
+                                    checkFeaturePackContentStability(buildTimestabilityLevel, forbidLowerStatibilityLevelPackageReference, lowerStabilityPackages,
                                             desc.getPackages(), desc.getLayers(), desc.getFeatures(), desc.getConfigs(), getLog());
                                 } catch (Exception ex) {
                                     throw new RuntimeException(ex);
@@ -535,7 +543,19 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         }
     }
 
-    static void checkFeaturePackContentStability(boolean forbidLowerStatibilityLevelPackageReference,
+    private static String formatIgnoreMessage(String kind, String name, String pkgName) {
+        return formatMessage(kind, name, pkgName, MSG_PACKAGE_IGNORED);
+    }
+
+    private static String formatErrorMessage(String kind, String name, String pkgName) {
+        return formatMessage(kind, name, pkgName, MSG_PACKAGE_ERROR);
+    }
+
+    private static String formatMessage(String kind, String name, String pkgName, String solution) {
+        return kind + name + " depends on the package " + pkgName + "." + MSG_PACKAGE_NOT_INCLUDED + solution;
+    }
+
+    static void checkFeaturePackContentStability(Stability buildTimestabilityLevel, boolean forbidLowerStatibilityLevelPackageReference,
             Set<String> lowerStabilityPackages,
             Collection<PackageSpec> packages,
             Collection<ConfigLayerSpec> layers,
@@ -547,12 +567,19 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             if (spec.hasLocalPackageDeps()) {
                 for (PackageDependencySpec pds : spec.getLocalPackageDeps()) {
                     if (lowerStabilityPackages.contains(pds.getName())) {
-                        String message = "package " + spec.getName() + " references the package " + pds.getName()
-                                + " that has not been packaged due to its stability level being lower than the feature-pack minimum stability level. You should remove this reference.";
-                        if (forbidLowerStatibilityLevelPackageReference) {
-                            throw new Exception(message);
+                        String validForStability = pds.getValidForStability();
+                        if (validForStability != null) {
+                            Stability minStability = Stability.fromString(validForStability);
+                            if (!buildTimestabilityLevel.enables(minStability)) {
+                                log.debug(formatIgnoreMessage(PACKAGE, spec.getName(), pds.getName()));
+                            }
                         } else {
-                            log.warn(message);
+                            String message = formatErrorMessage(PACKAGE, spec.getName(), pds.getName());
+                            if (forbidLowerStatibilityLevelPackageReference) {
+                                throw new Exception(message);
+                            } else {
+                                log.warn(message);
+                            }
                         }
                     }
                 }
@@ -562,12 +589,19 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             if (spec.hasLocalPackageDeps()) {
                 for (PackageDependencySpec pds : spec.getLocalPackageDeps()) {
                     if (lowerStabilityPackages.contains(pds.getName())) {
-                        String message = "package " + spec.getName() + " references the package " + pds.getName()
-                                + " that has not been packaged due to its stability level being lower than the feature-pack minimum stability level. You should remove this reference.";
-                        if (forbidLowerStatibilityLevelPackageReference) {
-                            throw new Exception(message);
+                        String validForStability = pds.getValidForStability();
+                        if (validForStability != null) {
+                            Stability minStability = Stability.fromString(validForStability);
+                            if (!buildTimestabilityLevel.enables(minStability)) {
+                                log.debug(formatIgnoreMessage(LAYER, spec.getName(), pds.getName()));
+                            }
                         } else {
-                            log.warn(message);
+                            String message = formatErrorMessage(LAYER, spec.getName(), pds.getName());
+                            if (forbidLowerStatibilityLevelPackageReference) {
+                                throw new Exception(message);
+                            } else {
+                                log.warn(message);
+                            }
                         }
                     }
                 }
@@ -577,12 +611,19 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             if (spec.hasLocalPackageDeps()) {
                 for (PackageDependencySpec pds : spec.getLocalPackageDeps()) {
                     if (lowerStabilityPackages.contains(pds.getName())) {
-                        String message = "feature " + spec.getName() + " references the package " + pds.getName()
-                                + " that has not been packaged due to its stability level being lower than the feature-pack minimum stability level. You should remove this reference.";
-                        if (forbidLowerStatibilityLevelPackageReference) {
-                            throw new Exception(message);
+                        String validForStability = pds.getValidForStability();
+                        if (validForStability != null) {
+                            Stability minStability = Stability.fromString(validForStability);
+                            if (!buildTimestabilityLevel.enables(minStability)) {
+                                log.debug(formatIgnoreMessage(FEATURE, spec.getName(), pds.getName()));
+                            }
                         } else {
-                            log.warn(message);
+                            String message = formatErrorMessage(FEATURE, spec.getName(), pds.getName());
+                            if (forbidLowerStatibilityLevelPackageReference) {
+                                throw new Exception(message);
+                            } else {
+                                log.warn(message);
+                            }
                         }
                     }
                 }
@@ -596,12 +637,19 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                 if (config.hasLocalPackageDeps()) {
                     for (PackageDependencySpec pds : config.getLocalPackageDeps()) {
                         if (lowerStabilityPackages.contains(pds.getName())) {
-                            String message = "config " + modelName + "/" + configName + " references the package " + pds.getName()
-                                    + " that has not been packaged due to its stability level being lower than the feature-pack minimum stability level. You should remove this reference.";
-                            if (forbidLowerStatibilityLevelPackageReference) {
-                                throw new Exception(message);
+                            String validForStability = pds.getValidForStability();
+                            if (validForStability != null) {
+                                Stability minStability = Stability.fromString(validForStability);
+                                if (!buildTimestabilityLevel.enables(minStability)) {
+                                    log.debug(formatIgnoreMessage(CONFIG, modelName + "/" + configName, pds.getName()));
+                                }
                             } else {
-                                log.warn(message);
+                                String message = formatErrorMessage(CONFIG, modelName + "/" + configName, pds.getName());
+                                if (forbidLowerStatibilityLevelPackageReference) {
+                                    throw new Exception(message);
+                                } else {
+                                    log.warn(message);
+                                }
                             }
                         }
                     }

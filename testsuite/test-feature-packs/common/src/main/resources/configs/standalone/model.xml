@@ -5,8 +5,9 @@
   ~ SPDX-License-Identifier: Apache-2.0
   -->
 
-<package-spec xmlns="urn:jboss:galleon:package:3.0" name="test.default.package">
-  <dependencies>
+<config xmlns="urn:jboss:galleon:config:1.0" model="standalone">
+  <packages>
     <package name="test.community.package" optional="true" valid-for-stability="community"/>
-  </dependencies>
-</package-spec>
+  </packages>
+</config>
+
