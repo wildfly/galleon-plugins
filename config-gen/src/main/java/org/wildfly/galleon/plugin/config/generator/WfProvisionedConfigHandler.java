@@ -432,7 +432,7 @@ public class WfProvisionedConfigHandler implements ProvisionedConfigHandler, Aut
         } else if(WfConstants.DOMAIN.equals(config.getModel())) {
             configGen.startHc(getEmbeddedArgs(config));
             try {
-                configGen.handle(Operations.createAddOperation(Operations.createAddress("host", "tmp")));
+                configGen.handle(Operations.createAddOperation(Operations.createAddress("host", "tmp")).toJSONString(true));
             } catch (ConfigGeneratorException e) {
                 throw new ProvisioningException("Unsupported config model " + config.getModel());
             }
@@ -607,7 +607,7 @@ public class WfProvisionedConfigHandler implements ProvisionedConfigHandler, Aut
             ++opsCount;
         }
         try {
-            configGen.handle(op);
+            configGen.handle(op.toJSONString(true));
         } catch (Throwable t) {
             if (scriptWriter != null) {
                 closeScriptWriter();

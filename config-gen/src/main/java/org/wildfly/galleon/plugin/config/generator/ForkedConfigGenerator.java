@@ -24,7 +24,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 
-import org.jboss.dmr.ModelNode;
 import org.wildfly.galleon.plugin.WfConstants;
 import org.wildfly.galleon.plugin.server.ForkCallback;
 import org.wildfly.galleon.plugin.server.ConfigGeneratorException;
@@ -41,6 +40,8 @@ public class ForkedConfigGenerator extends BaseConfigGenerator implements ForkCa
       if(!Files.exists(script)) {
          throw new ConfigGeneratorException("Failed to locate " + script.toAbsolutePath());
       }
+      // In a Forked context, the contextClassLoader contains it all
+      initializeEmbedded(Thread.currentThread().getContextClassLoader());
       try {
          executeScript(script);
       } catch(IOException e) {
@@ -63,7 +64,7 @@ public class ForkedConfigGenerator extends BaseConfigGenerator implements ForkCa
                   endBatch();
                } else {
                   try {
-                     handle(ModelNode.fromJSONString(line));
+                     handle(line);
                   } catch(RuntimeException t) {
                      System.out.println("Failed to parse '" + line + "'");
                      throw t;
