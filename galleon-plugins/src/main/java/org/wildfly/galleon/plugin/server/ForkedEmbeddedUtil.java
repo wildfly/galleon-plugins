@@ -171,15 +171,7 @@ public class ForkedEmbeddedUtil {
         return props;
     }
 
-
-
-
-
     private static void collectCpUrls(String javaHome, ClassLoader cl, StringBuilder buf) throws ProvisioningException {
-        final ClassLoader parentCl = cl.getParent();
-        if(parentCl != null) {
-            collectCpUrls(javaHome, cl.getParent(), buf);
-        }
         if (cl instanceof URLClassLoader) {
             for (URL url : ((URLClassLoader)cl).getURLs()) {
                 final String file;
@@ -196,6 +188,10 @@ public class ForkedEmbeddedUtil {
                 }
                 buf.append(file);
             }
+        }
+        final ClassLoader parentCl = cl.getParent();
+        if (parentCl != null) {
+            collectCpUrls(javaHome, cl.getParent(), buf);
         }
     }
 
