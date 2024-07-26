@@ -17,18 +17,10 @@
 
 package org.wildfly.galleon.plugin.config.generator;
 
-import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
 
-import org.jboss.as.controller.client.ModelControllerClient;
-import org.jboss.as.controller.client.helpers.ClientConstants;
-import org.jboss.as.controller.client.helpers.Operations;
-import org.jboss.dmr.ModelNode;
-import org.wildfly.core.embedded.EmbeddedManagedProcess;
-import org.wildfly.core.embedded.EmbeddedProcessFactory;
-import org.wildfly.core.embedded.EmbeddedProcessStartException;
 import org.wildfly.galleon.plugin.WfConstants;
 import org.wildfly.galleon.plugin.server.ConfigGeneratorException;
 
@@ -49,10 +41,10 @@ public abstract class BaseConfigGenerator {
 
    protected Long bootTimeout = null;
 
-   protected EmbeddedManagedProcess embeddedProcess;
-   protected ModelControllerClient mcc;
+   protected Object embeddedProcess;
+   protected Object mcc;
 
-   protected ModelNode composite;
+   protected Object composite;
 
    protected String jbossHome;
    protected boolean forkEmbedded;
@@ -63,96 +55,107 @@ public abstract class BaseConfigGenerator {
    protected PrintWriter scriptWriter;
    protected StringBuilder scriptBuf;
 
-   protected void handle(ModelNode op) throws ConfigGeneratorException {
+   private static ServerBridge serverBridge;
+
+   public static void initializeEmbedded(ClassLoader loader) throws ConfigGeneratorException {
+        serverBridge = ServerBridge.get(loader);
+    }
+
+   protected void handle(String json) throws ConfigGeneratorException {
       if (forkEmbedded) {
-         op.writeJSONString(scriptWriter, true);
+          scriptWriter.write(json);
          scriptWriter.println();
       } else if (composite != null) {
-         composite.get(WfConstants.STEPS).add(op);
+          serverBridge.dmr_steps_add(composite, json);
       } else {
-         doHandle(op);
+         doHandle(json);
       }
    }
 
-   protected void doHandle(ModelNode op) throws ConfigGeneratorException {
-      try {
-         final ModelNode response = mcc.execute(op);
-         if (Operations.isSuccessfulOutcome(response)) {
-            return;
-         }
+   protected void doHandle(String json) throws ConfigGeneratorException {
+       Object op = serverBridge.dmr_fromJSON(json);
+       doHandle(op);
+   }
 
-         final StringBuilder buf = new StringBuilder();
-         buf.append("Failed to");
-         if (hc) {
+    private void doHandle(Object op) throws ConfigGeneratorException {
+        Object response = serverBridge.mcc_execute(mcc, op);
+        if (serverBridge.dmr_isSuccessful(response)) {
+            return;
+        }
+
+        final StringBuilder buf = new StringBuilder();
+        buf.append("Failed to");
+        if (hc) {
             String domainConfig = null;
             boolean emptyDomain = false;
             String hostConfig = null;
             boolean emptyHost = false;
             int i = 0;
             while (i < args.length) {
-               final String arg = args[i++];
-               if (arg.startsWith(WfConstants.EMBEDDED_ARG_DOMAIN_CONFIG)) {
-                  if (arg.length() == WfConstants.EMBEDDED_ARG_DOMAIN_CONFIG.length()) {
-                     domainConfig = args[i++];
-                  } else {
-                     domainConfig = arg.substring(WfConstants.EMBEDDED_ARG_DOMAIN_CONFIG.length() + 1);
-                  }
-               } else if (arg.startsWith(WfConstants.EMBEDDED_ARG_HOST_CONFIG)) {
-                  if (arg.length() == WfConstants.EMBEDDED_ARG_HOST_CONFIG.length()) {
-                     hostConfig = args[i++];
-                  } else {
-                     hostConfig = arg.substring(WfConstants.EMBEDDED_ARG_HOST_CONFIG.length() + 1);
-                  }
-               } else if (arg.equals(WfConstants.EMBEDDED_ARG_EMPTY_HOST_CONFIG)) {
-                  emptyHost = true;
-               } else if (arg.equals(WfConstants.EMBEDDED_ARG_EMPTY_DOMAIN_CONFIG)) {
-                  emptyDomain = true;
-               }
+                final String arg = args[i++];
+                if (arg.startsWith(WfConstants.EMBEDDED_ARG_DOMAIN_CONFIG)) {
+                    if (arg.length() == WfConstants.EMBEDDED_ARG_DOMAIN_CONFIG.length()) {
+                        domainConfig = args[i++];
+                    } else {
+                        domainConfig = arg.substring(WfConstants.EMBEDDED_ARG_DOMAIN_CONFIG.length() + 1);
+                    }
+                } else if (arg.startsWith(WfConstants.EMBEDDED_ARG_HOST_CONFIG)) {
+                    if (arg.length() == WfConstants.EMBEDDED_ARG_HOST_CONFIG.length()) {
+                        hostConfig = args[i++];
+                    } else {
+                        hostConfig = arg.substring(WfConstants.EMBEDDED_ARG_HOST_CONFIG.length() + 1);
+                    }
+                } else if (arg.equals(WfConstants.EMBEDDED_ARG_EMPTY_HOST_CONFIG)) {
+                    emptyHost = true;
+                } else if (arg.equals(WfConstants.EMBEDDED_ARG_EMPTY_DOMAIN_CONFIG)) {
+                    emptyDomain = true;
+                }
             }
             if (emptyDomain) {
-               buf.append(" generate ").append(domainConfig);
-               if (emptyHost && hostConfig != null) {
-                  buf.append(" and ").append(hostConfig);
-               }
+                buf.append(" generate ").append(domainConfig);
+                if (emptyHost && hostConfig != null) {
+                    buf.append(" and ").append(hostConfig);
+                }
             } else if (emptyHost) {
-               buf.append(" generate ").append(hostConfig);
+                buf.append(" generate ").append(hostConfig);
             } else {
-               buf.append(" execute script");
+                buf.append(" execute script");
             }
-         } else {
+        } else {
             String serverConfig = null;
             boolean emptyConfig = false;
             int i = 0;
             while (i < args.length) {
-               final String arg = args[i++];
-               if (arg.equals(WfConstants.EMBEDDED_ARG_SERVER_CONFIG)) {
-                  if (arg.length() == WfConstants.EMBEDDED_ARG_SERVER_CONFIG.length()) {
-                     serverConfig = args[i++];
-                  } else {
-                     serverConfig = arg.substring(WfConstants.EMBEDDED_ARG_SERVER_CONFIG.length() + 1);
-                  }
-               } else if (arg.equals(WfConstants.EMBEDDED_ARG_INTERNAL_EMPTY_CONFIG)) {
-                  emptyConfig = true;
-               }
+                final String arg = args[i++];
+                if (arg.equals(WfConstants.EMBEDDED_ARG_SERVER_CONFIG)) {
+                    if (arg.length() == WfConstants.EMBEDDED_ARG_SERVER_CONFIG.length()) {
+                        serverConfig = args[i++];
+                    } else {
+                        serverConfig = arg.substring(WfConstants.EMBEDDED_ARG_SERVER_CONFIG.length() + 1);
+                    }
+                } else if (arg.equals(WfConstants.EMBEDDED_ARG_INTERNAL_EMPTY_CONFIG)) {
+                    emptyConfig = true;
+                }
             }
             if (emptyConfig) {
-               buf.append(" generate ").append(serverConfig);
+                buf.append(" generate ").append(serverConfig);
             } else {
-               buf.append(" execute script");
+                buf.append(" execute script");
             }
-         }
-         buf.append(" on ").append(op).append(": ").append(Operations.getFailureDescription(response));
-         throw new ConfigGeneratorException(buf.toString());
-      } catch (IOException e) {
-         throw new ConfigGeneratorException("Failed to execute " + op);
-      }
-   }
+        }
+        buf.append(" on ").append(op).append(": ").append(serverBridge.dmr_getFailureDescription(response));
+        throw new ConfigGeneratorException(buf.toString());
+    }
 
    void startBatch() {
       if (forkEmbedded) {
          writeScript(BATCH);
       } else {
-         composite = Operations.createCompositeOperation();
+          try {
+              composite = serverBridge.dmr_createCompositeOperation();
+          } catch (Exception ex) {
+              throw new RuntimeException(ex);
+          }
       }
    }
 
@@ -169,23 +172,19 @@ public abstract class BaseConfigGenerator {
       //System.out.println("embed hc " + jbossHome + " " + Arrays.asList(args));
       this.args = args;
       this.hc = true;
-      embeddedProcess = EmbeddedProcessFactory.createHostController(jbossHome, null, null, args);
-      try {
-         embeddedProcess.start();
-      } catch (EmbeddedProcessStartException e) {
-         throw new ConfigGeneratorException("Failed to start embedded hc", e);
-      }
-      mcc = embeddedProcess.getModelControllerClient();
+      embeddedProcess = serverBridge.embed_createHostController(jbossHome, args);
+      serverBridge.embed_start(embeddedProcess);
+      mcc = serverBridge.embed_getModelControllerClient(embeddedProcess);
       waitForHc(embeddedProcess);
    }
 
-   protected void waitForHc(EmbeddedManagedProcess embeddedProcess) throws ConfigGeneratorException {
+   protected void waitForHc(Object embeddedProcess) throws ConfigGeneratorException {
       if (bootTimeout == null || bootTimeout > 0) {
          long expired = bootTimeout == null ? Long.MAX_VALUE : System.nanoTime() + bootTimeout;
 
          String status;
          do {
-            status = embeddedProcess.getProcessState();
+            status = serverBridge.embed_getProcessState(embeddedProcess);
             if (status == null || "starting".equals(status)) {
                try {
                   Thread.sleep(50);
@@ -212,13 +211,13 @@ public abstract class BaseConfigGenerator {
       //System.out.println("embed server " + jbossHome + " " + Arrays.asList(args));
       this.args = args;
       this.hc = false;
-      embeddedProcess = EmbeddedProcessFactory.createStandaloneServer(jbossHome, null, null, args);
       try {
-         embeddedProcess.start();
-      } catch (EmbeddedProcessStartException e) {
-         throw new ConfigGeneratorException("Failed to start embedded server", e);
+          embeddedProcess = serverBridge.embed_createStandalone(jbossHome, args);
+          serverBridge.embed_start(embeddedProcess);
+          mcc = serverBridge.embed_getModelControllerClient(embeddedProcess);
+      } catch (Exception e) {
+          throw new ConfigGeneratorException("Failed to start embedded server", e);
       }
-      mcc = embeddedProcess.getModelControllerClient();
       waitForServer();
    }
 
@@ -226,14 +225,18 @@ public abstract class BaseConfigGenerator {
       //System.out.println("stop embedded");
       if(mcc != null) {
          try {
-            mcc.close();
-         } catch (IOException e) {
+            serverBridge.mcc_close(mcc);
+         } catch (Exception e) {
             throw new ConfigGeneratorException("Failed to close ModelControllerClient", e);
          }
          mcc = null;
       }
       if(embeddedProcess != null) {
-         embeddedProcess.stop();
+          try {
+              serverBridge.embed_stop(embeddedProcess);
+          } catch (Exception e) {
+              throw new ConfigGeneratorException("Failed to close ModelControllerClient", e);
+          }
          embeddedProcess = null;
       }
    }
@@ -244,14 +247,22 @@ public abstract class BaseConfigGenerator {
          // and do reflection stuff to read the state and register for change notifications
          long expired = bootTimeout == null ? Long.MAX_VALUE : System.nanoTime() + bootTimeout;
          String status = "starting";
-         final ModelNode getStateOp = new ModelNode();
-         getStateOp.get(ClientConstants.OP).set(ClientConstants.READ_ATTRIBUTE_OPERATION);
-         getStateOp.get(ClientConstants.NAME).set("server-state");
+         final Object getStateOp;
+          try {
+              getStateOp = serverBridge.dmr_newInstance();
+              Object op = serverBridge.dmr_get(getStateOp, serverBridge.OP_FIELD_VALUE);
+              serverBridge.dmr_set(op, serverBridge.READ_ATTRIBUTE_OPERATION_FIELD_VALUE);
+              Object name = serverBridge.dmr_get(getStateOp, serverBridge.NAME_FIELD_VALUE);
+              serverBridge.dmr_set(name, "server-state");
+          } catch (Exception ex) {
+              throw new ConfigGeneratorException(ex);
+          }
          do {
             try {
-               final ModelNode response = mcc.execute(getStateOp);
-               if (Operations.isSuccessfulOutcome(response)) {
-                  status = response.get(ClientConstants.RESULT).asString();
+               final Object response = serverBridge.mcc_execute(mcc, getStateOp);
+               if (serverBridge.dmr_isSuccessful(response)) {
+                   Object result = serverBridge.dmr_get(response, serverBridge.RESULT_FIELD_VALUE);
+                   status = serverBridge.dmr_asString(result);
                }
             } catch (Exception e) {
                // ignore and try again

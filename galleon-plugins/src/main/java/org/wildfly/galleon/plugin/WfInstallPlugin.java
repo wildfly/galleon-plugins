@@ -765,7 +765,10 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
         final long startTime = runtime.isLogTime() ? System.nanoTime() : -1;
 
-        final URL[] cp = new URL[3];
+        // In this classloader we need CLI + config gen
+        final URL[] cp = new URL[2];
+        // In this classloader we need CLI + JBoss Modules
+        final URL[] cpEmbedded = new URL[2];
         try {
             MavenArtifact artifact = Utils.toArtifactCoords(mergedArtifactVersions, CONFIG_GEN_GA,
                     false, channelArtifactResolution, requireChannel(gaToProducer.get(CONFIG_GEN_GA)));
@@ -777,11 +780,12 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             artifact = Utils.toArtifactCoords(mergedArtifactVersions, JBOSS_MODULES_GA,
                     false, channelArtifactResolution, requireChannel(gaToProducer.get(JBOSS_MODULES_GA)));
             artifactResolver.resolve(artifact);
-            cp[1] = artifact.getPath().toUri().toURL();
+            cpEmbedded[0] = artifact.getPath().toUri().toURL();
             artifact = Utils.toArtifactCoords(mergedArtifactVersions, WILDFLY_CLI_GA+"::client",
                     false, channelArtifactResolution, requireChannel(gaToProducer.get(WILDFLY_CLI_GA)));
             artifactResolver.resolve(artifact);
-            cp[2] = artifact.getPath().toUri().toURL();
+            cpEmbedded[1] = artifact.getPath().toUri().toURL();
+            cp[1] = artifact.getPath().toUri().toURL();
         } catch (IOException e) {
             throw new ProvisioningException("Failed to init classpath for " + runtime.getStagedDir(), e);
         }
@@ -793,10 +797,16 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
 
         final ClassLoader originalCl = Thread.currentThread().getContextClassLoader();
+        // We need to delegate to resolve Galleon classes.
         final URLClassLoader configGenCl = new URLClassLoader(cp, originalCl);
+        // Embedded is loaded from an isolated classloader.
+        final URLClassLoader embeddedCl = new URLClassLoader(cpEmbedded, null);
         Thread.currentThread().setContextClassLoader(configGenCl);
         try {
             final Class<?> configHandlerCls = configGenCl.loadClass(CONFIG_GEN_CLASS);
+            // Embedded is loaded from an isolated classloader with no delegation
+            Method initEmbedded = configHandlerCls.getMethod("initializeEmbedded", ClassLoader.class);
+            initEmbedded.invoke(null, embeddedCl);
             final Constructor<?> ctor = configHandlerCls.getConstructor();
             final Object generator = ctor.newInstance();
             final boolean forkEmbedded = isForkEmbedded(runtime);
@@ -819,6 +829,10 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             Thread.currentThread().setContextClassLoader(originalCl);
             try {
                 configGenCl.close();
+            } catch (IOException e) {
+            }
+            try {
+                embeddedCl.close();
             } catch (IOException e) {
             }
         }
