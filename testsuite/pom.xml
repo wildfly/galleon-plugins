@@ -23,7 +23,7 @@
   <parent>
     <groupId>org.wildfly.galleon-plugins</groupId>
     <artifactId>wildfly-provisioning-parent</artifactId>
-    <version>7.1.2.Final-SNAPSHOT</version>
+    <version>7.1.2.Final</version>
   </parent>
   <properties>
     <!-- Don't deploy the testsuite modules -->
