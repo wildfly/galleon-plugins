@@ -43,14 +43,14 @@ jobs:
         run:  |
           cd ~
           find ./.m2/repository -type d -name "*SNAPSHOT" -print0 | xargs -0 tar -czf ~/galleon-plugins-maven-repository.tar.gz  
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         if: matrix.java == '11'
         with:
           name: galleon-plugins-maven-repository
           path: ~/galleon-plugins-maven-repository.tar.gz
           retention-days: 5
       - name: Upload Test Reports on Failure
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: surefire-reports-${{ matrix.os }}-${{ matrix.java }}
@@ -124,7 +124,7 @@ jobs:
       run: mvn clean install -Dversion.org.wildfly.galleon-plugins=${{needs.galleon-plugins-build.outputs.galleon-plugins-version}}
       shell: bash
     - name: Upload Test Reports on Failure
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: failure()
       with:
         name: surefire-reports-${{ matrix.os }}-${{ matrix.java }}
