@@ -19,6 +19,7 @@ package org.wildfly.galleon.maven;
 import java.io.BufferedWriter;
 import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.FileVisitResult;
@@ -32,6 +33,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import javax.xml.stream.XMLStreamException;
 
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
@@ -49,6 +51,7 @@ import org.jboss.galleon.universe.FeaturePackLocation;
 import org.jboss.galleon.util.IoUtils;
 import org.jboss.galleon.util.CollectionUtils;
 import org.jboss.galleon.util.PathFilter;
+import org.jboss.galleon.xml.PackageXmlParser;
 import org.wildfly.galleon.plugin.WfConstants;
 
 /**
@@ -211,17 +214,17 @@ public class WfFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
         final Path contentDir = targetResources.resolve(Constants.CONTENT);
         if (Files.exists(contentDir)) {
             try {
-                packageContent(fpBuilder, contentDir, fpPackagesDir);
+                packageContent(fpBuilder, contentDir, fpPackagesDir, targetResources);
             } catch (IOException e) {
                 throw new MojoExecutionException("Failed to process content", e);
             }
         }
 
         if(buildConfig.hasSchemaGroups()) {
-            addDocsSchemas(fpPackagesDir, fpBuilder);
+            addDocsSchemas(fpPackagesDir, fpBuilder, targetResources);
         }
 
-        final PackageSpec.Builder docsBuilder = getExtendedPackage(WfConstants.DOCS, false);
+        final PackageSpec.Builder docsBuilder = getExtendedPackage(WfConstants.DOCS, false, targetResources);
         if(docsBuilder != null) {
             fpBuilder.getSpecBuilder().addDefaultPackage(addPackage(fpPackagesDir, fpBuilder, docsBuilder).getName());
 //            if(fpBuilder.hasPackage("docs.examples.configs")) {
@@ -247,13 +250,32 @@ public class WfFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
         buildFeaturePack(fpBuilder, buildConfig);
     }
 
-    private PackageSpec.Builder getExtendedPackage(String name, boolean create) {
+    private PackageSpec.Builder getExtendedPackage(String name, boolean create, Path resourcesDir) throws MojoExecutionException {
         PackageSpec.Builder pkgBuilder = extendedPackages.get(name);
         if(pkgBuilder == null) {
             if(!create) {
                 return null;
             }
             pkgBuilder = PackageSpec.builder(name);
+            Path existingPackage = resourcesDir.resolve(Constants.PACKAGES).resolve(name).resolve("package.xml");
+            if (Files.exists(existingPackage)) {
+                try {
+                    try (FileReader stream = new FileReader(existingPackage.toFile())) {
+                        PackageSpec spec = PackageXmlParser.getInstance().parse(stream);
+                        for (PackageDependencySpec dep : spec.getLocalPackageDeps()) {
+                            pkgBuilder.addPackageDep(dep);
+                        }
+                        for (String origin : spec.getPackageOrigins()) {
+                            for (PackageDependencySpec dep : spec.getExternalPackageDeps(origin)) {
+                                pkgBuilder.addPackageDep(origin, dep);
+                            }
+                        }
+                    }
+                    Files.delete(existingPackage);
+                } catch (IOException | XMLStreamException ex) {
+                    throw new MojoExecutionException(ex);
+                }
+            }
             extendedPackages = CollectionUtils.put(extendedPackages, name, pkgBuilder);
         }
         return pkgBuilder;
@@ -263,20 +285,20 @@ public class WfFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
         debug("WfFeaturePackBuildMojo adding module packages");
         final Path layersDir = srcModulesDir.resolve(WfConstants.SYSTEM).resolve(WfConstants.LAYERS);
         if (Files.exists(layersDir)) {
-            final PackageSpec.Builder modulesAll = getExtendedPackage(WfConstants.MODULES_ALL, true);
+            final PackageSpec.Builder modulesAll = getExtendedPackage(WfConstants.MODULES_ALL, true, targetResources);
             handleLayers(srcModulesDir, fpBuilder, targetResources, modulesAll);
         }
         final Path addOnsDir = srcModulesDir.resolve(WfConstants.SYSTEM).resolve(WfConstants.ADD_ONS);
         if (Files.exists(addOnsDir)) {
-            final PackageSpec.Builder modulesAll = getExtendedPackage(WfConstants.MODULES_ALL, true);
+            final PackageSpec.Builder modulesAll = getExtendedPackage(WfConstants.MODULES_ALL, true, targetResources);
             handleAddOns(srcModulesDir, fpBuilder, targetResources, modulesAll);
         }
     }
 
-    private void addDocsSchemas(final Path fpPackagesDir, final FeaturePackDescription.Builder fpBuilder)
+    private void addDocsSchemas(final Path fpPackagesDir, final FeaturePackDescription.Builder fpBuilder, Path targetResourcesDir)
             throws MojoExecutionException {
-        getExtendedPackage(WfConstants.DOCS_SCHEMA, true);
-        getExtendedPackage(WfConstants.DOCS, true).addPackageDep(WfConstants.DOCS_SCHEMA, true);
+        getExtendedPackage(WfConstants.DOCS_SCHEMA, true, targetResourcesDir);
+        getExtendedPackage(WfConstants.DOCS, true, targetResourcesDir).addPackageDep(WfConstants.DOCS_SCHEMA, true);
         final Path schemasPackageDir = fpPackagesDir.resolve(WfConstants.DOCS_SCHEMA);
         final Path schemaGroupsTxt = schemasPackageDir.resolve(WfConstants.PM).resolve(WfConstants.WILDFLY).resolve(WfConstants.SCHEMA_GROUPS_TXT);
         BufferedWriter writer = null;
@@ -300,20 +322,20 @@ public class WfFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
         }
     }
 
-    private void packageContent(FeaturePackDescription.Builder fpBuilder, Path contentDir, Path packagesDir) throws IOException, MojoExecutionException {
+    private void packageContent(FeaturePackDescription.Builder fpBuilder, Path contentDir, Path packagesDir, Path targetResourcesDir) throws IOException, MojoExecutionException {
         try(DirectoryStream<Path> stream = Files.newDirectoryStream(contentDir)) {
             for(Path p : stream) {
                 final String pkgName = p.getFileName().toString();
                 final Path pkgDir = packagesDir.resolve(pkgName);
                 final Path pkgContentDir = pkgDir.resolve(Constants.CONTENT).resolve(pkgName);
-                final PackageSpec.Builder pkgBuilder = getExtendedPackage(pkgName, true);
+                final PackageSpec.Builder pkgBuilder = getExtendedPackage(pkgName, true, targetResourcesDir);
                 if(pkgName.equals(WfConstants.DOCS)) {
                     try(DirectoryStream<Path> docsStream = Files.newDirectoryStream(p)) {
                         for(Path docPath : docsStream) {
                             final String docName = docPath.getFileName().toString();
                             final String docPkgName = WfConstants.DOCS + '.' + docName;
                             final Path docDir = packagesDir.resolve(docPkgName);
-                            getExtendedPackage(docPkgName, true);
+                            getExtendedPackage(docPkgName, true, targetResourcesDir);
                             final Path docContentDir = docDir.resolve(Constants.CONTENT).resolve(WfConstants.DOCS).resolve(docName);
                             IoUtils.copy(docPath, docContentDir);
                             pkgBuilder.addPackageDep(docPkgName, true);
@@ -357,23 +379,23 @@ public class WfFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
                     PackageSpec.Builder toolsBuilder = null;
                     if (Files.exists(toolsBinPkgDir)) {
                         pkgBuilder.addPackageDep("tools");
-                        toolsBuilder = getExtendedPackage("tools", true);
+                        toolsBuilder = getExtendedPackage("tools", true, targetResourcesDir);
                     }
                     PackageSpec.Builder coreToolsBuilder = null;
                     if (Files.exists(coreToolsBinPkgDir)) {
                         ensureLineEndings(coreToolsBinPkgDir);
-                        coreToolsBuilder = getExtendedPackage("core-tools", true);
+                        coreToolsBuilder = getExtendedPackage("core-tools", true, targetResourcesDir);
                         // We want the tools package to depend on core-tools.
                         if (toolsBuilder == null) {
                             pkgBuilder.addPackageDep("tools");
-                            toolsBuilder = getExtendedPackage("tools", true);
+                            toolsBuilder = getExtendedPackage("tools", true, targetResourcesDir);
                         }
                         toolsBuilder.addPackageDep(PackageDependencySpec.optional("core-tools"));
                     }
 
                     if (Files.exists(binCommonPkgDir)) {
                         ensureLineEndings(binCommonPkgDir);
-                        getExtendedPackage("bin.common", true);
+                        getExtendedPackage("bin.common", true, targetResourcesDir);
                         if (coreToolsBuilder != null) {
                             coreToolsBuilder.addPackageDep(PackageDependencySpec.required("bin.common"));
                         }
@@ -384,29 +406,29 @@ public class WfFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
 
                     if(Files.exists(binStandalonePkgDir)) {
                         ensureLineEndings(binStandalonePkgDir);
-                        getExtendedPackage("bin.standalone", true).addPackageDep("bin.common");
+                        getExtendedPackage("bin.standalone", true, targetResourcesDir).addPackageDep("bin.common");
                     }
                     if(Files.exists(binDomainPkgDir)) {
                         ensureLineEndings(binDomainPkgDir);
-                        getExtendedPackage("bin.domain", true).addPackageDep(pkgName);
+                        getExtendedPackage("bin.domain", true, targetResourcesDir).addPackageDep(pkgName);
                     }
                     if(Files.exists(binAppClientPkgDir)) {
                         ensureLineEndings(binAppClientPkgDir);
-                        getExtendedPackage("bin.appclient", true).addPackageDep("bin.common");
+                        getExtendedPackage("bin.appclient", true, targetResourcesDir).addPackageDep("bin.common");
                         if(toolsBuilder != null) {
                             toolsBuilder.addPackageDep(PackageDependencySpec.optional("bin.appclient"));
                         }
                     }
                     if(Files.exists(binWsToolsPkgDir)) {
                         ensureLineEndings(binWsToolsPkgDir);
-                        getExtendedPackage("bin.wstools", true).addPackageDep("bin.common");
+                        getExtendedPackage("bin.wstools", true, targetResourcesDir).addPackageDep("bin.common");
                         if(toolsBuilder != null) {
                             toolsBuilder.addPackageDep(PackageDependencySpec.optional("bin.wstools"));
                         }
                     }
                     if(Files.exists(binVaultToolsPkgDir)) {
                         ensureLineEndings(binVaultToolsPkgDir);
-                        getExtendedPackage("bin.vaulttools", true).addPackageDep("bin.common");
+                        getExtendedPackage("bin.vaulttools", true, targetResourcesDir).addPackageDep("bin.common");
                         if (coreToolsBuilder != null) {
                             coreToolsBuilder.addPackageDep(PackageDependencySpec.optional("bin.vaulttools"));
                         }
@@ -416,7 +438,7 @@ public class WfFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
                     }
                     if(Files.exists(binJdrToolsPkgDir)) {
                         ensureLineEndings(binJdrToolsPkgDir);
-                        getExtendedPackage("bin.jdrtools", true).addPackageDep("bin.common");
+                        getExtendedPackage("bin.jdrtools", true, targetResourcesDir).addPackageDep("bin.common");
                         if(toolsBuilder != null) {
                             toolsBuilder.addPackageDep(PackageDependencySpec.optional("bin.jdrtools"));
                         }

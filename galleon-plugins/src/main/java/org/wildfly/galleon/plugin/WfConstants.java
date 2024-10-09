@@ -56,6 +56,7 @@ public interface WfConstants {
     String SCHEMA = "schema";
     String SCHEMA_GROUPS_TXT = "schema-groups.txt";
     String SCRIPTS = "scripts";
+    String SHADED = "shaded";
     String STANDALONE = "standalone";
     String STEPS = "steps";
     String SYSTEM = "system";

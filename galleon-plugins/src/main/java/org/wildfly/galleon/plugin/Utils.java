@@ -28,6 +28,7 @@ import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -54,6 +55,10 @@ import org.wildfly.galleon.plugin.config.CopyArtifact;
  * @author Alexey Loubyansky
  */
 public class Utils {
+
+    interface ArtifactResourceConsumer {
+        boolean consume(Path resourcePath) throws IOException;
+    }
 
     private static final String EXPRESSION_PREFIX = "${";
     private static final String EXPRESSION_SUFFIX = "}";
@@ -453,5 +458,48 @@ public class Utils {
             throw new IllegalArgumentException("Unexpected artifact coordinates format: " + artifact);
         }
         return item;
+    }
+
+    static void navigateArtifact(Path artifact, Path target, ArtifactResourceConsumer consumer) throws IOException {
+        if(!Files.exists(target)) {
+            Files.createDirectories(target);
+        }
+        try (FileSystem zipFS = FileSystems.newFileSystem(artifact, (ClassLoader) null)) {
+            for(Path zipRoot : zipFS.getRootDirectories()) {
+                Files.walkFileTree(zipRoot, EnumSet.of(FileVisitOption.FOLLOW_LINKS), Integer.MAX_VALUE,
+                        new SimpleFileVisitor<Path>() {
+                            @Override
+                            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs)
+                                throws IOException {
+                                String entry = dir.toString().substring(1);
+                                if(entry.isEmpty()) {
+                                    return FileVisitResult.CONTINUE;
+                                }
+                                if(!entry.endsWith("/")) {
+                                    entry += '/';
+                                }
+                                final Path targetDir = target.resolve(zipRoot.relativize(dir).toString());
+                                try {
+                                    Files.copy(dir, targetDir);
+                                } catch (FileAlreadyExistsException e) {
+                                     if (!Files.isDirectory(targetDir))
+                                         throw e;
+                                }
+                                return FileVisitResult.CONTINUE;
+                            }
+                            @Override
+                            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
+                                throws IOException {
+                                if (consumer.consume(file)) {
+                                    final Path targetPath = target.resolve(zipRoot.relativize(file).toString());
+                                    if ( !Files.exists(targetPath)) {
+                                        Files.copy(file, targetPath, StandardCopyOption.REPLACE_EXISTING);
+                                    }
+                                }
+                                return FileVisitResult.CONTINUE;
+                            }
+                        });
+            }
+        }
     }
 }
