@@ -108,6 +108,22 @@ public class ArtifactRecorderTestCase {
                 );
     }
 
+    @Test
+    public void cacheDoesntStoreAlreadyRecordedArtifact() throws Exception {
+        final Path artifactFile = createArtifactFile("test-one.jar");
+        recorder.record(mavenArtifact("org.test", "test-one"), artifactFile);
+
+        recorder.cache(mavenArtifact("org.test", "test-one"), artifactFile);
+
+        recorder.writeCacheManifest();
+
+        assertRecordedArtifactContainOnly(
+                "org.test:test-one:jar:1.0.0::*::test-one.jar"
+        );
+        assertFalse("File expected not to exist, but found " + cacheDir.resolve("test-one-1.0.0.jar"),
+                Files.exists(cacheDir.resolve("test-one-1.0.0.jar")));
+    }
+
     private void assertRecordedArtifactContainOnly(String... lines) throws IOException {
         final List<String> artifactList = Files.readAllLines(cacheDir.resolve(ArtifactRecorder.ARTIFACT_LIST_FILE));
 

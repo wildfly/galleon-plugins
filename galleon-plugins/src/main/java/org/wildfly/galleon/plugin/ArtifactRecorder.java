@@ -91,9 +91,11 @@ public class ArtifactRecorder {
      * @throws IOException
      */
     public void cache(MavenArtifact artifact, Path jarSrc) throws MavenUniverseException, IOException {
-        IoUtils.copy(jarSrc, cacheDir.resolve(artifact.getArtifactFileName()));
+        if (!cachedArtifacts.containsKey(artifact.getCoordsAsString())) {
+            IoUtils.copy(jarSrc, cacheDir.resolve(artifact.getArtifactFileName()));
 
-        record(artifact, cacheDir.resolve(artifact.getArtifactFileName()));
+            record(artifact, cacheDir.resolve(artifact.getArtifactFileName()));
+        }
     }
 
     /**
