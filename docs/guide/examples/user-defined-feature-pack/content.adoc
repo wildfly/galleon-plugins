@@ -25,7 +25,7 @@ Add the Maven plugin dependency in your pom.xml file :
   <dependency>
     <groupId>org.wildfly.galleon-plugins</groupId>
     <artifactId>wildfly-galleon-maven-plugin</artifactId>
-    <version>6.4.10.Final</version>
+    <version>6.4.11.Final-SNAPSHOT</version>
   </dependency>
 </dependencies>
 ----
