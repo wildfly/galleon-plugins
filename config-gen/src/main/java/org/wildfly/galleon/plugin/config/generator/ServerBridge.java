@@ -174,7 +174,8 @@ public class ServerBridge {
 
     String dmr_getFailureDescription(Object response) throws ConfigGeneratorException {
         try {
-            return (String) getFailureDescriptionMethod.invoke(null, response);
+            Object obj = getFailureDescriptionMethod.invoke(null, response);
+            return dmr_asString(obj);
         } catch (Exception ex) {
             throw new ConfigGeneratorException(ex);
         }
