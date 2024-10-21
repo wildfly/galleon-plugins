@@ -11,6 +11,7 @@ First, make sure you don't have pending changes in your main branch.
 * Commit the changes with message: `Update doc to X.X.X.Final`
 * `mvn versions:set -DnewVersion=X.X.X.Final`
 * `mvn versions:commit`
+* `git add *`
 * Commit the changes with message: `Release X.X.X.Final`
 * Deploy in nexus
 ** `mvn clean deploy -DskipTests`
@@ -18,6 +19,7 @@ First, make sure you don't have pending changes in your main branch.
 * Update docs/* content to reference the new SNAPSHOT version.
 * `mvn versions:set -DnewVersion=X.X.X.Final-SNAPSHOT`
 * `mvn versions:commit`
+* `git add *`
 * Commit the changes with message: `New development iteration X.X.X.Final-SNAPSHOT`
 * `git push upstream main`
 
