@@ -58,7 +58,7 @@ jobs:
 
   wildfly-build-and-test:
     name: Linux/Windows - JDK11 and JDK17
-    uses: wildfly/wildfly/.github/workflows/shared-wildfly-build-and-test.yml@main
+    uses: wildfly/wildfly/.github/workflows/shared-wildfly-build-and-test.yml@${{ inputs.wildfly-ref }}
     with:
       build-arguments: '-fae -Dversion.org.jboss.galleon=${{needs.galleon-plugins-build.outputs.galleon-version}} -Dversion.org.wildfly.galleon-plugins=${{needs.galleon-plugins-build.outputs.galleon-plugins-version}}'
       java-versions: "['11', '17']"
@@ -70,7 +70,7 @@ jobs:
  
   wildfly-build-and-test-galleon-layers:
     name: Galleon Linux - JDK11
-    uses: wildfly/wildfly/.github/workflows/shared-wildfly-build-and-test.yml@main
+    uses: wildfly/wildfly/.github/workflows/shared-wildfly-build-and-test.yml@${{ inputs.wildfly-ref }}
     with:
       test-arguments: '-fae -Dts.layers -Dts.galleon'
       build-arguments: '-Dversion.org.jboss.galleon=${{needs.galleon-plugins-build.outputs.galleon-version}} -Dversion.org.wildfly.galleon-plugins=${{needs.galleon-plugins-build.outputs.galleon-plugins-version}}'
@@ -83,7 +83,7 @@ jobs:
   
   wildfly-build-and-test-preview:
     name: WildFly Preview - Linux- JDK17
-    uses: wildfly/wildfly/.github/workflows/shared-wildfly-build-and-test.yml@main
+    uses: wildfly/wildfly/.github/workflows/shared-wildfly-build-and-test.yml@${{ inputs.wildfly-ref }}
     with:
       test-arguments: '-fae -Dts.preview'
       build-arguments: '-Dversion.org.jboss.galleon=${{needs.galleon-plugins-build.outputs.galleon-version}} -Dversion.org.wildfly.galleon-plugins=${{needs.galleon-plugins-build.outputs.galleon-plugins-version}}'
