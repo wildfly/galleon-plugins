@@ -121,7 +121,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private static final String JBOSS_MODULES_GA = "org.jboss.modules:jboss-modules";
     private static final String MAVEN_REPO_LOCAL = "maven.repo.local";
     private static final String WILDFLY_CLI_GA = "org.wildfly.core:wildfly-cli";
-    private static final String WILDFLY_LAUNCHER_GA = "org.wildfly.core:wildfly-launcher";
+    private static final String WILDFLY_LAUNCHER_GA = "org.wildfly.launcher:wildfly-launcher";
 
     private static final ProvisioningOption OPTION_MVN_DIST = ProvisioningOption.builder("jboss-maven-dist")
             .setBooleanValueSet()
