@@ -13,7 +13,7 @@
   <parent>
     <groupId>org.wildfly.galleon-plugins</groupId>
     <artifactId>wildfly-galleon-plugins-test-feature-packs</artifactId>
-    <version>7.3.1.Final</version>
+    <version>7.3.2.Final-SNAPSHOT</version>
   </parent>
 
   <artifactId>preview-feature-pack</artifactId>
