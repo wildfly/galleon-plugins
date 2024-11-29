@@ -60,7 +60,7 @@ jobs:
     name: Linux/Windows - JDK11 and JDK17
     uses: wildfly/wildfly/.github/workflows/shared-wildfly-build-and-test.yml@34.0.0.Final
     with:
-      build-arguments: '-fae -Dversion.org.jboss.galleon=${{needs.galleon-plugins-build.outputs.galleon-version}} -Dversion.org.wildfly.galleon-plugins=${{needs.galleon-plugins-build.outputs.galleon-plugins-version}}'
+      build-arguments: '-fae -Dversion.org.jboss.galleon=${{needs.galleon-plugins-build.outputs.galleon-version}} -Dversion.org.wildfly.galleon-plugins=${{needs.galleon-plugins-build.outputs.galleon-plugins-version}} -Dversion.org.wildfly.plugin=5.1.0.Alpha2 -Dversion.org.wildfly.wildfly-channel-plugin=1.0.20 -Dversion.org.wildfly.bom-builder-plugin=2.0.8.Final'
       java-versions: "['11', '17']"
       os: "['ubuntu-latest', 'windows-latest']"
       maven-repo-name: galleon-plugins-maven-repository
@@ -73,7 +73,7 @@ jobs:
     uses: wildfly/wildfly/.github/workflows/shared-wildfly-build-and-test.yml@34.0.0.Final
     with:
       test-arguments: '-fae -Dts.layers -Dts.galleon'
-      build-arguments: '-Dversion.org.jboss.galleon=${{needs.galleon-plugins-build.outputs.galleon-version}} -Dversion.org.wildfly.galleon-plugins=${{needs.galleon-plugins-build.outputs.galleon-plugins-version}}'
+      build-arguments: '-Dversion.org.jboss.galleon=${{needs.galleon-plugins-build.outputs.galleon-version}} -Dversion.org.wildfly.galleon-plugins=${{needs.galleon-plugins-build.outputs.galleon-plugins-version}} -Dversion.org.wildfly.plugin=5.1.0.Alpha2 -Dversion.org.wildfly.wildfly-channel-plugin=1.0.20 -Dversion.org.wildfly.bom-builder-plugin=2.0.8.Final'
       os: "['ubuntu-latest']"
       java-versions: "['11']"
       maven-repo-name: galleon-plugins-maven-repository
@@ -86,7 +86,7 @@ jobs:
     uses: wildfly/wildfly/.github/workflows/shared-wildfly-build-and-test.yml@34.0.0.Final
     with:
       test-arguments: '-fae -Dts.preview'
-      build-arguments: '-Dversion.org.jboss.galleon=${{needs.galleon-plugins-build.outputs.galleon-version}} -Dversion.org.wildfly.galleon-plugins=${{needs.galleon-plugins-build.outputs.galleon-plugins-version}}'
+      build-arguments: '-Dversion.org.jboss.galleon=${{needs.galleon-plugins-build.outputs.galleon-version}} -Dversion.org.wildfly.galleon-plugins=${{needs.galleon-plugins-build.outputs.galleon-plugins-version}} -Dversion.org.wildfly.plugin=5.1.0.Alpha2 -Dversion.org.wildfly.wildfly-channel-plugin=1.0.20 -Dversion.org.wildfly.bom-builder-plugin=2.0.8.Final'
       java-versions: "['17']"
       os: "['ubuntu-latest']"
       maven-repo-name: galleon-plugins-maven-repository
