@@ -1,0 +1,108 @@
+<!--
+~ Copyright The WildFly Authors
+~ SPDX-License-Identifier: Apache-2.0
+-->
+
+<build xmlns="urn:wildfly:feature-pack-build:3.4" producer="foo@maven(org.jboss.universe:community-universe):latest">
+  <dependencies>
+    <dependency group-id="groupId-1" artifact-id="artifactId-1" translate-to-fpl="true">
+      <name>dependency-1</name>
+      <default-configs inherit="true" inherit-unnamed-models="true">
+        <include name="default-config-1" model="model-1"/>
+      </default-configs>
+      <config name="config-1" model="model-1" inherit-features="true"/>
+      <patches>
+        <patch id="org:patch1:1"/>
+        <patch id="org:patch2:2"/>
+        <patch id="org:patch3:3"/>
+      </patches>
+      <packages>
+        <include name="package-1"/>
+        <include name="package-2"/>
+        <include name="package-3"/>
+        <exclude name="package-4"/>
+        <exclude name="package-5"/>
+        <exclude name="package-6"/>
+      </packages>
+    </dependency>
+    <dependency group-id="groupId-2" artifact-id="artifactId-2" translate-to-fpl="false"/>
+    <dependency group-id="groupId-3" artifact-id="artifactId-3" translate-to-fpl="false"/>
+  </dependencies>
+  <default-packages>
+    <package name="package-1"/>
+    <package name="package-2"/>
+    <package name="package-3"/>
+  </default-packages>
+  <package-schemas>
+    <group name="package-schema-1"/>
+    <group name="package-schema-2"/>
+    <group name="package-schema-3"/>
+  </package-schemas>
+  <config name="config-1.xml" model="model-1" inherit-features="true"/>
+  <config name="config-2.xml" model="model-2"/>
+  <config name="config-3.xml" model="model-3"/>
+  <transitive>
+    <dependency group-id="tgroupId-1" artifact-id="tartifactId-1" translate-to-fpl="true">
+      <name>transitive-1</name>
+      <default-configs inherit="true" inherit-unnamed-models="true">
+        <include name="default-config-1" model="model-1"/>
+      </default-configs>
+      <patches>
+        <patch id="org:patch1:1"/>
+        <patch id="org:patch2:2"/>
+        <patch id="org:patch3:3"/>
+      </patches>
+      <packages>
+        <include name="package-1"/>
+        <include name="package-2"/>
+        <include name="package-3"/>
+        <exclude name="package-4"/>
+        <exclude name="package-5"/>
+        <exclude name="package-6"/>
+      </packages>
+    </dependency>
+    <dependency group-id="tgroupId-2" artifact-id="tartifactId-2" translate-to-fpl="false"/>
+    <dependency group-id="tgroupId-3" artifact-id="tartifactId-3" translate-to-fpl="false"/>
+  </transitive>
+  <plugins>
+    <plugin artifact="grpoupId1:artifactId1"/>
+    <plugin id="plugin1" artifact="grpoupId2:artifactId2:2.0"/>
+    <plugin id="plugin2" artifact="grpoupId3:artifactId3:3.0:classifier3"/>
+    <plugin id="plugin3" artifact="grpoupId3:artifactId3:3.0:classifier3:zip"/>
+  </plugins>
+  <resources>
+    <copy to="to1" artifact="grpoupId2:artifactId2:2.0"/>
+    <copy to="to2" artifact="grpoupId3:artifactId3:3.0:classifier3"/>
+    <copy to="to3" artifact="grpoupId3:artifactId3:3.0:classifier3:zip"/>
+  </resources>
+  <generate-feature-specs>
+    <extensions>
+      <standalone>
+        <extension>standalone-extension-1</extension>
+        <extension>standalone-extension-2</extension>
+        <extension>standalone-extension-3</extension>
+      </standalone>
+      <domain>
+        <extension>domain-extension-1</extension>
+        <extension>domain-extension-2</extension>
+        <extension>domain-extension-3</extension>
+      </domain>
+      <host>
+        <extension>host-extension-1</extension>
+        <extension>host-extension-2</extension>
+        <extension>host-extension-3</extension>
+      </host>
+    </extensions>
+  </generate-feature-specs>
+  <system-paths>
+    <system-path path="system-path-1"/>
+    <system-path path="system-path-2"/>
+    <system-path path="system-path-3"/>
+  </system-paths>
+  <stability-levels>
+    <stability-level>level-1</stability-level>
+    <minimum-stability-level>level-2</minimum-stability-level>
+    <config-stability-level>level-3</config-stability-level>
+    <package-stability-level>level-4</package-stability-level>
+  </stability-levels>
+</build>
