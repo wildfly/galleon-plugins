@@ -1,3 +1,4 @@
+[[build_feature_pack]]
 include::../../../../../maven-plugin/target/generated-sources/plugin/build-feature-pack-mojo.adoc[]
 
 include::packages/index.adoc[]

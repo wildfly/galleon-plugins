@@ -113,6 +113,11 @@ public class UserFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
     private boolean generate;
 
     @Override
+    protected String getPackaging() {
+        return "galleon-user-feature-pack";
+    }
+
+    @Override
     protected void doExecute() throws MojoExecutionException, MojoFailureException {
 
         final Path resources = configDir.getAbsoluteFile().toPath().resolve(resourcesDir);

@@ -1,0 +1,102 @@
+<!--
+  ~ Copyright The WildFly Authors
+  ~ SPDX-License-Identifier: Apache-2.0
+  -->
+
+<!--
+   Defines Plexus components to allow this plugin to function as
+   a Maven extension that defines new packaging types 'galleon-feature-pack' and 'galleon-user-feature-pack'.
+
+   When building a module with these types, in the 'package' phase this plugin's 'build-feature-pack' or
+   'build-user-feature-pack' goals will be invoked, using execution id 'default-build-feature-pack' or
+   'default-build-feature-pack'. The respective mojos behind these goals will detect this and set the
+   built feature pack zip as the file for the main project artifact, instead of attaching it as a secondary
+   artifact.
+
+   The assumption is users of these packaging types will be migrating poms that previously used the 'pom'
+   packaging type. So, each uses the same default lifecycle mappings as the 'pom' type, but adds a mapping
+   for the `package` phase. This will result in migrated poms getting the same default executions as before,
+   plus an additional execution in `package`.
+-->
+<component-set>
+  <components>
+    <component>
+      <role>org.apache.maven.lifecycle.mapping.LifecycleMapping</role>
+      <role-hint>galleon-feature-pack</role-hint>
+      <implementation>org.apache.maven.lifecycle.mapping.DefaultLifecycleMapping</implementation>
+      <configuration>
+        <lifecycles>
+          <lifecycle>
+            <id>default</id>
+            <phases>
+              <package>
+                org.wildfly.galleon-plugins:wildfly-galleon-maven-plugin:build-feature-pack
+              </package>
+              <install>
+                org.apache.maven.plugins:maven-install-plugin:install
+              </install>
+              <deploy>
+                org.apache.maven.plugins:maven-deploy-plugin:deploy
+              </deploy>
+            </phases>
+          </lifecycle>
+        </lifecycles>
+      </configuration>
+    </component>
+    <component>
+      <role>org.apache.maven.artifact.handler.ArtifactHandler</role>
+      <role-hint>galleon-feature-pack</role-hint>
+      <implementation>
+        org.apache.maven.artifact.handler.DefaultArtifactHandler
+      </implementation>
+      <configuration>
+        <!--the extension used by Maven in the repository-->
+        <extension>zip</extension>
+        <!--the type used when specifying dependencies etc.-->
+        <type>zip</type>
+        <!--the packaging used when declaring an implementation of
+          the packaging-->
+        <packaging>galleon-feature-pack</packaging>
+      </configuration>
+    </component>
+    <component>
+      <role>org.apache.maven.lifecycle.mapping.LifecycleMapping</role>
+      <role-hint>galleon-user-feature-pack</role-hint>
+      <implementation>org.apache.maven.lifecycle.mapping.DefaultLifecycleMapping</implementation>
+      <configuration>
+        <lifecycles>
+          <lifecycle>
+            <id>default</id>
+            <phases>
+              <package>
+                org.wildfly.galleon-plugins:wildfly-galleon-maven-plugin:build-user-feature-pack
+              </package>
+              <install>
+                org.apache.maven.plugins:maven-install-plugin:install
+              </install>
+              <deploy>
+                org.apache.maven.plugins:maven-deploy-plugin:deploy
+              </deploy>
+            </phases>
+          </lifecycle>
+        </lifecycles>
+      </configuration>
+    </component>
+    <component>
+      <role>org.apache.maven.artifact.handler.ArtifactHandler</role>
+      <role-hint>galleon-user-feature-pack</role-hint>
+      <implementation>
+        org.apache.maven.artifact.handler.DefaultArtifactHandler
+      </implementation>
+      <configuration>
+        <!--the extension used by Maven in the repository-->
+        <extension>zip</extension>
+        <!--the type used when specifying dependencies etc.-->
+        <type>zip</type>
+        <!--the packaging used when declaring an implementation of
+          the packaging-->
+        <packaging>galleon-user-feature-pack</packaging>
+      </configuration>
+    </component>
+  </components>
+</component-set>

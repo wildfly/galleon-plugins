@@ -16,4 +16,6 @@ include::provision-dist/index.adoc[]
 
 include::goals/index.adoc[]
 
+include::maven-extension/index.adoc[]
+
 include::wildfly-feature-pack-build-xml/index.adoc[]
