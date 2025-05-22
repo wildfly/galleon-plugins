@@ -16,6 +16,10 @@
  */
 package org.wildfly.galleon.maven;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import static java.lang.String.format;
 import static org.wildfly.galleon.maven.FeatureSpecGeneratorInvoker.MODULE_PATH_SEGMENT;
 import static org.wildfly.galleon.maven.Util.mkdirs;
@@ -48,6 +52,7 @@ import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.TreeSet;
@@ -81,19 +86,28 @@ import org.jboss.galleon.Errors;
 import org.jboss.galleon.ProvisioningDescriptionException;
 import org.jboss.galleon.ProvisioningException;
 import org.jboss.galleon.Stability;
+import org.jboss.galleon.api.GalleonLayerDependency;
+import org.jboss.galleon.config.ConfigItem;
 import org.jboss.galleon.config.ConfigModel;
+import org.jboss.galleon.config.FeatureConfig;
 import org.jboss.galleon.config.FeaturePackConfig;
 import org.jboss.galleon.layout.FeaturePackDescriber;
 import org.jboss.galleon.layout.FeaturePackDescription;
+import org.jboss.galleon.layout.FeaturePackLayout;
+import org.jboss.galleon.layout.ProvisioningLayout;
+import org.jboss.galleon.layout.ProvisioningLayoutFactory;
 import org.jboss.galleon.maven.plugin.FpMavenErrors;
 import org.jboss.galleon.maven.plugin.util.MavenArtifactRepositoryManager;
 import org.jboss.galleon.spec.ConfigLayerSpec;
+import org.jboss.galleon.spec.FeatureAnnotation;
 import org.jboss.galleon.spec.FeaturePackPlugin;
 import org.jboss.galleon.spec.FeaturePackSpec;
+import org.jboss.galleon.spec.FeatureParameterSpec;
 import org.jboss.galleon.spec.FeatureSpec;
 import org.jboss.galleon.spec.PackageDependencySpec;
 import org.jboss.galleon.spec.PackageSpec;
 import org.jboss.galleon.universe.FeaturePackLocation;
+import org.jboss.galleon.universe.UniverseResolver;
 import org.jboss.galleon.util.CollectionUtils;
 import org.jboss.galleon.util.IoUtils;
 import org.jboss.galleon.util.StringUtils;
@@ -522,6 +536,23 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                                     FeaturePackDescription desc = FeaturePackDescriber.describeFeaturePack(versionDir, "UTF-8");
                                     checkFeaturePackContentStability(buildTimestabilityLevel, forbidLowerStatibilityLevelPackageReference, lowerStabilityPackages,
                                             desc.getPackages(), desc.getLayers(), desc.getFeatures(), desc.getConfigs(), getLog());
+                                    ZipUtils.zip(versionDir, target);
+
+                                    MavenArtifactRepositoryManager repo = new MavenArtifactRepositoryManager(repoSystem, repoSession, repositories);
+                                    UniverseResolver resolver = UniverseResolver.builder().addArtifactResolver(repo).build();
+                                    ProvisioningLayoutFactory fact = ProvisioningLayoutFactory.getInstance(resolver);
+                                    fact.addLocal(target, false);
+                                    ProvisioningLayout<FeaturePackLayout> pl = fact.
+                                            newConfigLayout(target, false);
+                                    FeaturePackLocation.FPID fpl = FeaturePackLocation.fromString("org.wildfly:wildfly-datasources-galleon-pack:10.0.1.Final-SNAPSHOT").getFPID();
+//                                    ProvisioningRuntimeBuilder rtBuilder = ProvisioningRuntimeBuilder.newInstance();
+//                                    ProvisioningRuntime rt = rtBuilder.initLayout(pl).build();
+//                                    for(FeaturePackRuntime rr : rt.getFeaturePacks()) {
+//                                    }
+//                                    for(ProvisionedConfig pc : rt.getConfigs()) {
+//                                        pc.
+//                                    }
+                                    generateMetadata(desc, pl);
                                 } catch (Exception ex) {
                                     throw new RuntimeException(ex);
                                 }
@@ -561,6 +592,176 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         } catch (IOException e) {
             throw new MojoExecutionException("Failed to create a feature-pack archives from the layout", e);
         }
+    }
+
+    private Operation buildModel(FeatureSpec spec, FeatureConfig config) throws ProvisioningDescriptionException {
+        System.out.println("FEATURE-SPEC " + spec.getName());
+        FeatureAnnotation annot = spec.getAnnotation("jboss-op");
+        List<String> addr = annot.getElementAsList("addr-params");
+        Operation op = new Operation();
+        Set<String> ids = new HashSet<>();
+        for(String a : addr) {
+            FeatureParameterSpec fps = spec.getParam(a);
+            ids.add(a);
+            if("GLN_UNDEFINED".equals(fps.getDefaultValue())) {
+                continue;
+            }
+            if(fps.hasDefaultValue()) {
+                op.address.add(a+"="+fps.getDefaultValue());
+            } else {
+                String value = config.getParam(a);
+                op.address.add(a+"="+value);
+            }
+        }
+        //builder.append(":"+annot.getElement("name"));
+        //builder.append("(");
+        for(Entry<String, String> entry : config.getParams().entrySet()) {
+            if(!ids.contains(entry.getKey())) {
+                 op.params.put(entry.getKey(), entry.getValue());
+            }
+            //builder.append(entry.getKey()+"="+entry.getValue()+", ");
+        }
+        return op;
+        //builder.append(")");
+        //return builder.toString();
+    }
+
+    private FeatureSpec getFeatureSpec(ProvisioningLayout<FeaturePackLayout> pl, String name) throws ProvisioningException {
+        for (FeaturePackLayout layout : pl.getOrderedFeaturePacks()) {
+            if(layout.hasFeatureSpec(name)) {
+                return layout.loadFeatureSpec(name);
+            }
+        }
+        return null;
+    }
+    private void generateModelUpdates(List<ConfigItem> items, ProvisioningLayout<FeaturePackLayout> pl, List<Operation> ops) throws ProvisioningDescriptionException, ProvisioningException {
+        for (ConfigItem i : items) {
+            if (i instanceof FeatureConfig) {
+                FeatureConfig fc = (FeatureConfig) i;
+                FeatureSpec fp = getFeatureSpec(pl, fc.getSpecId().getName());
+                //System.out.println("Feature spec of " + fc.getSpecId() + " is " + fc);
+                Operation op = buildModel(fp, fc);
+                ops.add(op);
+                if (!fc.getItems().isEmpty()) {
+                    generateModelUpdates(fc.getItems(), pl, ops);
+                }
+            }
+        }
+    }
+    private static class ModelItem {
+        String name;
+        Map<String,ModelItem> children = new TreeMap<>();
+        Map<String, String> attributes = new TreeMap<>();
+        ModelItem(String name) {
+            this.name = name;
+        }
+    }
+    private static class Model {
+        ModelItem root = new ModelItem("/");
+        Model() {
+        }
+        void populate(List<Operation> ops) {
+            for(Operation op : ops) {
+                ModelItem current = root;
+                for(String item : op.address) {
+                    ModelItem i = current.children.get(item);
+                    if(i == null) {
+                        ModelItem child = new ModelItem(item);
+                        current.children.put(item, child);
+                        current = child;
+                    } else {
+                        current = i;
+                    }
+                }
+                // We have built the address fully.
+                current.attributes.putAll(op.params);
+            }
+        }
+        ObjectNode export() {
+            ObjectNode model = export(root);
+            return model;
+        }
+
+        ObjectNode export(ModelItem item) {
+            ObjectMapper mapper = new ObjectMapper();
+            ObjectNode model = mapper.createObjectNode();
+            model.put("address", item.name);
+            if (!item.children.isEmpty()) {
+                ArrayNode childrenNode = mapper.createArrayNode();
+                model.putIfAbsent("children", childrenNode);
+                for (String k : item.children.keySet()) {
+                    ModelItem child = item.children.get(k);
+                    childrenNode.add(export(child));
+                }
+            }
+            if (!item.attributes.isEmpty()) {
+                ObjectNode attributesNode = mapper.createObjectNode();
+                model.putIfAbsent("attributes", attributesNode);
+                for (Entry<String, String> entry : item.attributes.entrySet()) {
+                    attributesNode.put(entry.getKey(), entry.getValue());
+                }
+            }
+            return model;
+        }
+    }
+    private static class Operation {
+        String fullAddress;
+        List<String> address = new ArrayList<>();
+        Map<String, String> params = new HashMap<>();
+    }
+    private void generateMetadata(FeaturePackDescription desc, ProvisioningLayout<FeaturePackLayout> pl) throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        ObjectNode fpMetadata = mapper.createObjectNode();
+        ArrayNode layers = mapper.createArrayNode();
+        mapper.enable(SerializationFeature.INDENT_OUTPUT);
+        fpMetadata.put("version", project.getVersion());
+        fpMetadata.put("feature-pack-location", project.getGroupId() + ":" + project.getArtifactId() + ":" + project.getVersion());
+
+        for (ConfigLayerSpec spec : desc.getLayers()) {
+            List<Operation> ops = new ArrayList<>();
+            System.out.println("***************** LAYER " + spec.getName());
+            //String category = spec.getProperties().get("org.wildfly.category");
+            //if (category != null) {
+                ObjectNode layerNode = mapper.createObjectNode();
+                layerNode.put("name", spec.getName());
+                if (spec.hasLayerDeps()) {
+                    ArrayNode depsNode = mapper.createArrayNode();
+                    for (GalleonLayerDependency dep : spec.getLayerDeps()) {
+                        ObjectNode depNode = mapper.createObjectNode();
+                        depNode.put("name", dep.getName());
+                        depNode.put("optional", dep.isOptional());
+                        depsNode.add(depNode);
+                    }
+                    layerNode.putIfAbsent("dependencies", depsNode);
+                }
+
+                generateModelUpdates(spec.getItems(), pl, ops);
+                Model m = new Model();
+                m.populate(ops);
+                layerNode.putIfAbsent("managementModel", m.export());
+                if (!spec.getProperties().isEmpty()) {
+                    ArrayNode propertiesNode = mapper.createArrayNode();
+                    for (Entry<String, String> entry : spec.getProperties().entrySet()) {
+                        ObjectNode propertyNode = mapper.createObjectNode();
+                        propertyNode.put("name", entry.getKey());
+                        propertyNode.put("value", entry.getValue());
+                        propertiesNode.add(propertyNode);
+                        if (entry.getKey().equals("org.wildfly.rule.configuration")) {
+                            String s = entry.getValue();
+                            // Retrieve env variable
+                        }
+                    }
+                    layerNode.putIfAbsent("properties", propertiesNode);
+                }
+                layers.add(layerNode);
+            //}
+        }
+        if(!layers.isEmpty()) {
+            fpMetadata.putIfAbsent("layers", layers);
+        }
+        final Path metadataTarget = Paths.get(project.getBuild().getDirectory()).resolve("feature-pack-metadata.json");
+        debug("Generating metadata definition %s as a project artifact", metadataTarget);
+        mapper.writerWithDefaultPrettyPrinter().writeValue(metadataTarget.toFile(), fpMetadata);
     }
 
     private static String formatIgnoreMessage(String kind, String name, String pkgName) {
