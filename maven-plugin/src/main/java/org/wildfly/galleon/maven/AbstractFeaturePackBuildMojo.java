@@ -720,8 +720,8 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         for (ConfigLayerSpec spec : desc.getLayers()) {
             List<Operation> ops = new ArrayList<>();
             System.out.println("***************** LAYER " + spec.getName());
-            //String category = spec.getProperties().get("org.wildfly.category");
-            //if (category != null) {
+            String category = spec.getProperties().get("org.wildfly.category");
+            if (category != null) {
                 ObjectNode layerNode = mapper.createObjectNode();
                 layerNode.put("name", spec.getName());
                 if (spec.hasLayerDeps()) {
@@ -754,7 +754,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                     layerNode.putIfAbsent("properties", propertiesNode);
                 }
                 layers.add(layerNode);
-            //}
+            }
         }
         if(!layers.isEmpty()) {
             fpMetadata.putIfAbsent("layers", layers);
