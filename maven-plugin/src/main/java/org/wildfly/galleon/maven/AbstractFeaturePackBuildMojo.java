@@ -90,6 +90,7 @@ import org.jboss.galleon.api.GalleonLayerDependency;
 import org.jboss.galleon.config.ConfigItem;
 import org.jboss.galleon.config.ConfigModel;
 import org.jboss.galleon.config.FeatureConfig;
+import org.jboss.galleon.config.FeatureGroup;
 import org.jboss.galleon.config.FeaturePackConfig;
 import org.jboss.galleon.layout.FeaturePackDescriber;
 import org.jboss.galleon.layout.FeaturePackDescription;
@@ -594,7 +595,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         }
     }
 
-    private Operation buildModel(FeatureSpec spec, FeatureConfig config) throws ProvisioningDescriptionException {
+    private Operation buildModel(FeatureSpec spec, List<ConfigItem> parents, FeatureConfig config) throws ProvisioningDescriptionException {
         System.out.println("FEATURE-SPEC " + spec.getName());
         FeatureAnnotation annot = spec.getAnnotation("jboss-op");
         List<String> addr = annot.getElementAsList("addr-params");
@@ -610,8 +611,36 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                 op.address.add(a+"="+fps.getDefaultValue());
             } else {
                 String value = config.getParam(a);
+                if(value == null) {
+                    for (int i = parents.size() - 1; i >= 0; i--) {
+                        ConfigItem parent = parents.get(i);
+                        if (parent instanceof FeatureConfig) {
+                            FeatureConfig pc = (FeatureConfig) parent;
+                            value = pc.getParam(a);
+                            if(value != null) {
+                                break;
+                            }
+                        }
+                    }
+                    if(value == null) {
+                        System.out.println("ERROR!!!!!!!!!");
+                            throw new RuntimeException("Notcorrect parent for spec " + spec.getName() + "\nConfig is " + config + "\n Parents " + parents);
+                    }
+                }
                 op.address.add(a+"="+value);
             }
+        }
+        if (annot.hasElement("complex-attribute")) {
+           String attribute = annot.getElement("complex-attribute");
+           StringBuilder val = new StringBuilder("{");
+            for (Entry<String, String> entry : config.getParams().entrySet()) {
+                if (!ids.contains(entry.getKey())) {
+                   val.append(" " + entry.getKey() +"="+entry.getValue() + ",");
+                }
+                //builder.append(entry.getKey()+"="+entry.getValue()+", ");
+            }
+            String clean = val.toString().substring(0, val.toString().length() -1) + " }";
+            op.params.put(attribute, clean);
         }
         //builder.append(":"+annot.getElement("name"));
         //builder.append("(");
@@ -634,16 +663,50 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         }
         return null;
     }
-    private void generateModelUpdates(List<ConfigItem> items, ProvisioningLayout<FeaturePackLayout> pl, List<Operation> ops) throws ProvisioningDescriptionException, ProvisioningException {
+    private FeatureGroup getFeatureGroup(ProvisioningLayout<FeaturePackLayout> pl, String name) throws ProvisioningException {
+        for (FeaturePackLayout layout : pl.getOrderedFeaturePacks()) {
+            if(layout.hasFeatureGroup(name)) {
+                return layout.loadFeatureGroupSpec(name);
+            }
+        }
+        return null;
+    }
+    private ConfigLayerSpec getLayer(ProvisioningLayout<FeaturePackLayout> pl, String name) throws ProvisioningException {
+        for (FeaturePackLayout layout : pl.getOrderedFeaturePacks()) {
+            ConfigLayerSpec s = layout.loadConfigLayerSpec("standalone", name);
+            if (s != null) {
+                return s;
+            }
+        }
+        return null;
+    }
+    private void generateModelUpdates(List<ConfigItem> items, List<ConfigItem> parents, ProvisioningLayout<FeaturePackLayout> pl, List<Operation> ops) throws ProvisioningDescriptionException, ProvisioningException {
         for (ConfigItem i : items) {
             if (i instanceof FeatureConfig) {
                 FeatureConfig fc = (FeatureConfig) i;
                 FeatureSpec fp = getFeatureSpec(pl, fc.getSpecId().getName());
                 //System.out.println("Feature spec of " + fc.getSpecId() + " is " + fc);
-                Operation op = buildModel(fp, fc);
+                Operation op = buildModel(fp, parents, fc);
                 ops.add(op);
                 if (!fc.getItems().isEmpty()) {
-                    generateModelUpdates(fc.getItems(), pl, ops);
+                    parents.add(fc);
+                    generateModelUpdates(fc.getItems(), parents, pl, ops);
+                    parents.remove(parents.size() - 1);
+                }
+            } else {
+                if (i instanceof FeatureGroup) {
+                    FeatureGroup fg = (FeatureGroup) i;
+                    FeatureGroup complete = getFeatureGroup(pl, fg.getName());
+                    if (!complete.getItems().isEmpty()) {
+                        parents.add(fg);
+                        generateModelUpdates(complete.getItems(), parents, pl, ops);
+                        parents.remove(parents.size() - 1);
+                    }
+                    if (!fg.getItems().isEmpty()) {
+                        parents.add(fg);
+                        generateModelUpdates(fg.getItems(), parents, pl, ops);
+                        parents.remove(parents.size() - 1);
+                    }
                 }
             }
         }
@@ -686,6 +749,13 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             ObjectMapper mapper = new ObjectMapper();
             ObjectNode model = mapper.createObjectNode();
             model.put("address", item.name);
+            if (!item.attributes.isEmpty()) {
+                ObjectNode attributesNode = mapper.createObjectNode();
+                model.putIfAbsent("attributes", attributesNode);
+                for (Entry<String, String> entry : item.attributes.entrySet()) {
+                    attributesNode.put(entry.getKey(), entry.getValue());
+                }
+            }
             if (!item.children.isEmpty()) {
                 ArrayNode childrenNode = mapper.createArrayNode();
                 model.putIfAbsent("children", childrenNode);
@@ -694,18 +764,10 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                     childrenNode.add(export(child));
                 }
             }
-            if (!item.attributes.isEmpty()) {
-                ObjectNode attributesNode = mapper.createObjectNode();
-                model.putIfAbsent("attributes", attributesNode);
-                for (Entry<String, String> entry : item.attributes.entrySet()) {
-                    attributesNode.put(entry.getKey(), entry.getValue());
-                }
-            }
             return model;
         }
     }
     private static class Operation {
-        String fullAddress;
         List<String> address = new ArrayList<>();
         Map<String, String> params = new HashMap<>();
     }
@@ -731,11 +793,13 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                         depNode.put("name", dep.getName());
                         depNode.put("optional", dep.isOptional());
                         depsNode.add(depNode);
+//                        System.out.println("********* Dep spec " + dep.getName());
+//                        ConfigLayerSpec depSpec = getLayer(pl, dep.getName());
+//                        generateModelUpdates(depSpec.getItems(), new ArrayList<>(), pl, ops);
                     }
                     layerNode.putIfAbsent("dependencies", depsNode);
                 }
-
-                generateModelUpdates(spec.getItems(), pl, ops);
+                generateModelUpdates(spec.getItems(), new ArrayList<>(), pl, ops);
                 Model m = new Model();
                 m.populate(ops);
                 layerNode.putIfAbsent("managementModel", m.export());
