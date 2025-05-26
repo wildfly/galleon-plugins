@@ -740,9 +740,15 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                 current.attributes.putAll(op.params);
             }
         }
+
         ObjectNode export() {
-            ObjectNode model = export(root);
-            return model;
+            if (root.children.isEmpty() && root.attributes.isEmpty()) {
+                ObjectMapper mapper = new ObjectMapper();
+                return mapper.createObjectNode();
+            } else {
+                ObjectNode model = export(root);
+                return model;
+            }
         }
 
         ObjectNode export(ModelItem item) {
