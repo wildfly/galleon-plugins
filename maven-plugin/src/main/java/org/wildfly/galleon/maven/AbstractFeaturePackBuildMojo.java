@@ -275,6 +275,12 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     @Parameter(alias = "package-stability-level", required = false)
     protected String packageStabilityLevel;
 
+    /**
+     * Add any feature-pack dependency in the generated metadata.
+     */
+    @Parameter(alias = "add-feature-packs-dependencies-in-metadata", required = false, defaultValue = "false")
+    protected boolean addFeaturePacksDependenciesInMetadata;
+
     private MavenProjectArtifactVersions artifactVersions;
 
     private Map<String, FeaturePackDescription> fpDependencies = Collections.emptyMap();
@@ -553,7 +559,16 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
 //                                    for(ProvisionedConfig pc : rt.getConfigs()) {
 //                                        pc.
 //                                    }
-                                    generateMetadata(desc, pl);
+//                                    if(addFeaturePacksDependenciesInMetadata) {
+//                                        for(FeaturePackConfig fpconfig : fpLayout.getSpec().getFeaturePackDeps()) {
+//                                            System.out.println("FP CONFIG " + fpconfig.getLocation());
+//                                            ProvisioningConfig c = ProvisioningConfig.builder().addFeaturePackDep(fpconfig).build();
+//                                            ProvisioningLayout<FeaturePackLayout> plDep = fact.
+//                                                newConfigLayout(c);
+//                                            plDep.getOrderedFeaturePacks().get(0);
+//                                        }
+//                                    }
+                                    generateMetadata(desc, pl, addFeaturePacksDependenciesInMetadata);
                                 } catch (Exception ex) {
                                     throw new RuntimeException(ex);
                                 }
@@ -777,53 +792,88 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         List<String> address = new ArrayList<>();
         Map<String, String> params = new HashMap<>();
     }
-    private void generateMetadata(FeaturePackDescription desc, ProvisioningLayout<FeaturePackLayout> pl) throws Exception {
+    private void generateMetadata(FeaturePackDescription desc, ProvisioningLayout<FeaturePackLayout> pl, boolean includeDep) throws Exception {
         ObjectMapper mapper = new ObjectMapper();
         ObjectNode fpMetadata = mapper.createObjectNode();
         ArrayNode layers = mapper.createArrayNode();
         mapper.enable(SerializationFeature.INDENT_OUTPUT);
         fpMetadata.put("version", project.getVersion());
         fpMetadata.put("feature-pack-location", project.getGroupId() + ":" + project.getArtifactId() + ":" + project.getVersion());
-
-        for (ConfigLayerSpec spec : desc.getLayers()) {
+        Map<String, List<ConfigLayerSpec>> layerSpecs = new HashMap<>();
+        if(includeDep) {
+            for (FeaturePackLayout layout : pl.getOrderedFeaturePacks()) {
+                Path p = layout.getDir();
+                FeaturePackDescription descDep = FeaturePackDescriber.describeFeaturePack(p, "UTF-8");
+                System.out.println("FP " + descDep.getFPID());
+                for (ConfigLayerSpec descLayer : descDep.getLayers()) {
+                    List<ConfigLayerSpec> specs = layerSpecs.get(descLayer.getId().getName());
+                    if(specs == null) {
+                        specs = new ArrayList<>();
+                        layerSpecs.put(descLayer.getId().getName(), specs);
+                    } else {
+                        System.out.println("We already have a layer " + descLayer.getId().getName());
+                    }
+                    specs.add(descLayer);
+                }
+            }
+        } else {
+            for (ConfigLayerSpec spec : desc.getLayers()) {
+                List<ConfigLayerSpec> specs = new ArrayList<>();
+                specs.add(spec);
+                layerSpecs.put(spec.getName(), specs);
+            }
+        }
+        for (Entry<String, List<ConfigLayerSpec>> entry : layerSpecs.entrySet()) {
             List<Operation> ops = new ArrayList<>();
-            System.out.println("***************** LAYER " + spec.getName());
-            String category = spec.getProperties().get("org.wildfly.category");
-            if (category != null) {
-                ObjectNode layerNode = mapper.createObjectNode();
-                layerNode.put("name", spec.getName());
-                if (spec.hasLayerDeps()) {
-                    ArrayNode depsNode = mapper.createArrayNode();
-                    for (GalleonLayerDependency dep : spec.getLayerDeps()) {
-                        ObjectNode depNode = mapper.createObjectNode();
-                        depNode.put("name", dep.getName());
-                        depNode.put("optional", dep.isOptional());
-                        depsNode.add(depNode);
+            ObjectNode layerNode = null;
+            ArrayNode depsNode = null;
+            boolean propertiesAdded = false;
+            for (ConfigLayerSpec spec : entry.getValue()) {
+                System.out.println("***************** LAYER " + spec.getName());
+                String category = spec.getProperties().get("org.wildfly.category");
+                if (category != null) {
+                    if(layerNode == null) {
+                        layerNode = mapper.createObjectNode();
+                        layerNode.put("name", spec.getName());
+                        layers.add(layerNode);
+                    }
+                    if (spec.hasLayerDeps()) {
+                        if(depsNode == null) {
+                            depsNode = mapper.createArrayNode();
+                        }
+                        for (GalleonLayerDependency dep : spec.getLayerDeps()) {
+                            ObjectNode depNode = mapper.createObjectNode();
+                            depNode.put("name", dep.getName());
+                            depNode.put("optional", dep.isOptional());
+                            depsNode.add(depNode);
 //                        System.out.println("********* Dep spec " + dep.getName());
 //                        ConfigLayerSpec depSpec = getLayer(pl, dep.getName());
 //                        generateModelUpdates(depSpec.getItems(), new ArrayList<>(), pl, ops);
-                    }
-                    layerNode.putIfAbsent("dependencies", depsNode);
-                }
-                generateModelUpdates(spec.getItems(), new ArrayList<>(), pl, ops);
-                Model m = new Model();
-                m.populate(ops);
-                layerNode.putIfAbsent("managementModel", m.export());
-                if (!spec.getProperties().isEmpty()) {
-                    ArrayNode propertiesNode = mapper.createArrayNode();
-                    for (Entry<String, String> entry : spec.getProperties().entrySet()) {
-                        ObjectNode propertyNode = mapper.createObjectNode();
-                        propertyNode.put("name", entry.getKey());
-                        propertyNode.put("value", entry.getValue());
-                        propertiesNode.add(propertyNode);
-                        if (entry.getKey().equals("org.wildfly.rule.configuration")) {
-                            String s = entry.getValue();
-                            // Retrieve env variable
                         }
                     }
-                    layerNode.putIfAbsent("properties", propertiesNode);
+                    generateModelUpdates(spec.getItems(), new ArrayList<>(), pl, ops);
+                    Model m = new Model();
+                    m.populate(ops);
+                    layerNode.putIfAbsent("managementModel", m.export());
+                    if (!spec.getProperties().isEmpty() && !propertiesAdded) {
+                        propertiesAdded = true;
+                        ArrayNode propertiesNode = mapper.createArrayNode();
+                        for (Entry<String, String> propsEntry : spec.getProperties().entrySet()) {
+                            ObjectNode propertyNode = mapper.createObjectNode();
+                            propertyNode.put("name", propsEntry.getKey());
+                            propertyNode.put("value", propsEntry.getValue());
+                            propertiesNode.add(propertyNode);
+                            if (entry.getKey().equals("org.wildfly.rule.configuration")) {
+                                String s = propsEntry.getValue();
+                                // Retrieve env variable
+                            }
+                        }
+                        layerNode.putIfAbsent("properties", propertiesNode);
+                    }
                 }
-                layers.add(layerNode);
+            }
+            if (depsNode != null && layerNode != null) {
+                layerNode.putIfAbsent("dependencies", depsNode);
             }
         }
         if(!layers.isEmpty()) {
