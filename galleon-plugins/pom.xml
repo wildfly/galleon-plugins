@@ -44,7 +44,7 @@
       <scope>provided</scope>
     </dependency>
     <dependency>
-      <groupId>org.wildfly.core</groupId>
+      <groupId>org.wildfly.launcher</groupId>
       <artifactId>wildfly-launcher</artifactId>
       <scope>provided</scope>
     </dependency>
@@ -111,7 +111,7 @@
                   <exclude>org.wildfly.core:wildfly-embedded</exclude>
                   <exclude>org.wildfly.core:wildfly-cli</exclude>
                   <exclude>org.wildfly.core:wildfly-controller-client</exclude>
-                  <exclude>org.wildfly.core:wildfly-launcher</exclude>
+                  <exclude>org.wildfly.launcher:wildfly-launcher</exclude>
                   <exclude>org.wildfly.core:wildfly-protocol</exclude>
                   <exclude>org.wildfly.security:wildfly-elytron</exclude>
                   <exclude>xalan:xalan</exclude>
