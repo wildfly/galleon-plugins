@@ -330,6 +330,16 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         return defaultConfigStabilityLevel;
     }
 
+    /**
+     * Gets the maven packaging type supported by this mojo if this
+     * plugin is configured to run as a maven extension.
+     *
+     * @return the packaging type. By default returns {@code null}
+     */
+    protected String getPackaging() {
+        return null;
+    }
+
     private static void checkStabilityLevels(Stability min, Stability config, Stability pkg) throws MojoExecutionException {
         min = min == null ? Stability.DEFAULT : min;
         config = config == null ? Stability.DEFAULT : config;
@@ -516,8 +526,18 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                                     throw new RuntimeException(ex);
                                 }
                                 ZipUtils.zip(versionDir, target);
-                                debug("Attaching feature-pack %s as a project artifact", target);
-                                projectHelper.attachArtifact(project, "zip", target.toFile());
+                                if (project.getPackaging().equals(getPackaging())) {
+                                    if (project.getArtifact().getFile() != null) {
+                                        throw new MojoExecutionException("Cannot set " + target.getFileName()
+                                                + " as the main project artifact file as one is already set.");
+                                    } else {
+                                        debug("Setting feature-pack %s as the main project artifact", target);
+                                        project.getArtifact().setFile(target.toFile());
+                                    }
+                                } else {
+                                    debug("Attaching feature-pack %s as a project artifact", target);
+                                    projectHelper.attachArtifact(project, "zip", target.toFile());
+                                }
                                 final Path offLinerTarget = Paths.get(project.getBuild().getDirectory()).resolve(artifactId + '-'
                                         + versionDir.getFileName() + "-" + ARTIFACT_LIST_CLASSIFIER + "." + ARTIFACT_LIST_EXTENSION);
                                 debug("Attaching feature-pack artifact list %s as a project artifact", offLinerTarget);

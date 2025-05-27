@@ -1,0 +1,72 @@
+[[maven-extension]]
+### Using the plugin as a Maven Extension
+
+Your project can be configured to use the plugin as a Maven extension. If you do this, Maven will allow you to use one of two new `packaging` types for your Maven module: `galleon-feature-pack` or `galleon-user-feature-pack`. You would use these instead of the `pom` packaging that's typically used.
+
+There are two main benefits of doing this:
+
+* It results in a default `package` phase execution of this plugin's `<<build_feature_pack,build-feature-pack>>` or `<<build_user_feature_pack,build-user-feature-pack>>` goal, saving you the XML boilerplate of specifying executions and an execution id, goal and phase.
+* It results in the plugin using the built feature pack as the main artifact of the project build, instead of attaching it as an additional artifact with a `null` Maven classifier. Doing it this way avoids problems some other plugins have with additional attachments with a `null` qualifier.
+
+To tell Maven to use the plugin as a Maven extension, in the plugin declaration include the `extensions` element with a value of `true`:
+
+[source,xml]
+----
+<plugin>
+    <groupId>org.wildfly.galleon-plugins</groupId>
+    <artifactId>wildfly-galleon-maven-plugin</artifactId>
+    <extensions>true</extensions>
+----
+
+#### Packaging type `galleon-feature-pack`
+
+Use this packaging type when you wish to use the `<<build_feature_pack,build-feature-pack>>` goal. To use it, configure the pom's top-level `packaging` element:
+
+[source,xml]
+----
+<packaging>galleon-feature-pack</packaging>
+----
+
+When this packaging type is used, Maven will execute default plugins in the `package`, `install` and `deploy` phases (assuming the command to launch maven enables those phases). It will also execute any other plugins configured in your pom.
+
+WARNING: If you are migrating a pom that used any `packaging` value other than `pom` (for example `jar`), plugin executions for other phases that previously happened by default will no longer happen and will need to be manually declared in the pom.
+
+The important thing here is the default plugin execution for the `package` phase is this plugin's `<<build_feature_pack,build-feature-pack>>` goal. That goal will be executed, using whatever configuration is specified for the `default-build-feature-pack` execution id.
+
+IMPORTANT: If you are using the `galleon-feature-pack` packaging type, use `default-build-feature-pack` as the execution id in the plugin configuration. Better yet, skip the `executions` element boilerplate and place any `configuration` element directly under the `plugin` root.
+
+An example plugin configuration might look like this:
+
+[source,xml]
+----
+<plugin>
+    <groupId>org.wildfly.galleon-plugins</groupId>
+    <artifactId>wildfly-galleon-maven-plugin</artifactId>
+    <extensions>true</extensions>
+    <configuration>
+        <fork-embedded>true</fork-embedded>
+        <generate-channel-manifest>true</generate-channel-manifest>
+        <minimum-stability-level>preview</minimum-stability-level>
+        <config-stability-level>preview</config-stability-level>
+        <package-stability-level>preview</package-stability-level>
+    </configuration>
+</plugin>
+----
+
+
+#### Packaging type `galleon-user-feature-pack`
+
+Use this packaging type when you wish to use the `<<build_user_feature_pack,build-user-feature-pack>>` goal. To use it, configure the pom's top-level `packaging` element:
+
+[source,xml]
+----
+<packaging>galleon-user-feature-pack</packaging>
+----
+
+When this packaging type is used, Maven will execute default plugins in the `package`, `install` and `deploy` phases (assuming the command to launch maven enables those phases). It will also execute any other plugins configured in your pom.
+
+WARNING: If you are migrating a pom that used any `packaging` value other than `pom` (for example `jar`), plugin executions for other phases that previously happened by default will no longer happen and will need to be manually declared in the pom.
+
+The important thing here is the default plugin execution for the `package` phase is this plugin's `<<build_user_feature_pack,build-user-feature-pack>>` goal. That goal will be executed, using whatever configuration is specified for the `default-build-user-feature-pack` execution id.
+
+IMPORTANT: If you are using the `galleon-user-feature-pack` packaging type, use `default-user-build-feature-pack` as the execution id in the plugin configuration. Better yet, skip the `executions` element boilerplate and place any `configuration` element directly under the `plugin` root.

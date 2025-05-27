@@ -1,3 +1,4 @@
+[[build_user_feature_pack]]
 include::../../../../../maven-plugin/target/generated-sources/plugin/build-user-feature-pack-mojo.adoc[]
 
 #### Plugin configuration

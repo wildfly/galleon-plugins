@@ -151,6 +151,11 @@ public class WfFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
     }
 
     @Override
+    protected String getPackaging() {
+        return "galleon-feature-pack";
+    }
+
+    @Override
     protected void doExecute() throws MojoExecutionException, MojoFailureException {
         final Path targetResources = Paths.get(buildName, Constants.RESOURCES);
         final Path specsDir = configDir.getAbsoluteFile().toPath().resolve(resourcesDir);
