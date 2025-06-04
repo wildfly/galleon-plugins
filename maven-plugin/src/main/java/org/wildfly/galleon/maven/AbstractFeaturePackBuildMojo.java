@@ -150,6 +150,9 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     static final String ARTIFACT_LIST_CLASSIFIER = "artifact-list";
     static final String ARTIFACT_LIST_EXTENSION = "txt";
 
+    static final String METADATA_CLASSIFIER = "metadata";
+    static final String METADATA_EXTENSION = "json";
+
     static boolean isProvided(String module) {
         return module.startsWith("java.")
                 || module.startsWith("jdk.")
@@ -544,31 +547,11 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                                     checkFeaturePackContentStability(buildTimestabilityLevel, forbidLowerStatibilityLevelPackageReference, lowerStabilityPackages,
                                             desc.getPackages(), desc.getLayers(), desc.getFeatures(), desc.getConfigs(), getLog());
                                     ZipUtils.zip(versionDir, target);
-
-                                    MavenArtifactRepositoryManager repo = new MavenArtifactRepositoryManager(repoSystem, repoSession, repositories);
-                                    UniverseResolver resolver = UniverseResolver.builder().addArtifactResolver(repo).build();
-                                    ProvisioningLayoutFactory fact = ProvisioningLayoutFactory.getInstance(resolver);
-                                    fact.addLocal(target, false);
-                                    ProvisioningLayout<FeaturePackLayout> pl = fact.
-                                            newConfigLayout(target, false);
-                                    FeaturePackLocation.FPID fpl = FeaturePackLocation.fromString("org.wildfly:wildfly-datasources-galleon-pack:10.0.1.Final-SNAPSHOT").getFPID();
-//                                    ProvisioningRuntimeBuilder rtBuilder = ProvisioningRuntimeBuilder.newInstance();
-//                                    ProvisioningRuntime rt = rtBuilder.initLayout(pl).build();
-//                                    for(FeaturePackRuntime rr : rt.getFeaturePacks()) {
-//                                    }
-//                                    for(ProvisionedConfig pc : rt.getConfigs()) {
-//                                        pc.
-//                                    }
-//                                    if(addFeaturePacksDependenciesInMetadata) {
-//                                        for(FeaturePackConfig fpconfig : fpLayout.getSpec().getFeaturePackDeps()) {
-//                                            System.out.println("FP CONFIG " + fpconfig.getLocation());
-//                                            ProvisioningConfig c = ProvisioningConfig.builder().addFeaturePackDep(fpconfig).build();
-//                                            ProvisioningLayout<FeaturePackLayout> plDep = fact.
-//                                                newConfigLayout(c);
-//                                            plDep.getOrderedFeaturePacks().get(0);
-//                                        }
-//                                    }
-                                    generateMetadata(desc, pl, addFeaturePacksDependenciesInMetadata);
+                                    final Path metadataTarget = Paths.get(project.getBuild().getDirectory()).resolve(artifactId + '-'
+                                            + versionDir.getFileName() + "-" + METADATA_CLASSIFIER + "." + METADATA_EXTENSION);
+                                    generateMetadata(target, desc, metadataTarget);
+                                     debug("Attaching feature-pack metadata %s as a project artifact", metadataTarget);
+                                    projectHelper.attachArtifact(project, METADATA_EXTENSION, METADATA_CLASSIFIER, metadataTarget.toFile());
                                 } catch (Exception ex) {
                                     throw new RuntimeException(ex);
                                 }
@@ -610,12 +593,26 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         }
     }
 
+    private void generateMetadata(Path featurePack, FeaturePackDescription desc, Path metadataTarget) throws Exception {
+        MavenArtifactRepositoryManager repo = new MavenArtifactRepositoryManager(repoSystem, repoSession, repositories);
+        UniverseResolver resolver = UniverseResolver.builder().addArtifactResolver(repo).build();
+        ProvisioningLayoutFactory fact = ProvisioningLayoutFactory.getInstance(resolver);
+        fact.addLocal(featurePack, false);
+        ProvisioningLayout<FeaturePackLayout> pl = fact.
+                newConfigLayout(featurePack, false);
+        generateMetadata(desc, pl, metadataTarget);
+    }
+
     private Operation buildModel(FeatureSpec spec, List<ConfigItem> parents, FeatureConfig config) throws ProvisioningDescriptionException {
         System.out.println("FEATURE-SPEC " + spec.getName());
+        String description = spec.getDescription();
         FeatureAnnotation annot = spec.getAnnotation("jboss-op");
         List<String> addr = annot.getElementAsList("addr-params");
         Operation op = new Operation();
         Set<String> ids = new HashSet<>();
+        if(description != null) {
+            op.description = description;
+        }
         for(String a : addr) {
             FeatureParameterSpec fps = spec.getParam(a);
             ids.add(a);
@@ -655,13 +652,21 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                 //builder.append(entry.getKey()+"="+entry.getValue()+", ");
             }
             String clean = val.toString().substring(0, val.toString().length() -1) + " }";
-            op.params.put(attribute, clean);
+            Param p = new Param();
+            //p.description = spec.getParam(attribute).getDescription();
+            p.name = attribute;
+            p.value = clean;
+            op.params.put(p.name, p);
         }
         //builder.append(":"+annot.getElement("name"));
         //builder.append("(");
         for(Entry<String, String> entry : config.getParams().entrySet()) {
-            if(!ids.contains(entry.getKey())) {
-                 op.params.put(entry.getKey(), entry.getValue());
+            if (!ids.contains(entry.getKey())) {
+                Param p = new Param();
+                p.description = spec.getParam(entry.getKey()).getDescription();
+                p.name = entry.getKey();
+                p.value = entry.getValue();
+                op.params.put(p.name, p);
             }
             //builder.append(entry.getKey()+"="+entry.getValue()+", ");
         }
@@ -728,8 +733,9 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     }
     private static class ModelItem {
         String name;
+        String description;
         Map<String,ModelItem> children = new TreeMap<>();
-        Map<String, String> attributes = new TreeMap<>();
+        Map<String, Param> attributes = new TreeMap<>();
         ModelItem(String name) {
             this.name = name;
         }
@@ -745,6 +751,9 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                     ModelItem i = current.children.get(item);
                     if(i == null) {
                         ModelItem child = new ModelItem(item);
+                        if(op.description != null) {
+                            child.description = op.description;
+                        }
                         current.children.put(item, child);
                         current = child;
                     } else {
@@ -770,11 +779,21 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             ObjectMapper mapper = new ObjectMapper();
             ObjectNode model = mapper.createObjectNode();
             model.put("address", item.name);
+            if(item.description != null) {
+                model.put("description", item.description);
+            }
             if (!item.attributes.isEmpty()) {
-                ObjectNode attributesNode = mapper.createObjectNode();
+                ArrayNode attributesNode = mapper.createArrayNode();
                 model.putIfAbsent("attributes", attributesNode);
-                for (Entry<String, String> entry : item.attributes.entrySet()) {
-                    attributesNode.put(entry.getKey(), entry.getValue());
+                for (Entry<String, Param> entry : item.attributes.entrySet()) {
+                    Param p = entry.getValue();
+                    ObjectNode pNode = mapper.createObjectNode();
+                    pNode.put("name", p.name);
+                    pNode.put("value", p.value);
+                    if (p.description != null) {
+                        pNode.put("description", p.description);
+                    }
+                    attributesNode.add(pNode);
                 }
             }
             if (!item.children.isEmpty()) {
@@ -788,11 +807,17 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             return model;
         }
     }
+    private static class Param {
+        String name;
+        String description;
+        String value;
+    }
     private static class Operation {
         List<String> address = new ArrayList<>();
-        Map<String, String> params = new HashMap<>();
+        Map<String, Param> params = new HashMap<>();
+        String description;
     }
-    private void generateMetadata(FeaturePackDescription desc, ProvisioningLayout<FeaturePackLayout> pl, boolean includeDep) throws Exception {
+    private void generateMetadata(FeaturePackDescription desc, ProvisioningLayout<FeaturePackLayout> pl, Path metadataTarget) throws Exception {
         ObjectMapper mapper = new ObjectMapper();
         ObjectNode fpMetadata = mapper.createObjectNode();
         ArrayNode layers = mapper.createArrayNode();
@@ -800,7 +825,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         fpMetadata.put("version", project.getVersion());
         fpMetadata.put("feature-pack-location", project.getGroupId() + ":" + project.getArtifactId() + ":" + project.getVersion());
         Map<String, List<ConfigLayerSpec>> layerSpecs = new HashMap<>();
-        if(includeDep) {
+        if(addFeaturePacksDependenciesInMetadata) {
             for (FeaturePackLayout layout : pl.getOrderedFeaturePacks()) {
                 Path p = layout.getDir();
                 FeaturePackDescription descDep = FeaturePackDescriber.describeFeaturePack(p, "UTF-8");
@@ -879,7 +904,6 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         if(!layers.isEmpty()) {
             fpMetadata.putIfAbsent("layers", layers);
         }
-        final Path metadataTarget = Paths.get(project.getBuild().getDirectory()).resolve("feature-pack-metadata.json");
         debug("Generating metadata definition %s as a project artifact", metadataTarget);
         mapper.writerWithDefaultPrettyPrinter().writeValue(metadataTarget.toFile(), fpMetadata);
     }

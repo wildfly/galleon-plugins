@@ -381,6 +381,10 @@ class FeatureSpecNode {
             String stability = descr.get("stability").asString();
             builder.setStability(stability);
         }
+        if(descr.hasDefined("description")) {
+            String description = descr.get("description").asString();
+            builder.setDescription(description);
+        }
         if (descr.hasDefined("requires")) {
             for (ModelNode capability : descr.require("requires").asList()) {
                 builder.requiresCapability(capability.get("name").asString(), capability.hasDefined("optional") && capability.get("optional").asBoolean());
@@ -456,6 +460,9 @@ class FeatureSpecNode {
                 }
                 if (param.hasDefined("stability")) {
                     featureParamSpecBuilder.setStability(param.get("stability").asString());
+                }
+                if (param.hasDefined("description")) {
+                    featureParamSpecBuilder.setDescription(param.get("description").asString());
                 }
                 builder.addParam(featureParamSpecBuilder.build());
             }
