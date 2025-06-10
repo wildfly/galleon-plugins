@@ -186,13 +186,29 @@ public class FeatureSpecGenerator implements ForkCallback {
             String minStab = mimimumStability == null ? "" : mimimumStability;
             ForkedEmbeddedUtil.fork(this, debug, getStoredSystemProps(), installation, getStandaloneSpecsFile().toString(), getDomainSpecsFile().toString(), minStab);
             standaloneFeatures = readSpecsFile(getStandaloneSpecsFile());
+            Path model = getStandaloneSpecsFile().getParent().resolve("model.json");
+            try {
+                Files.createDirectories(outputDir);
+                Files.copy(model, outputDir.resolve("model.json"));
+            } catch (IOException ex) {
+                throw new ProvisioningException(ex);
+            }
             if(Files.exists(Paths.get(installation).resolve(WfConstants.DOMAIN).resolve(WfConstants.CONFIGURATION))) {
                 domainRoots = readSpecsFile(getDomainSpecsFile());
             }
         } else {
             final Path home = Paths.get(installation);
             if(Files.exists(home.resolve(WfConstants.STANDALONE).resolve(WfConstants.CONFIGURATION))) {
-                standaloneFeatures = readFeatureSpecs(createStandaloneServer(installation, mimimumStability));
+                standaloneFeatures = readFeatureSpecs(createStandaloneServer(installation, mimimumStability, null));
+                ModelNode result = generateModel(createStandaloneServer(installation, mimimumStability, "standalone-local.xml"));
+                try {
+                    if (!Files.exists(outputDir)) {
+                        Files.createDirectories(outputDir);
+                    }
+                    Files.write(outputDir.resolve("model.json"), result.toJSONString(false).getBytes());
+                } catch (IOException ex) {
+                    throw new ProvisioningException(ex);
+                }
             } else {
                 throw new ProvisioningException("The installation does not include standalone configuration");
             }
@@ -237,8 +253,11 @@ public class FeatureSpecGenerator implements ForkCallback {
         }
         try {
             String mimimumStability = args.length == 4 ? args[3] : null;
-            ModelNode result = readFeatureSpecs(createStandaloneServer(args[0], mimimumStability));
+            ModelNode result = readFeatureSpecs(createStandaloneServer(args[0], mimimumStability, null));
             writeSpecsFile(Paths.get(args[1]), result);
+            ModelNode resultModel = generateModel(createStandaloneServer(args[0], mimimumStability, "standalone-local.xml"));
+            writeModelFile(Paths.get(args[1]).toAbsolutePath().getParent().resolve("model.json"), resultModel);
+            System.out.println("FORKED TO " + Paths.get(args[1]).toAbsolutePath().getParent().resolve("model.json"));
             if (Files.exists(Paths.get(args[0]).resolve(WfConstants.DOMAIN).resolve(WfConstants.CONFIGURATION))) {
                 result = readFeatureSpecs(createEmbeddedHc(args[0], mimimumStability));
                 writeSpecsFile(Paths.get(args[2]), result);
@@ -302,21 +321,53 @@ public class FeatureSpecGenerator implements ForkCallback {
         return spec;
     }
 
-    private static EmbeddedManagedProcess createStandaloneServer(String jbossHome, String minimumStability) {
-        String[] cmdArgs = getCmdArgs(minimumStability);
+    private static EmbeddedManagedProcess createStandaloneServer(String jbossHome, String minimumStability, String config) {
+        String[] cmdArgs = getCmdArgs(minimumStability, config);
         return EmbeddedProcessFactory.createStandaloneServer(jbossHome, null, null, cmdArgs);
     }
 
     private static EmbeddedManagedProcess createEmbeddedHc(String jbossHome, String minimumStability) {
-        String[] cmdArgs = getCmdArgs(minimumStability);
+        String[] cmdArgs = getCmdArgs(minimumStability, null);
         return EmbeddedProcessFactory.createHostController(jbossHome, null, null, cmdArgs);
     }
 
-    private static String[] getCmdArgs(String mimimumStability) {
+    private static String[] getCmdArgs(String mimimumStability, String serverConfig) {
+        List<String> args = new ArrayList<>();
+        args.add("--admin-only");
         if (mimimumStability != null && !mimimumStability.isEmpty()) {
-            return new String[] {"--admin-only", "--stability=" + mimimumStability};
+            args.add("--stability=" + mimimumStability);
         }
-        return new String[] {"--admin-only"};
+        if (serverConfig != null) {
+           args.add("--server-config=" + serverConfig);
+        }
+        return args.toArray(String[]::new);
+    }
+
+    private static ModelNode generateModel(final EmbeddedManagedProcess server) throws ProvisioningException {
+        try {
+            server.start();
+            Boolean all = Boolean.getBoolean("org.wildfly.galleon.complete.model");
+            ModelNode rootAddress = Operations.createAddress().setEmptyList();
+            if(!all) {
+                rootAddress = Operations.createAddress("subsystem", "*");
+            }
+            final ModelNode op = Operations.createOperation("read-resource-description", rootAddress);
+            op.get(ClientConstants.RECURSIVE).set(true);
+            final ModelNode result;
+            try {
+                result = server.getModelControllerClient().execute(op);
+            } catch (IOException e) {
+                throw new ProvisioningException("Failed to read feature descriptions", e);
+            }
+            if(!Operations.isSuccessfulOutcome(result)) {
+                throw new ProvisioningException(Operations.getFailureDescription(result).asString());
+            }
+            return result.get("result");
+        } catch (EmbeddedProcessStartException ex) {
+            throw new ProvisioningException("Failed to read feature spec descriptions", ex);
+        } finally {
+            server.stop();
+        }
     }
 
     private static ModelNode readFeatureSpecs(final EmbeddedManagedProcess server) throws ProvisioningException {
@@ -352,6 +403,14 @@ public class FeatureSpecGenerator implements ForkCallback {
     private void writeSpecsFile(Path specsFile, ModelNode specs) throws ProvisioningException {
         try(BufferedWriter writer = Files.newBufferedWriter(specsFile)) {
             writer.write(specs.asString());
+        } catch (IOException e) {
+            throw new ProvisioningException(Errors.writeFile(specsFile), e);
+        }
+    }
+
+    private void writeModelFile(Path specsFile, ModelNode specs) throws ProvisioningException {
+        try(BufferedWriter writer = Files.newBufferedWriter(specsFile)) {
+            writer.write(specs.toJSONString(false));
         } catch (IOException e) {
             throw new ProvisioningException(Errors.writeFile(specsFile), e);
         }

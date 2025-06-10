@@ -290,6 +290,19 @@ public class FeatureSpecGeneratorInvoker {
             Files.write(wildflyHome.resolve(WfConstants.STANDALONE).resolve(WfConstants.CONFIGURATION).resolve("standalone.xml"), lines);
         }
 
+        // Generate a server config that contains only what this feature-pack brings, used to generate the model description
+        if (buildConfig.hasStandaloneExtensions()) {
+            lines.clear();
+            lines.add("<?xml version='1.0' encoding='UTF-8'?>");
+            lines.add("<server xmlns=\"urn:jboss:domain:6.0\">");
+            lines.add("<extensions>");
+            for (String extension : buildConfig.getStandaloneExtensions()) {
+                lines.add(String.format("<extension module=\"%s\"/>", extension));
+            }
+            lines.add("</extensions>");
+            lines.add("</server>");
+            Files.write(wildflyHome.resolve(WfConstants.STANDALONE).resolve(WfConstants.CONFIGURATION).resolve("standalone-local.xml"), lines);
+        }
         if (!domainExtensions.isEmpty()) {
             lines.clear();
             lines.add("<?xml version='1.0' encoding='UTF-8'?>");

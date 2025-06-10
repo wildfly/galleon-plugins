@@ -152,6 +152,8 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
 
     static final String METADATA_CLASSIFIER = "metadata";
     static final String METADATA_EXTENSION = "json";
+    static final String MODEL_CLASSIFIER = "model";
+    static final String MODEL_EXTENSION = "json";
 
     static boolean isProvided(String module) {
         return module.startsWith("java.")
@@ -550,8 +552,16 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                                     final Path metadataTarget = Paths.get(project.getBuild().getDirectory()).resolve(artifactId + '-'
                                             + versionDir.getFileName() + "-" + METADATA_CLASSIFIER + "." + METADATA_EXTENSION);
                                     generateMetadata(target, desc, metadataTarget);
-                                     debug("Attaching feature-pack metadata %s as a project artifact", metadataTarget);
+                                    debug("Attaching feature-pack metadata %s as a project artifact", metadataTarget);
                                     projectHelper.attachArtifact(project, METADATA_EXTENSION, METADATA_CLASSIFIER, metadataTarget.toFile());
+                                    Path model = Paths.get(project.getBuild().getDirectory()).resolve("model.json");
+                                    if (Files.exists(model)) {
+                                        final Path modelTarget = Paths.get(project.getBuild().getDirectory()).resolve(artifactId + '-'
+                                            + versionDir.getFileName() + "-" + MODEL_CLASSIFIER + "." + MODEL_EXTENSION);
+                                        Files.copy(model, modelTarget);
+                                        debug("Attaching feature-pack model %s as a project artifact", modelTarget);
+                                        projectHelper.attachArtifact(project, MODEL_EXTENSION, MODEL_CLASSIFIER, modelTarget.toFile());
+                                    }
                                 } catch (Exception ex) {
                                     throw new RuntimeException(ex);
                                 }
@@ -643,32 +653,33 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             }
         }
         if (annot.hasElement("complex-attribute")) {
-           String attribute = annot.getElement("complex-attribute");
-           StringBuilder val = new StringBuilder("{");
+            String attribute = annot.getElement("complex-attribute");
+            StringBuilder val = new StringBuilder("{");
             for (Entry<String, String> entry : config.getParams().entrySet()) {
                 if (!ids.contains(entry.getKey())) {
-                   val.append(" " + entry.getKey() +"="+entry.getValue() + ",");
+                    val.append(" " + entry.getKey() + "=" + entry.getValue() + ",");
                 }
                 //builder.append(entry.getKey()+"="+entry.getValue()+", ");
             }
-            String clean = val.toString().substring(0, val.toString().length() -1) + " }";
+            String clean = val.toString().substring(0, val.toString().length() - 1) + " }";
             Param p = new Param();
             //p.description = spec.getParam(attribute).getDescription();
             p.name = attribute;
             p.value = clean;
             op.params.put(p.name, p);
-        }
-        //builder.append(":"+annot.getElement("name"));
-        //builder.append("(");
-        for(Entry<String, String> entry : config.getParams().entrySet()) {
-            if (!ids.contains(entry.getKey())) {
-                Param p = new Param();
-                p.description = spec.getParam(entry.getKey()).getDescription();
-                p.name = entry.getKey();
-                p.value = entry.getValue();
-                op.params.put(p.name, p);
+        } else {
+            //builder.append(":"+annot.getElement("name"));
+            //builder.append("(");
+            for (Entry<String, String> entry : config.getParams().entrySet()) {
+                if (!ids.contains(entry.getKey())) {
+                    Param p = new Param();
+                    p.description = spec.getParam(entry.getKey()).getDescription();
+                    p.name = entry.getKey();
+                    p.value = entry.getValue();
+                    op.params.put(p.name, p);
+                }
+                //builder.append(entry.getKey()+"="+entry.getValue()+", ");
             }
-            //builder.append(entry.getKey()+"="+entry.getValue()+", ");
         }
         return op;
         //builder.append(")");
@@ -734,7 +745,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     private static class ModelItem {
         String name;
         String description;
-        Map<String,ModelItem> children = new TreeMap<>();
+        Map<String, Map<String,ModelItem>> children = new TreeMap<>();
         Map<String, Param> attributes = new TreeMap<>();
         ModelItem(String name) {
             this.name = name;
@@ -748,16 +759,24 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             for(Operation op : ops) {
                 ModelItem current = root;
                 for(String item : op.address) {
-                    ModelItem i = current.children.get(item);
-                    if(i == null) {
-                        ModelItem child = new ModelItem(item);
+                    String[] split = item.split("=");
+                    String type = split[0];
+                    String name = split[1];
+                    Map<String, ModelItem> map = current.children.get(type);
+                    if(map == null) {
+                        map = new TreeMap<>();
+                        current.children.put(type, map);
+                    }
+                    ModelItem child = map.get(name);
+                    if(child == null) {
+                        child = new ModelItem(name);
                         if(op.description != null) {
                             child.description = op.description;
                         }
-                        current.children.put(item, child);
+                        map.put(name, child);
                         current = child;
                     } else {
-                        current = i;
+                        current = child;
                     }
                 }
                 // We have built the address fully.
@@ -778,30 +797,34 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         ObjectNode export(ModelItem item) {
             ObjectMapper mapper = new ObjectMapper();
             ObjectNode model = mapper.createObjectNode();
-            model.put("address", item.name);
             if(item.description != null) {
                 model.put("description", item.description);
             }
             if (!item.attributes.isEmpty()) {
-                ArrayNode attributesNode = mapper.createArrayNode();
-                model.putIfAbsent("attributes", attributesNode);
+                //ArrayNode attributesNode = mapper.createArrayNode();
+                //model.putIfAbsent("attributes", attributesNode);
                 for (Entry<String, Param> entry : item.attributes.entrySet()) {
                     Param p = entry.getValue();
-                    ObjectNode pNode = mapper.createObjectNode();
-                    pNode.put("name", p.name);
-                    pNode.put("value", p.value);
-                    if (p.description != null) {
-                        pNode.put("description", p.description);
-                    }
-                    attributesNode.add(pNode);
+//                    ObjectNode pNode = mapper.createObjectNode();
+//                    pNode.put("name", p.name);
+//                    pNode.put("value", p.value);
+//                    if (p.description != null) {
+//                        pNode.put("description", p.description);
+//                    }
+//                    attributesNode.add(pNode);
+                    model.put(p.name, p.value);
                 }
             }
             if (!item.children.isEmpty()) {
-                ArrayNode childrenNode = mapper.createArrayNode();
-                model.putIfAbsent("children", childrenNode);
+                //ArrayNode childrenNode = mapper.createArrayNode();
+                //model.putIfAbsent("children", childrenNode);
                 for (String k : item.children.keySet()) {
-                    ModelItem child = item.children.get(k);
-                    childrenNode.add(export(child));
+                    ObjectNode typeNode = mapper.createObjectNode();
+                    model.putIfAbsent(k, typeNode);
+                    Map<String, ModelItem> childs = item.children.get(k);
+                    for(Entry<String, ModelItem> c : childs.entrySet()) {
+                        typeNode.putIfAbsent(c.getKey(), export(c.getValue()));
+                    }
                 }
             }
             return model;
