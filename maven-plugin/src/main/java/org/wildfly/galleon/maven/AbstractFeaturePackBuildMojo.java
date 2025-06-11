@@ -613,7 +613,18 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         generateMetadata(desc, pl, metadataTarget);
     }
 
-    private Operation buildModel(FeatureSpec spec, List<ConfigItem> parents, FeatureConfig config) throws ProvisioningDescriptionException {
+    static class Configuration implements Comparable<Configuration> {
+        String address;
+        Set<String> systemProperties = new TreeSet<>();
+        Set<String> envVariables = new TreeSet<>();
+
+        @Override
+        public int compareTo(Configuration t) {
+            return address.compareTo(t.address);
+        }
+    }
+
+    private Operation buildModel(FeatureSpec spec, List<ConfigItem> parents, FeatureConfig config, Map<String, Configuration> configuration) throws ProvisioningDescriptionException {
         System.out.println("FEATURE-SPEC " + spec.getName());
         String description = spec.getDescription();
         FeatureAnnotation annot = spec.getAnnotation("jboss-op");
@@ -658,6 +669,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             for (Entry<String, String> entry : config.getParams().entrySet()) {
                 if (!ids.contains(entry.getKey())) {
                     val.append(" " + entry.getKey() + "=" + entry.getValue() + ",");
+                    addConfiguration(entry.getKey(), entry.getValue(), op, configuration);
                 }
                 //builder.append(entry.getKey()+"="+entry.getValue()+", ");
             }
@@ -677,6 +689,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                     p.name = entry.getKey();
                     p.value = entry.getValue();
                     op.params.put(p.name, p);
+                    addConfiguration(p.name, p.value, op, configuration);
                 }
                 //builder.append(entry.getKey()+"="+entry.getValue()+", ");
             }
@@ -685,7 +698,89 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         //builder.append(")");
         //return builder.toString();
     }
+    private void addConfiguration(String name, String value, Operation op, Map<String, Configuration> configuration) {
+        List<Set<String>> found = parseValue(value);
+        if (!found.isEmpty()) {
+            StringBuilder k = new StringBuilder("/");
+            for (String a : op.address) {
+                k.append(a).append("/");
+            }
 
+            String key = k.substring(0, k.toString().length() - 1) + "." + name;
+            Configuration s = configuration.get(key);
+            if (s == null) {
+                s = new Configuration();
+                configuration.put(key, s);
+            }
+            s.envVariables.addAll(found.get(0));
+            s.systemProperties.addAll(found.get(1));
+        }
+    }
+     private static List<Set<String>> parseValue(String value) {
+        char[] chars = value.toCharArray();
+        List<Set<String>> lst = new ArrayList<>();
+        Set<String> envs = new TreeSet<>();
+        Set<String> props = new TreeSet<>();
+        boolean expression = false;
+        StringBuilder exp = null;
+        boolean envVar = false;
+        boolean expressionStart = false;
+        for (int i = 0; i < chars.length; i++) {
+            char c = chars[i];
+            if (c == ' ') {
+                continue;
+            }
+            if (expressionStart) {
+                exp = new StringBuilder();
+                String radical = value.substring(i, i + 4);
+                if (radical.equals("env.")) {
+                    envVar = true;
+                    i += 3;
+                } else {
+                    exp.append(c);
+                }
+                expressionStart = false;
+                continue;
+            }
+            if (expression) {
+                switch (c) {
+                    case '}':
+                    case ':':
+                        expression = false;
+                        if (envVar) {
+                            envs.add(exp.toString());
+                        } else {
+                            props.add(exp.toString());
+                        }
+                        envVar = false;
+                        break;
+                    case ',':
+                        expressionStart = true;
+                        if (envVar) {
+                            envs.add(exp.toString());
+                        } else {
+                            props.add(exp.toString());
+                        }
+                        envVar = false;
+                        break;
+                    default:
+                        exp.append(c);
+                        break;
+                }
+            } else {
+                if (c == '$' && chars[i + 1] == '{') {
+                    expression = true;
+                    expressionStart = true;
+                    i += 1;
+                }
+            }
+        }
+        if (!envs.isEmpty() || !props.isEmpty()) {
+            lst.add(envs);
+            lst.add(props);
+        }
+        return lst;
+    }
     private FeatureSpec getFeatureSpec(ProvisioningLayout<FeaturePackLayout> pl, String name) throws ProvisioningException {
         for (FeaturePackLayout layout : pl.getOrderedFeaturePacks()) {
             if(layout.hasFeatureSpec(name)) {
@@ -711,17 +806,17 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         }
         return null;
     }
-    private void generateModelUpdates(List<ConfigItem> items, List<ConfigItem> parents, ProvisioningLayout<FeaturePackLayout> pl, List<Operation> ops) throws ProvisioningDescriptionException, ProvisioningException {
+    private void generateModelUpdates(List<ConfigItem> items, List<ConfigItem> parents, ProvisioningLayout<FeaturePackLayout> pl, List<Operation> ops, Map<String, Configuration> config) throws ProvisioningDescriptionException, ProvisioningException {
         for (ConfigItem i : items) {
             if (i instanceof FeatureConfig) {
                 FeatureConfig fc = (FeatureConfig) i;
                 FeatureSpec fp = getFeatureSpec(pl, fc.getSpecId().getName());
                 //System.out.println("Feature spec of " + fc.getSpecId() + " is " + fc);
-                Operation op = buildModel(fp, parents, fc);
+                Operation op = buildModel(fp, parents, fc, config);
                 ops.add(op);
                 if (!fc.getItems().isEmpty()) {
                     parents.add(fc);
-                    generateModelUpdates(fc.getItems(), parents, pl, ops);
+                    generateModelUpdates(fc.getItems(), parents, pl, ops, config);
                     parents.remove(parents.size() - 1);
                 }
             } else {
@@ -730,12 +825,12 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                     FeatureGroup complete = getFeatureGroup(pl, fg.getName());
                     if (!complete.getItems().isEmpty()) {
                         parents.add(fg);
-                        generateModelUpdates(complete.getItems(), parents, pl, ops);
+                        generateModelUpdates(complete.getItems(), parents, pl, ops, config);
                         parents.remove(parents.size() - 1);
                     }
                     if (!fg.getItems().isEmpty()) {
                         parents.add(fg);
-                        generateModelUpdates(fg.getItems(), parents, pl, ops);
+                        generateModelUpdates(fg.getItems(), parents, pl, ops, config);
                         parents.remove(parents.size() - 1);
                     }
                 }
@@ -848,6 +943,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         fpMetadata.put("version", project.getVersion());
         fpMetadata.put("feature-pack-location", project.getGroupId() + ":" + project.getArtifactId() + ":" + project.getVersion());
         Map<String, List<ConfigLayerSpec>> layerSpecs = new HashMap<>();
+        Map<String, Configuration> config = new TreeMap<>();
         if(addFeaturePacksDependenciesInMetadata) {
             for (FeaturePackLayout layout : pl.getOrderedFeaturePacks()) {
                 Path p = layout.getDir();
@@ -899,7 +995,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
 //                        generateModelUpdates(depSpec.getItems(), new ArrayList<>(), pl, ops);
                         }
                     }
-                    generateModelUpdates(spec.getItems(), new ArrayList<>(), pl, ops);
+                    generateModelUpdates(spec.getItems(), new ArrayList<>(), pl, ops, config);
                     Model m = new Model();
                     m.populate(ops);
                     layerNode.putIfAbsent("managementModel", m.export());
@@ -924,7 +1020,31 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                 layerNode.putIfAbsent("dependencies", depsNode);
             }
         }
-        if(!layers.isEmpty()) {
+        if(!config.isEmpty()) {
+            ArrayNode configNode = mapper.createArrayNode();
+            fpMetadata.set("configuration", configNode);
+            for(Entry<String, Configuration> entry : config.entrySet()) {
+                ObjectNode attNode = mapper.createObjectNode();
+                attNode.put("attribute", entry.getKey());
+                Configuration attConfig = entry.getValue();
+                if(!attConfig.envVariables.isEmpty()) {
+                    ArrayNode envNode = mapper.createArrayNode();
+                    attNode.putIfAbsent("environmentVariables", envNode);
+                    for(String env : attConfig.envVariables) {
+                        envNode.add(env);
+                    }
+                }
+                if(!attConfig.systemProperties.isEmpty()) {
+                    ArrayNode propsNode = mapper.createArrayNode();
+                    attNode.putIfAbsent("systemProperties", propsNode);
+                    for(String prop : attConfig.systemProperties) {
+                        propsNode.add(prop);
+                    }
+                }
+                configNode.add(attNode);
+            }
+        }
+        if (!layers.isEmpty()) {
             fpMetadata.putIfAbsent("layers", layers);
         }
         debug("Generating metadata definition %s as a project artifact", metadataTarget);
