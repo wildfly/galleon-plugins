@@ -628,6 +628,9 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         System.out.println("FEATURE-SPEC " + spec.getName());
         String description = spec.getDescription();
         FeatureAnnotation annot = spec.getAnnotation("jboss-op");
+        if(annot == null) {
+            return new Operation();
+        }
         List<String> addr = annot.getElementAsList("addr-params");
         Operation op = new Operation();
         Set<String> ids = new HashSet<>();
@@ -991,8 +994,8 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                             depNode.put("optional", dep.isOptional());
                             depsNode.add(depNode);
 //                        System.out.println("********* Dep spec " + dep.getName());
-//                        ConfigLayerSpec depSpec = getLayer(pl, dep.getName());
-//                        generateModelUpdates(depSpec.getItems(), new ArrayList<>(), pl, ops);
+                        ConfigLayerSpec depSpec = getLayer(pl, dep.getName());
+                        generateConfigRecursive(depSpec, config, pl, new HashSet<>());
                         }
                     }
                     generateModelUpdates(spec.getItems(), new ArrayList<>(), pl, ops, config);
@@ -1051,6 +1054,17 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         mapper.writerWithDefaultPrettyPrinter().writeValue(metadataTarget.toFile(), fpMetadata);
     }
 
+    private void generateConfigRecursive(ConfigLayerSpec layer, Map<String, Configuration> config, ProvisioningLayout<FeaturePackLayout> pl, Set<String> seen) throws ProvisioningException {
+        if(seen.contains(layer.getName())) {
+            return;
+        }
+        seen.add(layer.getName());
+        generateModelUpdates(layer.getItems(), new ArrayList<>(), pl, new ArrayList<>(), config);
+        for (GalleonLayerDependency dep : layer.getLayerDeps()) {
+            ConfigLayerSpec depSpec = getLayer(pl, dep.getName());
+            generateConfigRecursive(depSpec, config, pl, seen);
+        }
+    }
     private static String formatIgnoreMessage(String kind, String name, String pkgName) {
         return formatMessage(kind, name, pkgName, MSG_PACKAGE_IGNORED);
     }
