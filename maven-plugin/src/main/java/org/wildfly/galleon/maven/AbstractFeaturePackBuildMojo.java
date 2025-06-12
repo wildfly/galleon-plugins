@@ -626,7 +626,6 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
 
     private Operation buildModel(FeatureSpec spec, List<ConfigItem> parents, FeatureConfig config, Map<String, Configuration> configuration) throws ProvisioningDescriptionException {
         System.out.println("FEATURE-SPEC " + spec.getName());
-        String description = spec.getDescription();
         FeatureAnnotation annot = spec.getAnnotation("jboss-op");
         if(annot == null) {
             return new Operation();
@@ -634,9 +633,6 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         List<String> addr = annot.getElementAsList("addr-params");
         Operation op = new Operation();
         Set<String> ids = new HashSet<>();
-        if(description != null) {
-            op.description = description;
-        }
         for(String a : addr) {
             FeatureParameterSpec fps = spec.getParam(a);
             ids.add(a);
@@ -688,7 +684,6 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             for (Entry<String, String> entry : config.getParams().entrySet()) {
                 if (!ids.contains(entry.getKey())) {
                     Param p = new Param();
-                    p.description = spec.getParam(entry.getKey()).getDescription();
                     p.name = entry.getKey();
                     p.value = entry.getValue();
                     op.params.put(p.name, p);
@@ -868,9 +863,6 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                     ModelItem child = map.get(name);
                     if(child == null) {
                         child = new ModelItem(name);
-                        if(op.description != null) {
-                            child.description = op.description;
-                        }
                         map.put(name, child);
                         current = child;
                     } else {
@@ -930,13 +922,11 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     }
     private static class Param {
         String name;
-        String description;
         String value;
     }
     private static class Operation {
         List<String> address = new ArrayList<>();
         Map<String, Param> params = new HashMap<>();
-        String description;
     }
     private void generateMetadata(FeaturePackDescription desc, ProvisioningLayout<FeaturePackLayout> pl, Path metadataTarget) throws Exception {
         ObjectMapper mapper = new ObjectMapper();
