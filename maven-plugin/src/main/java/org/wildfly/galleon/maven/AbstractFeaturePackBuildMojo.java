@@ -286,6 +286,9 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     @Parameter(alias = "add-feature-packs-dependencies-in-metadata", required = false, defaultValue = "false")
     protected boolean addFeaturePacksDependenciesInMetadata;
 
+    @Parameter(alias = "feature-pack-description", required = false)
+    protected String featurePackDescription;
+
     private MavenProjectArtifactVersions artifactVersions;
 
     private Map<String, FeaturePackDescription> fpDependencies = Collections.emptyMap();
@@ -935,6 +938,9 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         mapper.enable(SerializationFeature.INDENT_OUTPUT);
         fpMetadata.put("version", project.getVersion());
         fpMetadata.put("feature-pack-location", project.getGroupId() + ":" + project.getArtifactId() + ":" + project.getVersion());
+        if (featurePackDescription != null) {
+           fpMetadata.put("description", featurePackDescription);
+        }
         Map<String, List<ConfigLayerSpec>> layerSpecs = new HashMap<>();
         if(addFeaturePacksDependenciesInMetadata) {
             for (FeaturePackLayout layout : pl.getOrderedFeaturePacks()) {
