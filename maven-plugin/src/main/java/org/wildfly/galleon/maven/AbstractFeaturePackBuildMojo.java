@@ -946,7 +946,6 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         fpMetadata.put("version", project.getVersion());
         fpMetadata.put("feature-pack-location", project.getGroupId() + ":" + project.getArtifactId() + ":" + project.getVersion());
         Map<String, List<ConfigLayerSpec>> layerSpecs = new HashMap<>();
-        Map<String, Configuration> config = new TreeMap<>();
         if(addFeaturePacksDependenciesInMetadata) {
             for (FeaturePackLayout layout : pl.getOrderedFeaturePacks()) {
                 Path p = layout.getDir();
@@ -975,6 +974,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             ObjectNode layerNode = null;
             ArrayNode depsNode = null;
             boolean propertiesAdded = false;
+            Map<String, Configuration> config = new TreeMap<>();
             for (ConfigLayerSpec spec : entry.getValue()) {
                 System.out.println("***************** LAYER " + spec.getName());
                 String category = spec.getProperties().get("org.wildfly.category");
@@ -1017,36 +1017,37 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                         }
                         layerNode.putIfAbsent("properties", propertiesNode);
                     }
+                    if (!config.isEmpty()) {
+                        ArrayNode configNode = mapper.createArrayNode();
+                        layerNode.set("configuration", configNode);
+                        for (Entry<String, Configuration> configEntry : config.entrySet()) {
+                            ObjectNode attNode = mapper.createObjectNode();
+                            attNode.put("attribute", configEntry.getKey());
+                            Configuration attConfig = configEntry.getValue();
+                            if (!attConfig.envVariables.isEmpty()) {
+                                ArrayNode envNode = mapper.createArrayNode();
+                                attNode.putIfAbsent("environmentVariables", envNode);
+                                for (String env : attConfig.envVariables) {
+                                    envNode.add(env);
+                                }
+                            }
+                            if (!attConfig.systemProperties.isEmpty()) {
+                                ArrayNode propsNode = mapper.createArrayNode();
+                                attNode.putIfAbsent("systemProperties", propsNode);
+                                for (String prop : attConfig.systemProperties) {
+                                    propsNode.add(prop);
+                                }
+                            }
+                            configNode.add(attNode);
+                        }
+                    }
                 }
             }
             if (depsNode != null && layerNode != null) {
                 layerNode.putIfAbsent("dependencies", depsNode);
             }
         }
-        if(!config.isEmpty()) {
-            ArrayNode configNode = mapper.createArrayNode();
-            fpMetadata.set("configuration", configNode);
-            for(Entry<String, Configuration> entry : config.entrySet()) {
-                ObjectNode attNode = mapper.createObjectNode();
-                attNode.put("attribute", entry.getKey());
-                Configuration attConfig = entry.getValue();
-                if(!attConfig.envVariables.isEmpty()) {
-                    ArrayNode envNode = mapper.createArrayNode();
-                    attNode.putIfAbsent("environmentVariables", envNode);
-                    for(String env : attConfig.envVariables) {
-                        envNode.add(env);
-                    }
-                }
-                if(!attConfig.systemProperties.isEmpty()) {
-                    ArrayNode propsNode = mapper.createArrayNode();
-                    attNode.putIfAbsent("systemProperties", propsNode);
-                    for(String prop : attConfig.systemProperties) {
-                        propsNode.add(prop);
-                    }
-                }
-                configNode.add(attNode);
-            }
-        }
+
         if (!layers.isEmpty()) {
             fpMetadata.putIfAbsent("layers", layers);
         }
