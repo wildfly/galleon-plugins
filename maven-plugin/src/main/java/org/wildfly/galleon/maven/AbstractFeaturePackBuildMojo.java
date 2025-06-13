@@ -63,6 +63,7 @@ import nu.xom.ParsingException;
 import org.apache.maven.artifact.DefaultArtifact;
 import org.apache.maven.artifact.handler.DefaultArtifactHandler;
 import org.apache.maven.execution.MavenSession;
+import org.apache.maven.model.License;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
@@ -101,6 +102,7 @@ import org.jboss.galleon.maven.plugin.FpMavenErrors;
 import org.jboss.galleon.maven.plugin.util.MavenArtifactRepositoryManager;
 import org.jboss.galleon.spec.ConfigLayerSpec;
 import org.jboss.galleon.spec.FeatureAnnotation;
+import org.jboss.galleon.spec.FeatureId;
 import org.jboss.galleon.spec.FeaturePackPlugin;
 import org.jboss.galleon.spec.FeaturePackSpec;
 import org.jboss.galleon.spec.FeatureParameterSpec;
@@ -615,6 +617,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
 
     static class Configuration implements Comparable<Configuration> {
         String address;
+        String attribute;
         Set<String> systemProperties = new TreeSet<>();
         Set<String> envVariables = new TreeSet<>();
 
@@ -626,6 +629,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
 
     private Operation buildModel(FeatureSpec spec, List<ConfigItem> parents, FeatureConfig config, Map<String, Configuration> configuration) throws ProvisioningDescriptionException {
         System.out.println("FEATURE-SPEC " + spec.getName());
+
         FeatureAnnotation annot = spec.getAnnotation("jboss-op");
         if(annot == null) {
             return new Operation();
@@ -636,11 +640,11 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         for(String a : addr) {
             FeatureParameterSpec fps = spec.getParam(a);
             ids.add(a);
-            if("GLN_UNDEFINED".equals(fps.getDefaultValue())) {
-                continue;
-            }
-            if(fps.hasDefaultValue()) {
-                op.address.add(a+"="+fps.getDefaultValue());
+            if(fps.hasDefaultValue() && !"GLN_UNDEFINED".equals(fps.getDefaultValue())) {
+                AddressItem ai = new AddressItem();
+                ai.type = a;
+                ai.name = fps.getDefaultValue();
+                op.address.add(ai);
             } else {
                 String value = config.getParam(a);
                 if(value == null) {
@@ -655,11 +659,20 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                         }
                     }
                     if(value == null) {
-                        System.out.println("ERROR!!!!!!!!!");
-                            throw new RuntimeException("Notcorrect parent for spec " + spec.getName() + "\nConfig is " + config + "\n Parents " + parents);
+                        if ("GLN_UNDEFINED".equals(fps.getDefaultValue())) {
+                            continue;
+                        }
+                        throw new RuntimeException("Not correct parent for spec " + spec.getName() + "\nConfig is " + config + "\n Parents " + parents);
                     }
                 }
-                op.address.add(a+"="+value);
+                AddressItem ai = new AddressItem();
+                ai.type = a;
+                ai.name = value;
+                // We have 1 case: subsystem.elytron.permission-set.permissions
+                if(!a.equals("subsystem")) {
+                    ai.isNamed = true;
+                }
+                op.address.add(ai);
             }
         }
         if (annot.hasElement("complex-attribute")) {
@@ -700,14 +713,18 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         List<Set<String>> found = parseValue(value);
         if (!found.isEmpty()) {
             StringBuilder k = new StringBuilder("/");
-            for (String a : op.address) {
-                k.append(a).append("/");
+            for (AddressItem a : op.address) {
+                k.append(a.type);
+                k.append("=");
+                k.append(a.isNamed ? "*" : a.name);
+                k.append("/");
             }
 
-            String key = k.substring(0, k.toString().length() - 1) + "." + name;
+            String key = k.substring(0, k.toString().length() - 1) + "@@@" + name;
             Configuration s = configuration.get(key);
             if (s == null) {
                 s = new Configuration();
+                s.attribute = name;
                 configuration.put(key, s);
             }
             s.envVariables.addAll(found.get(0));
@@ -809,13 +826,19 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             if (i instanceof FeatureConfig) {
                 FeatureConfig fc = (FeatureConfig) i;
                 FeatureSpec fp = getFeatureSpec(pl, fc.getSpecId().getName());
-                //System.out.println("Feature spec of " + fc.getSpecId() + " is " + fc);
-                Operation op = buildModel(fp, parents, fc, config);
-                ops.add(op);
-                if (!fc.getItems().isEmpty()) {
-                    parents.add(fc);
-                    generateModelUpdates(fc.getItems(), parents, pl, ops, config);
-                    parents.remove(parents.size() - 1);
+                if(fp == null) {
+                    // Can happen in tests.
+                    continue;
+                }
+                boolean excluded = isExcluded(parents, fp, fc);
+                if (!excluded) {
+                    Operation op = buildModel(fp, parents, fc, config);
+                    ops.add(op);
+                    if (!fc.getItems().isEmpty()) {
+                        parents.add(fc);
+                        generateModelUpdates(fc.getItems(), parents, pl, ops, config);
+                        parents.remove(parents.size() - 1);
+                    }
                 }
             } else {
                 if (i instanceof FeatureGroup) {
@@ -835,35 +858,85 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             }
         }
     }
+    private boolean isExcluded(List<ConfigItem> parents, FeatureSpec fs, FeatureConfig fc) throws ProvisioningDescriptionException {
+        for (int i = parents.size() - 1; i >= 0; i--) {
+            ConfigItem p = parents.get(i);
+            if (p instanceof FeatureGroup) {
+                FeatureGroup fg = (FeatureGroup) p;
+                if (fg.hasExcludedSpecs()) {
+                    if (fg.getExcludedSpecs().contains(fc.getSpecId())) {
+                        return true;
+                    }
+                }
+                if (fg.hasExcludedFeatures()) {
+                    for(FeatureId id : fg.getExcludedFeatures().keySet()) {
+                        if (id.getSpec().getName().equals(fc.getSpecId().getName())) {
+                            // Build the featureId
+                            Map<String, String> idParams = new HashMap<>();
+                            for(String idParam : id.getParamNames()) {
+                                if(fc.getParam(idParam) != null) {
+                                    idParams.put(idParam, fc.getParam(idParam));
+                                } else {
+                                    String value = null;
+                                    for (int ii = parents.size() - 1; ii >= 0; ii--) {
+                                        ConfigItem parent = parents.get(ii);
+                                        if (parent instanceof FeatureConfig) {
+                                            FeatureConfig pc = (FeatureConfig) parent;
+                                            value = pc.getParam(idParam);
+                                            if (value != null) {
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    if(value == null) {
+                                        // Is it a default value...
+                                        FeatureParameterSpec fparamSpec = fs.getParam(idParam);
+                                        value = fparamSpec.getDefaultValue();
+                                    }
+                                    idParams.put(idParam, value);
+                                }
+                            }
+                            FeatureId fid = new FeatureId(fc.getSpecId().getName(), idParams);
+                            System.out.println("COMPUTED FEATURE ID " + fid);
+                            System.out.println("EXCLUDED FEATURE ID " + id);
+                            if (fid.equals(id)) {
+                                System.out.println("EXCLUDED");
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
     private static class ModelItem {
-        String name;
         String description;
+        AddressItem address;
         Map<String, Map<String,ModelItem>> children = new TreeMap<>();
         Map<String, Param> attributes = new TreeMap<>();
-        ModelItem(String name) {
-            this.name = name;
+        ModelItem(AddressItem address) {
+            this.address= address;
         }
     }
     private static class Model {
-        ModelItem root = new ModelItem("/");
+        ModelItem root = new ModelItem(new AddressItem());
         Model() {
         }
         void populate(List<Operation> ops) {
             for(Operation op : ops) {
                 ModelItem current = root;
-                for(String item : op.address) {
-                    String[] split = item.split("=");
-                    String type = split[0];
-                    String name = split[1];
-                    Map<String, ModelItem> map = current.children.get(type);
+                for(AddressItem item : op.address) {
+                    Map<String, ModelItem> map = current.children.get(item.type);
                     if(map == null) {
                         map = new TreeMap<>();
-                        current.children.put(type, map);
+                        current.children.put(item.type, map);
                     }
-                    ModelItem child = map.get(name);
+                    ModelItem child = map.get(item.name);
                     if(child == null) {
-                        child = new ModelItem(name);
-                        map.put(name, child);
+                        child = new ModelItem(item);
+                        map.put(item.name, child);
                         current = child;
                     } else {
                         current = child;
@@ -879,30 +952,30 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                 ObjectMapper mapper = new ObjectMapper();
                 return mapper.createObjectNode();
             } else {
-                ObjectNode model = export(root);
+                ObjectNode model = export("", root);
                 return model;
             }
         }
 
-        ObjectNode export(ModelItem item) {
+        ObjectNode export(String radical, ModelItem item) {
             ObjectMapper mapper = new ObjectMapper();
             ObjectNode model = mapper.createObjectNode();
             if(item.description != null) {
                 model.put("description", item.description);
             }
+            String currentAddress = radical +(radical.endsWith("/") ? "" : "/")+item.address;
+            model.put("_address", currentAddress);
             if (!item.attributes.isEmpty()) {
-                //ArrayNode attributesNode = mapper.createArrayNode();
-                //model.putIfAbsent("attributes", attributesNode);
+                ArrayNode attributesNode = mapper.createArrayNode();
+                model.putIfAbsent("attributes", attributesNode);
                 for (Entry<String, Param> entry : item.attributes.entrySet()) {
                     Param p = entry.getValue();
-//                    ObjectNode pNode = mapper.createObjectNode();
-//                    pNode.put("name", p.name);
-//                    pNode.put("value", p.value);
-//                    if (p.description != null) {
-//                        pNode.put("description", p.description);
-//                    }
-//                    attributesNode.add(pNode);
-                    model.put(p.name, p.value);
+                    ObjectNode pNode = mapper.createObjectNode();
+                    pNode.put("name", p.name);
+                    pNode.put("value", p.value);
+                    pNode.put("_address", currentAddress + "@@@" + p.name);
+                    attributesNode.add(pNode);
+                    //model.put(p.name, p.value);
                 }
             }
             if (!item.children.isEmpty()) {
@@ -913,7 +986,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                     model.putIfAbsent(k, typeNode);
                     Map<String, ModelItem> childs = item.children.get(k);
                     for(Entry<String, ModelItem> c : childs.entrySet()) {
-                        typeNode.putIfAbsent(c.getKey(), export(c.getValue()));
+                        typeNode.putIfAbsent(c.getKey(), export(currentAddress, c.getValue()));
                     }
                 }
             }
@@ -924,8 +997,25 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         String name;
         String value;
     }
+    private static class AddressItem {
+        String type;
+        String name;
+        boolean isNamed;
+
+        @Override
+        public String toString() {
+            if(type == null) {
+                return "";
+            }
+            if(isNamed) {
+                return type +"=*";
+            } else {
+                return type +"="+ name;
+            }
+        }
+    }
     private static class Operation {
-        List<String> address = new ArrayList<>();
+        List<AddressItem> address = new ArrayList<>();
         Map<String, Param> params = new HashMap<>();
     }
     private void generateMetadata(FeaturePackDescription desc, ProvisioningLayout<FeaturePackLayout> pl, Path metadataTarget) throws Exception {
@@ -936,13 +1026,31 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         fpMetadata.put("version", project.getVersion());
         fpMetadata.put("feature-pack-location", project.getGroupId() + ":" + project.getArtifactId() + ":" + project.getVersion());
         fpMetadata.put("description", project.getDescription());
+        if(project.getLicenses() != null && !project.getLicenses().isEmpty()) {
+            ArrayNode licences = mapper.createArrayNode();
+            for(License licence : project.getLicenses()) {
+                licences.add(licence.getName());
+            }
+            fpMetadata.set("license", licences);
+        } else {
+            fpMetadata.set("license", mapper.createArrayNode());
+        }
+        if (project.getUrl() != null) {
+            fpMetadata.put("url", project.getUrl());
+        } else {
+            fpMetadata.put("url", "");
+        }
+        if(project.getScm()!= null && project.getScm().getUrl() != null) {
+            fpMetadata.put("scm", project.getScm().getUrl());
+        } else {
+            fpMetadata.put("scm", "");
+        }
         fpMetadata.put("name", project.getName());
         Map<String, List<ConfigLayerSpec>> layerSpecs = new HashMap<>();
         if(addFeaturePacksDependenciesInMetadata) {
             for (FeaturePackLayout layout : pl.getOrderedFeaturePacks()) {
                 Path p = layout.getDir();
                 FeaturePackDescription descDep = FeaturePackDescriber.describeFeaturePack(p, "UTF-8");
-                System.out.println("FP " + descDep.getFPID());
                 for (ConfigLayerSpec descLayer : descDep.getLayers()) {
                     List<ConfigLayerSpec> specs = layerSpecs.get(descLayer.getId().getName());
                     if(specs == null) {
@@ -988,9 +1096,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                             depNode.put("name", dep.getName());
                             depNode.put("optional", dep.isOptional());
                             depsNode.add(depNode);
-//                        System.out.println("********* Dep spec " + dep.getName());
-                        ConfigLayerSpec depSpec = getLayer(pl, dep.getName());
-                        //generateConfigRecursive(depSpec, config, pl, new HashSet<>());
+                            ConfigLayerSpec depSpec = getLayer(pl, dep.getName());
                         }
                     }
                     generateModelUpdates(spec.getItems(), new ArrayList<>(), pl, ops, config);
@@ -1017,7 +1123,8 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                         layerNode.set("configuration", configNode);
                         for (Entry<String, Configuration> configEntry : config.entrySet()) {
                             ObjectNode attNode = mapper.createObjectNode();
-                            attNode.put("attribute", configEntry.getKey());
+                            attNode.put("_address", configEntry.getKey());
+                            attNode.put("attribute", configEntry.getValue().attribute);
                             Configuration attConfig = configEntry.getValue();
                             if (!attConfig.envVariables.isEmpty()) {
                                 ArrayNode envNode = mapper.createArrayNode();
