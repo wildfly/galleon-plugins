@@ -942,9 +942,9 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             for(License licence : project.getLicenses()) {
                 licences.add(licence.getName());
             }
-            fpMetadata.set("licence", licences);
+            fpMetadata.set("license", licences);
         } else {
-            fpMetadata.set("licence", mapper.createArrayNode());
+            fpMetadata.set("license", mapper.createArrayNode());
         }
         if (project.getUrl() != null) {
             fpMetadata.put("url", project.getUrl());
