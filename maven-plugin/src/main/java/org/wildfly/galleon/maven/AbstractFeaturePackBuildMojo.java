@@ -970,6 +970,9 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             for (ConfigLayerSpec spec : entry.getValue()) {
                 System.out.println("***************** LAYER " + spec.getName());
                 String category = spec.getProperties().get("org.wildfly.category");
+                if (category == null) {
+                   category = "Internal";
+                }
                 if (category != null) {
                     if(layerNode == null) {
                         layerNode = mapper.createObjectNode();
@@ -987,7 +990,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                             depsNode.add(depNode);
 //                        System.out.println("********* Dep spec " + dep.getName());
                         ConfigLayerSpec depSpec = getLayer(pl, dep.getName());
-                        generateConfigRecursive(depSpec, config, pl, new HashSet<>());
+                        //generateConfigRecursive(depSpec, config, pl, new HashSet<>());
                         }
                     }
                     generateModelUpdates(spec.getItems(), new ArrayList<>(), pl, ops, config);
@@ -1031,6 +1034,20 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                                 }
                             }
                             configNode.add(attNode);
+                        }
+                    }
+                    if (spec.hasPackageDeps()) {
+                        ArrayNode packagesNode = mapper.createArrayNode();
+                        layerNode.putIfAbsent("packages", packagesNode);
+                        if (!spec.getLocalPackageDeps().isEmpty()) {
+                            for (PackageDependencySpec p : spec.getLocalPackageDeps()) {
+                                packagesNode.add(p.getName());
+                            }
+                        }
+                        for (String origin : spec.getPackageOrigins()) {
+                            for (PackageDependencySpec p : spec.getExternalPackageDeps(origin)) {
+                                packagesNode.add(p.getName());
+                            }
                         }
                     }
                 }
