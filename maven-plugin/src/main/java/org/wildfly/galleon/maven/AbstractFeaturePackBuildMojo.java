@@ -63,6 +63,7 @@ import nu.xom.ParsingException;
 import org.apache.maven.artifact.DefaultArtifact;
 import org.apache.maven.artifact.handler.DefaultArtifactHandler;
 import org.apache.maven.execution.MavenSession;
+import org.apache.maven.model.License;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
@@ -936,6 +937,25 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         fpMetadata.put("version", project.getVersion());
         fpMetadata.put("feature-pack-location", project.getGroupId() + ":" + project.getArtifactId() + ":" + project.getVersion());
         fpMetadata.put("description", project.getDescription());
+        if(project.getLicenses() != null && !project.getLicenses().isEmpty()) {
+            ArrayNode licences = mapper.createArrayNode();
+            for(License licence : project.getLicenses()) {
+                licences.add(licence.getName());
+            }
+            fpMetadata.set("licence", licences);
+        } else {
+            fpMetadata.set("licence", mapper.createArrayNode());
+        }
+        if (project.getUrl() != null) {
+            fpMetadata.put("url", project.getUrl());
+        } else {
+            fpMetadata.put("url", "");
+        }
+        if(project.getScm()!= null && project.getScm().getUrl() != null) {
+            fpMetadata.put("scm", project.getScm().getUrl());
+        } else {
+            fpMetadata.put("scm", "");
+        }
         fpMetadata.put("name", project.getName());
         Map<String, List<ConfigLayerSpec>> layerSpecs = new HashMap<>();
         if(addFeaturePacksDependenciesInMetadata) {
