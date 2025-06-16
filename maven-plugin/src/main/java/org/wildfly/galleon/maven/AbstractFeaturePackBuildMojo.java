@@ -810,6 +810,10 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             if (i instanceof FeatureConfig) {
                 FeatureConfig fc = (FeatureConfig) i;
                 FeatureSpec fp = getFeatureSpec(pl, fc.getSpecId().getName());
+                if(fp == null) {
+                    // Can happen in tests.
+                    continue;
+                }
                 //System.out.println("Feature spec of " + fc.getSpecId() + " is " + fc);
                 Operation op = buildModel(fp, parents, fc, config);
                 ops.add(op);
