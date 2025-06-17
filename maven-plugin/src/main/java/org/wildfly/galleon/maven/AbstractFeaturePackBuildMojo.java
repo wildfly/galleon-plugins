@@ -720,7 +720,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                 k.append("/");
             }
 
-            String key = k.substring(0, k.toString().length() - 1);
+            String key = k.substring(0, k.toString().length() - 1) + "@@@" + name;
             Configuration s = configuration.get(key);
             if (s == null) {
                 s = new Configuration();
