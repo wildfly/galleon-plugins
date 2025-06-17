@@ -74,6 +74,7 @@ public class FeatureSpecGenerator implements ForkCallback {
     private Path standaloneSpecsFile;
     private Path domainSpecsFile;
     private String mimimumStability;
+    private String description;
 
     String getBranchId(String spec, int dots) {
         int i = 0;
@@ -141,13 +142,14 @@ public class FeatureSpecGenerator implements ForkCallback {
     }
 
     public FeatureSpecGenerator(String installation, Path outputDir, Map<String, Path> inheritedSpecs,
-            String mimimumStability, boolean fork, boolean debug) {
+            String mimimumStability, String description, boolean fork, boolean debug) {
         this.installation = installation;
         this.outputDir = outputDir;
         this.fork = fork;
         this.debug = debug;
         this.inheritedSpecs = inheritedSpecs;
         this.mimimumStability = mimimumStability;
+        this.description = description == null ? "" : description;
     }
 
     public int generateSpecs() throws ProvisioningException {
@@ -185,7 +187,7 @@ public class FeatureSpecGenerator implements ForkCallback {
         ModelNode domainRoots = null;
         if (fork) {
             String minStab = mimimumStability == null ? "" : mimimumStability;
-            ForkedEmbeddedUtil.fork(this, debug, getStoredSystemProps(), installation, getStandaloneSpecsFile().toString(), getDomainSpecsFile().toString(), minStab);
+            ForkedEmbeddedUtil.fork(this, debug, getStoredSystemProps(), installation, getStandaloneSpecsFile().toString(), getDomainSpecsFile().toString(), description , minStab);
             standaloneFeatures = readSpecsFile(getStandaloneSpecsFile());
             Path model = getStandaloneSpecsFile().getParent().resolve("model.json");
             try {
@@ -202,7 +204,7 @@ public class FeatureSpecGenerator implements ForkCallback {
             if (Files.exists(home.resolve(WfConstants.STANDALONE).resolve(WfConstants.CONFIGURATION))) {
                 standaloneFeatures = readFeatureSpecs(createStandaloneServer(installation, mimimumStability, null));
                 Boolean all = Boolean.getBoolean("org.wildfly.galleon.complete.model");
-                ModelNode result = generateModel(createStandaloneServer(installation, mimimumStability, all ? "standalone.xml" : "standalone-local.xml"), all);
+                ModelNode result = generateModel(createStandaloneServer(installation, mimimumStability, all ? "standalone.xml" : "standalone-local.xml"), all, description);
                 try {
                     if (!Files.exists(outputDir)) {
                         Files.createDirectories(outputDir);
@@ -248,17 +250,18 @@ public class FeatureSpecGenerator implements ForkCallback {
 
     @Override
     public void forkedForEmbedded(String... args) throws ConfigGeneratorException {
-        if (args.length != 3 && args.length != 4) {
+        if(args.length != 4 && args.length != 5) {
             final StringBuilder buf = new StringBuilder();
             StringUtils.append(buf, Arrays.asList(args));
-            throw new IllegalArgumentException("Expected 3-4 arguments but got " + Arrays.asList(args));
+            throw new IllegalArgumentException("Expected 4-5 arguments but got " + Arrays.asList(args));
         }
         try {
-            String mimimumStability = args.length == 4 ? args[3] : null;
+            String description = args.length > 3 ? args[3] : null;
+            String mimimumStability = args.length == 5 ? args[4] : null;
             ModelNode result = readFeatureSpecs(createStandaloneServer(args[0], mimimumStability, null));
             writeSpecsFile(Paths.get(args[1]), result);
             Boolean all = Boolean.getBoolean("org.wildfly.galleon.complete.model");
-            ModelNode resultModel = generateModel(createStandaloneServer(args[0], mimimumStability, all ? "standalone.xml" : "standalone-local.xml"), all);
+            ModelNode resultModel = generateModel(createStandaloneServer(args[0], mimimumStability, all ? "standalone.xml" : "standalone-local.xml"), all, description);
             writeModelFile(Paths.get(args[1]).toAbsolutePath().getParent().resolve("model.json"), resultModel);
             System.out.println("FORKED TO " + Paths.get(args[1]).toAbsolutePath().getParent().resolve("model.json"));
             if (Files.exists(Paths.get(args[0]).resolve(WfConstants.DOMAIN).resolve(WfConstants.CONFIGURATION))) {
@@ -346,13 +349,13 @@ public class FeatureSpecGenerator implements ForkCallback {
         return args.toArray(String[]::new);
     }
 
-    private static ModelNode generateModel(final EmbeddedManagedProcess server, Boolean all) throws ProvisioningException {
+    private static ModelNode generateModel(final EmbeddedManagedProcess server, Boolean all, String description) throws ProvisioningException {
         try {
             server.start();
             if (!all) {
-                return readModel(server);
+                return readModel(server, description);
             }
-            return readAll(server);
+            return readAll(server, description);
         } catch (EmbeddedProcessStartException ex) {
             throw new ProvisioningException("Failed to read feature spec descriptions", ex);
         } finally {
@@ -360,23 +363,27 @@ public class FeatureSpecGenerator implements ForkCallback {
         }
     }
 
-    private static ModelNode readModel(final EmbeddedManagedProcess server) throws ProvisioningException {
+    private static ModelNode readModel(final EmbeddedManagedProcess server, String description) throws ProvisioningException {
         List<String> subsystems = listSubsystems(server);
-        ModelNode result = new ModelNode();
+        ModelNode result = new ModelNode().setEmptyObject();
         ModelNode subsystemNodes = result.get("children").get(ClientConstants.SUBSYSTEM).get("model-description");
-        for (String subsystem : subsystems) {
+        for(String subsystem : subsystems) {
             ModelNode address = Operations.createAddress(ClientConstants.SUBSYSTEM, subsystem);
-            ModelNode subsystemDescription = readResourceDescription(server, address);
+            ModelNode subsystemDescription = readResourceDescription(server, address, true);
             subsystemDescription.get(ClientConstants.ADDRESS).add(address);
             subsystemNodes.get(subsystem).set(subsystemDescription);
         }
         ModelNode address = Operations.createAddress(ClientConstants.DEPLOYMENT);
-        result.get("children").get(ClientConstants.DEPLOYMENT).get("model-description").get("*").set(readResourceDescription(server, address));
+        result.get("children").get(ClientConstants.DEPLOYMENT).get("model-description").get("*").set(readResourceDescription(server, address, true));
         result.remove(ClientConstants.RESULT);
+        ModelNode subsystemsDescription = readResourceDescription(server, Operations.createAddress().setEmptyList(), false);
+        result.get("children").get(ClientConstants.SUBSYSTEM).get("description").set(subsystemsDescription.get("children").get(ClientConstants.SUBSYSTEM).get("description"));
+        result.get("children").get(ClientConstants.DEPLOYMENT).get("description").set(subsystemsDescription.get("children").get(ClientConstants.DEPLOYMENT).get("description"));
+        result.get("description").set(description);
         return result;
     }
 
-    private static ModelNode readAll(final EmbeddedManagedProcess server) throws ProvisioningException {
+    private static ModelNode readAll(final EmbeddedManagedProcess server, String description) throws ProvisioningException {
         ModelNode rootAddress = Operations.createAddress().setEmptyList();
         final ModelNode op = Operations.createOperation("read-resource-description", rootAddress);
         op.get(ClientConstants.RECURSIVE).set(true);
@@ -389,7 +396,9 @@ public class FeatureSpecGenerator implements ForkCallback {
         if (!Operations.isSuccessfulOutcome(result)) {
             throw new ProvisioningException(Operations.getFailureDescription(result).asString());
         }
-        return result.get(ClientConstants.RESULT);
+        final ModelNode  effectiveResult = result.get(ClientConstants.RESULT);
+        effectiveResult.get("description").set(description);
+        return effectiveResult;
     }
 
     private static List<String> listSubsystems(final EmbeddedManagedProcess server) throws ProvisioningException {
@@ -413,9 +422,9 @@ public class FeatureSpecGenerator implements ForkCallback {
         return names;
     }
 
-    private static ModelNode readResourceDescription(final EmbeddedManagedProcess server, ModelNode address) throws ProvisioningException {
+    private static ModelNode readResourceDescription(final EmbeddedManagedProcess server, ModelNode address, boolean recursive) throws ProvisioningException {
         final ModelNode op = Operations.createOperation("read-resource-description", address);
-        op.get(ClientConstants.RECURSIVE).set(true);
+        op.get(ClientConstants.RECURSIVE).set(recursive);
         final ModelNode opResult;
         try {
             opResult = server.getModelControllerClient().execute(op);
