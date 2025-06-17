@@ -639,10 +639,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         for(String a : addr) {
             FeatureParameterSpec fps = spec.getParam(a);
             ids.add(a);
-            if("GLN_UNDEFINED".equals(fps.getDefaultValue())) {
-                continue;
-            }
-            if(fps.hasDefaultValue()) {
+            if(fps.hasDefaultValue() && !"GLN_UNDEFINED".equals(fps.getDefaultValue())) {
                 AddressItem ai = new AddressItem();
                 ai.type = a;
                 ai.name = fps.getDefaultValue();
@@ -661,14 +658,20 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                         }
                     }
                     if(value == null) {
+                        if ("GLN_UNDEFINED".equals(fps.getDefaultValue())) {
+                            continue;
+                        }
                         System.out.println("ERROR!!!!!!!!!");
-                            throw new RuntimeException("Notcorrect parent for spec " + spec.getName() + "\nConfig is " + config + "\n Parents " + parents);
+                        throw new RuntimeException("Notcorrect parent for spec " + spec.getName() + "\nConfig is " + config + "\n Parents " + parents);
                     }
                 }
                 AddressItem ai = new AddressItem();
                 ai.type = a;
                 ai.name = value;
-                ai.isNamed = true;
+                // We have 1 case: subsystem.elytron.permission-set.permissions
+                if(!a.equals("subsystem")) {
+                    ai.isNamed = true;
+                }
                 op.address.add(ai);
             }
         }
@@ -838,6 +841,9 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             } else {
                 if (i instanceof FeatureGroup) {
                     FeatureGroup fg = (FeatureGroup) i;
+                    if(fg.getName().equals("application-http-basic")) {
+                        System.out.println("DEBUG-ME");
+                    }
                     FeatureGroup complete = getFeatureGroup(pl, fg.getName());
                     if (!complete.getItems().isEmpty()) {
                         parents.add(fg);
@@ -874,6 +880,9 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                     if(map == null) {
                         map = new TreeMap<>();
                         current.children.put(item.type, map);
+                    }
+                    if(item.name.equals("elytron")) {
+                        System.out.println("ELYTON in " + item);
                     }
                     ModelItem child = map.get(item.name);
                     if(child == null) {
@@ -1045,6 +1054,9 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                         ConfigLayerSpec depSpec = getLayer(pl, dep.getName());
                         //generateConfigRecursive(depSpec, config, pl, new HashSet<>());
                         }
+                    }
+                    if (spec.getName().equals("ee-core-profile-server")) {
+                        System.out.println("DEBUG ME");
                     }
                     generateModelUpdates(spec.getItems(), new ArrayList<>(), pl, ops, config);
                     Model m = new Model();
