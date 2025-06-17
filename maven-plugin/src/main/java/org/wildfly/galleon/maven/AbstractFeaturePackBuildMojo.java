@@ -616,6 +616,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
 
     static class Configuration implements Comparable<Configuration> {
         String address;
+        String attribute;
         Set<String> systemProperties = new TreeSet<>();
         Set<String> envVariables = new TreeSet<>();
 
@@ -627,6 +628,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
 
     private Operation buildModel(FeatureSpec spec, List<ConfigItem> parents, FeatureConfig config, Map<String, Configuration> configuration) throws ProvisioningDescriptionException {
         System.out.println("FEATURE-SPEC " + spec.getName());
+
         FeatureAnnotation annot = spec.getAnnotation("jboss-op");
         if(annot == null) {
             return new Operation();
@@ -641,7 +643,10 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                 continue;
             }
             if(fps.hasDefaultValue()) {
-                op.address.add(a+"="+fps.getDefaultValue());
+                AddressItem ai = new AddressItem();
+                ai.type = a;
+                ai.name = fps.getDefaultValue();
+                op.address.add(ai);
             } else {
                 String value = config.getParam(a);
                 if(value == null) {
@@ -660,7 +665,11 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                             throw new RuntimeException("Notcorrect parent for spec " + spec.getName() + "\nConfig is " + config + "\n Parents " + parents);
                     }
                 }
-                op.address.add(a+"="+value);
+                AddressItem ai = new AddressItem();
+                ai.type = a;
+                ai.name = value;
+                ai.isNamed = true;
+                op.address.add(ai);
             }
         }
         if (annot.hasElement("complex-attribute")) {
@@ -701,14 +710,18 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         List<Set<String>> found = parseValue(value);
         if (!found.isEmpty()) {
             StringBuilder k = new StringBuilder("/");
-            for (String a : op.address) {
-                k.append(a).append("/");
+            for (AddressItem a : op.address) {
+                k.append(a.type);
+                k.append("=");
+                k.append(a.isNamed ? "*" : a.name);
+                k.append("/");
             }
 
-            String key = k.substring(0, k.toString().length() - 1) + "." + name;
+            String key = k.substring(0, k.toString().length() - 1);
             Configuration s = configuration.get(key);
             if (s == null) {
                 s = new Configuration();
+                s.attribute = name;
                 configuration.put(key, s);
             }
             s.envVariables.addAll(found.get(0));
@@ -841,34 +854,31 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         }
     }
     private static class ModelItem {
-        String name;
         String description;
+        AddressItem address;
         Map<String, Map<String,ModelItem>> children = new TreeMap<>();
         Map<String, Param> attributes = new TreeMap<>();
-        ModelItem(String name) {
-            this.name = name;
+        ModelItem(AddressItem address) {
+            this.address= address;
         }
     }
     private static class Model {
-        ModelItem root = new ModelItem("/");
+        ModelItem root = new ModelItem(new AddressItem());
         Model() {
         }
         void populate(List<Operation> ops) {
             for(Operation op : ops) {
                 ModelItem current = root;
-                for(String item : op.address) {
-                    String[] split = item.split("=");
-                    String type = split[0];
-                    String name = split[1];
-                    Map<String, ModelItem> map = current.children.get(type);
+                for(AddressItem item : op.address) {
+                    Map<String, ModelItem> map = current.children.get(item.type);
                     if(map == null) {
                         map = new TreeMap<>();
-                        current.children.put(type, map);
+                        current.children.put(item.type, map);
                     }
-                    ModelItem child = map.get(name);
+                    ModelItem child = map.get(item.name);
                     if(child == null) {
-                        child = new ModelItem(name);
-                        map.put(name, child);
+                        child = new ModelItem(item);
+                        map.put(item.name, child);
                         current = child;
                     } else {
                         current = child;
@@ -884,17 +894,19 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                 ObjectMapper mapper = new ObjectMapper();
                 return mapper.createObjectNode();
             } else {
-                ObjectNode model = export(root);
+                ObjectNode model = export("", root);
                 return model;
             }
         }
 
-        ObjectNode export(ModelItem item) {
+        ObjectNode export(String radical, ModelItem item) {
             ObjectMapper mapper = new ObjectMapper();
             ObjectNode model = mapper.createObjectNode();
             if(item.description != null) {
                 model.put("description", item.description);
             }
+            String currentAddress = radical +(radical.endsWith("/") ? "" : "/")+item.address;
+            model.put("_address", currentAddress);
             if (!item.attributes.isEmpty()) {
                 //ArrayNode attributesNode = mapper.createArrayNode();
                 //model.putIfAbsent("attributes", attributesNode);
@@ -918,7 +930,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                     model.putIfAbsent(k, typeNode);
                     Map<String, ModelItem> childs = item.children.get(k);
                     for(Entry<String, ModelItem> c : childs.entrySet()) {
-                        typeNode.putIfAbsent(c.getKey(), export(c.getValue()));
+                        typeNode.putIfAbsent(c.getKey(), export(currentAddress, c.getValue()));
                     }
                 }
             }
@@ -929,8 +941,25 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         String name;
         String value;
     }
+    private static class AddressItem {
+        String type;
+        String name;
+        boolean isNamed;
+
+        @Override
+        public String toString() {
+            if(type == null) {
+                return "";
+            }
+            if(isNamed) {
+                return type +"=*";
+            } else {
+                return type +"="+ name;
+            }
+        }
+    }
     private static class Operation {
-        List<String> address = new ArrayList<>();
+        List<AddressItem> address = new ArrayList<>();
         Map<String, Param> params = new HashMap<>();
     }
     private void generateMetadata(FeaturePackDescription desc, ProvisioningLayout<FeaturePackLayout> pl, Path metadataTarget) throws Exception {
@@ -1041,7 +1070,8 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                         layerNode.set("configuration", configNode);
                         for (Entry<String, Configuration> configEntry : config.entrySet()) {
                             ObjectNode attNode = mapper.createObjectNode();
-                            attNode.put("attribute", configEntry.getKey());
+                            attNode.put("_address", configEntry.getKey());
+                            attNode.put("attribute", configEntry.getValue().attribute);
                             Configuration attConfig = configEntry.getValue();
                             if (!attConfig.envVariables.isEmpty()) {
                                 ArrayNode envNode = mapper.createArrayNode();
