@@ -201,7 +201,8 @@ public class FeatureSpecGenerator implements ForkCallback {
             final Path home = Paths.get(installation);
             if (Files.exists(home.resolve(WfConstants.STANDALONE).resolve(WfConstants.CONFIGURATION))) {
                 standaloneFeatures = readFeatureSpecs(createStandaloneServer(installation, mimimumStability, null));
-                ModelNode result = generateModel(createStandaloneServer(installation, mimimumStability, "standalone-local.xml"));
+                Boolean all = Boolean.getBoolean("org.wildfly.galleon.complete.model");
+                ModelNode result = generateModel(createStandaloneServer(installation, mimimumStability, all ? "standalone.xml" : "standalone-local.xml"), all);
                 try {
                     if (!Files.exists(outputDir)) {
                         Files.createDirectories(outputDir);
@@ -256,7 +257,8 @@ public class FeatureSpecGenerator implements ForkCallback {
             String mimimumStability = args.length == 4 ? args[3] : null;
             ModelNode result = readFeatureSpecs(createStandaloneServer(args[0], mimimumStability, null));
             writeSpecsFile(Paths.get(args[1]), result);
-            ModelNode resultModel = generateModel(createStandaloneServer(args[0], mimimumStability, "standalone-local.xml"));
+            Boolean all = Boolean.getBoolean("org.wildfly.galleon.complete.model");
+            ModelNode resultModel = generateModel(createStandaloneServer(args[0], mimimumStability, all ? "standalone.xml" : "standalone-local.xml"), all);
             writeModelFile(Paths.get(args[1]).toAbsolutePath().getParent().resolve("model.json"), resultModel);
             System.out.println("FORKED TO " + Paths.get(args[1]).toAbsolutePath().getParent().resolve("model.json"));
             if (Files.exists(Paths.get(args[0]).resolve(WfConstants.DOMAIN).resolve(WfConstants.CONFIGURATION))) {
@@ -344,10 +346,9 @@ public class FeatureSpecGenerator implements ForkCallback {
         return args.toArray(String[]::new);
     }
 
-    private static ModelNode generateModel(final EmbeddedManagedProcess server) throws ProvisioningException {
+    private static ModelNode generateModel(final EmbeddedManagedProcess server, Boolean all) throws ProvisioningException {
         try {
             server.start();
-            Boolean all = Boolean.getBoolean("org.wildfly.galleon.complete.model");
             if (!all) {
                 return readModel(server);
             }
