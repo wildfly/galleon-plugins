@@ -917,18 +917,16 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             String currentAddress = radical +(radical.endsWith("/") ? "" : "/")+item.address;
             model.put("_address", currentAddress);
             if (!item.attributes.isEmpty()) {
-                //ArrayNode attributesNode = mapper.createArrayNode();
-                //model.putIfAbsent("attributes", attributesNode);
+                ArrayNode attributesNode = mapper.createArrayNode();
+                model.putIfAbsent("attributes", attributesNode);
                 for (Entry<String, Param> entry : item.attributes.entrySet()) {
                     Param p = entry.getValue();
-//                    ObjectNode pNode = mapper.createObjectNode();
-//                    pNode.put("name", p.name);
-//                    pNode.put("value", p.value);
-//                    if (p.description != null) {
-//                        pNode.put("description", p.description);
-//                    }
-//                    attributesNode.add(pNode);
-                    model.put(p.name, p.value);
+                    ObjectNode pNode = mapper.createObjectNode();
+                    pNode.put("name", p.name);
+                    pNode.put("value", p.value);
+                    pNode.put("_address", currentAddress + "@@@" + p.name);
+                    attributesNode.add(pNode);
+                    //model.put(p.name, p.value);
                 }
             }
             if (!item.children.isEmpty()) {
