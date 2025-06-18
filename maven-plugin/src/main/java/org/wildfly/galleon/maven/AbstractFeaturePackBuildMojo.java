@@ -102,6 +102,7 @@ import org.jboss.galleon.maven.plugin.FpMavenErrors;
 import org.jboss.galleon.maven.plugin.util.MavenArtifactRepositoryManager;
 import org.jboss.galleon.spec.ConfigLayerSpec;
 import org.jboss.galleon.spec.FeatureAnnotation;
+import org.jboss.galleon.spec.FeatureId;
 import org.jboss.galleon.spec.FeaturePackPlugin;
 import org.jboss.galleon.spec.FeaturePackSpec;
 import org.jboss.galleon.spec.FeatureParameterSpec;
@@ -661,8 +662,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                         if ("GLN_UNDEFINED".equals(fps.getDefaultValue())) {
                             continue;
                         }
-                        System.out.println("ERROR!!!!!!!!!");
-                        throw new RuntimeException("Notcorrect parent for spec " + spec.getName() + "\nConfig is " + config + "\n Parents " + parents);
+                        throw new RuntimeException("Not correct parent for spec " + spec.getName() + "\nConfig is " + config + "\n Parents " + parents);
                     }
                 }
                 AddressItem ai = new AddressItem();
@@ -830,20 +830,19 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                     // Can happen in tests.
                     continue;
                 }
-                //System.out.println("Feature spec of " + fc.getSpecId() + " is " + fc);
-                Operation op = buildModel(fp, parents, fc, config);
-                ops.add(op);
-                if (!fc.getItems().isEmpty()) {
-                    parents.add(fc);
-                    generateModelUpdates(fc.getItems(), parents, pl, ops, config);
-                    parents.remove(parents.size() - 1);
+                boolean excluded = isExcluded(parents, fp, fc);
+                if (!excluded) {
+                    Operation op = buildModel(fp, parents, fc, config);
+                    ops.add(op);
+                    if (!fc.getItems().isEmpty()) {
+                        parents.add(fc);
+                        generateModelUpdates(fc.getItems(), parents, pl, ops, config);
+                        parents.remove(parents.size() - 1);
+                    }
                 }
             } else {
                 if (i instanceof FeatureGroup) {
                     FeatureGroup fg = (FeatureGroup) i;
-                    if(fg.getName().equals("application-http-basic")) {
-                        System.out.println("DEBUG-ME");
-                    }
                     FeatureGroup complete = getFeatureGroup(pl, fg.getName());
                     if (!complete.getItems().isEmpty()) {
                         parents.add(fg);
@@ -859,6 +858,59 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             }
         }
     }
+    private boolean isExcluded(List<ConfigItem> parents, FeatureSpec fs, FeatureConfig fc) throws ProvisioningDescriptionException {
+        for (int i = parents.size() - 1; i >= 0; i--) {
+            ConfigItem p = parents.get(i);
+            if (p instanceof FeatureGroup) {
+                FeatureGroup fg = (FeatureGroup) p;
+                if (fg.hasExcludedSpecs()) {
+                    if (fg.getExcludedSpecs().contains(fc.getSpecId())) {
+                        return true;
+                    }
+                }
+                if (fg.hasExcludedFeatures()) {
+                    for(FeatureId id : fg.getExcludedFeatures().keySet()) {
+                        if (id.getSpec().getName().equals(fc.getSpecId().getName())) {
+                            // Build the featureId
+                            Map<String, String> idParams = new HashMap<>();
+                            for(String idParam : id.getParamNames()) {
+                                if(fc.getParam(idParam) != null) {
+                                    idParams.put(idParam, fc.getParam(idParam));
+                                } else {
+                                    String value = null;
+                                    for (int ii = parents.size() - 1; ii >= 0; ii--) {
+                                        ConfigItem parent = parents.get(ii);
+                                        if (parent instanceof FeatureConfig) {
+                                            FeatureConfig pc = (FeatureConfig) parent;
+                                            value = pc.getParam(idParam);
+                                            if (value != null) {
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    if(value == null) {
+                                        // Is it a default value...
+                                        FeatureParameterSpec fparamSpec = fs.getParam(idParam);
+                                        value = fparamSpec.getDefaultValue();
+                                    }
+                                    idParams.put(idParam, value);
+                                }
+                            }
+                            FeatureId fid = new FeatureId(fc.getSpecId().getName(), idParams);
+                            System.out.println("COMPUTED FEATURE ID " + fid);
+                            System.out.println("EXCLUDED FEATURE ID " + id);
+                            if (fid.equals(id)) {
+                                System.out.println("EXCLUDED");
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
     private static class ModelItem {
         String description;
         AddressItem address;
@@ -880,9 +932,6 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                     if(map == null) {
                         map = new TreeMap<>();
                         current.children.put(item.type, map);
-                    }
-                    if(item.name.equals("elytron")) {
-                        System.out.println("ELYTON in " + item);
                     }
                     ModelItem child = map.get(item.name);
                     if(child == null) {
@@ -1002,7 +1051,6 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             for (FeaturePackLayout layout : pl.getOrderedFeaturePacks()) {
                 Path p = layout.getDir();
                 FeaturePackDescription descDep = FeaturePackDescriber.describeFeaturePack(p, "UTF-8");
-                System.out.println("FP " + descDep.getFPID());
                 for (ConfigLayerSpec descLayer : descDep.getLayers()) {
                     List<ConfigLayerSpec> specs = layerSpecs.get(descLayer.getId().getName());
                     if(specs == null) {
@@ -1048,13 +1096,8 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                             depNode.put("name", dep.getName());
                             depNode.put("optional", dep.isOptional());
                             depsNode.add(depNode);
-//                        System.out.println("********* Dep spec " + dep.getName());
-                        ConfigLayerSpec depSpec = getLayer(pl, dep.getName());
-                        //generateConfigRecursive(depSpec, config, pl, new HashSet<>());
+                            ConfigLayerSpec depSpec = getLayer(pl, dep.getName());
                         }
-                    }
-                    if (spec.getName().equals("ee-core-profile-server")) {
-                        System.out.println("DEBUG ME");
                     }
                     generateModelUpdates(spec.getItems(), new ArrayList<>(), pl, ops, config);
                     Model m = new Model();
