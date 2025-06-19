@@ -143,6 +143,9 @@ public class WfFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
     @Parameter(alias = "feature-specs-output", defaultValue = "${project.build.directory}/resources/features", required = true)
     protected File featureSpecsOutput;
 
+    @Parameter(alias = "generate-all-model", defaultValue = "false", required = true)
+    protected Boolean generateAllModel;
+
     private WildFlyFeaturePackBuild buildConfig;
     private Map<String, PackageSpec.Builder> extendedPackages = Collections.emptyMap();
 
@@ -174,7 +177,18 @@ public class WfFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
         buildConfig = getBuildConfig();
         setStability(buildConfig);
         if(buildConfig.hasStandaloneExtensions() || buildConfig.hasDomainExtensions() || buildConfig.hasHostExtensions()) {
-            new FeatureSpecGeneratorInvoker(this).execute();
+            try {
+                if(generateAllModel) {
+                    System.setProperty("org.wildfly.galleon.complete.model", "true");
+                }
+                new FeatureSpecGeneratorInvoker(this).execute();
+                // Move the generated model.json outside
+                Path p = featureSpecsOutput.toPath().resolve("model.json");
+                Files.move(p, Paths.get(buildName).resolve("model.json"));
+                System.clearProperty("org.wildfly.galleon.complete.model");
+            } catch (IOException ex) {
+                throw new MojoExecutionException(ex);
+            }
         }
 
         FeaturePackLocation fpl = buildConfig.getProducer();
