@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -29,6 +30,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+
 import org.apache.maven.model.License;
 import org.apache.maven.project.MavenProject;
 import org.eclipse.aether.RepositorySystem;
@@ -36,7 +38,6 @@ import org.eclipse.aether.RepositorySystemSession;
 import org.eclipse.aether.repository.RemoteRepository;
 import org.jboss.galleon.ProvisioningDescriptionException;
 import org.jboss.galleon.ProvisioningException;
-import org.jboss.galleon.api.GalleonLayerDependency;
 import org.jboss.galleon.config.ConfigItem;
 import org.jboss.galleon.config.FeatureConfig;
 import org.jboss.galleon.config.FeatureGroup;
@@ -53,6 +54,7 @@ import org.jboss.galleon.spec.FeatureParameterSpec;
 import org.jboss.galleon.spec.FeatureSpec;
 import org.jboss.galleon.spec.PackageDependencySpec;
 import org.jboss.galleon.universe.UniverseResolver;
+import org.wildfly.galleon.plugin.doc.generator.Metadata;
 
 class MetadataGenerator {
 
@@ -217,32 +219,15 @@ class MetadataGenerator {
 
     private void generateMetadata(FeaturePackDescription desc, ProvisioningLayout<FeaturePackLayout> pl, Path metadataTarget) throws Exception {
         ObjectMapper mapper = new ObjectMapper();
-        ObjectNode fpMetadata = mapper.createObjectNode();
-        ArrayNode layers = mapper.createArrayNode();
         mapper.enable(SerializationFeature.INDENT_OUTPUT);
-        fpMetadata.put("version", project.getVersion());
-        fpMetadata.put("feature-pack-location", project.getGroupId() + ":" + project.getArtifactId() + ":" + project.getVersion());
-        fpMetadata.put("description", project.getDescription());
-        if (project.getLicenses() != null && !project.getLicenses().isEmpty()) {
-            ArrayNode licences = mapper.createArrayNode();
-            for (License licence : project.getLicenses()) {
-                licences.add(licence.getName());
-            }
-            fpMetadata.set("license", licences);
-        } else {
-            fpMetadata.set("license", mapper.createArrayNode());
+
+        List<String> licenses = project.getLicenses().stream().map(License::getName).toList();
+        String scmUrl = null;
+        if (project.getScm() != null) {
+            scmUrl = project.getScm().getUrl();
         }
-        if (project.getUrl() != null) {
-            fpMetadata.put("url", project.getUrl());
-        } else {
-            fpMetadata.put("url", "");
-        }
-        if (project.getScm() != null && project.getScm().getUrl() != null) {
-            fpMetadata.put("scm", project.getScm().getUrl());
-        } else {
-            fpMetadata.put("scm", "");
-        }
-        fpMetadata.put("name", project.getName());
+
+        // do some layers spec manipulation before filling the metatadata with their content....
         Map<String, List<ConfigLayerSpec>> layerSpecs = new HashMap<>();
         if (addFeaturePacksDependenciesInMetadata) {
             for (FeaturePackLayout layout : pl.getOrderedFeaturePacks()) {
@@ -264,94 +249,54 @@ class MetadataGenerator {
                 layerSpecs.put(spec.getName(), specs);
             }
         }
+
+        List<Metadata.Layer> layers = new ArrayList<>();
         for (Map.Entry<String, List<ConfigLayerSpec>> entry : layerSpecs.entrySet()) {
             List<ResourceOperation> ops = new ArrayList<>();
-            ObjectNode layerNode = null;
-            ArrayNode depsNode = null;
             boolean propertiesAdded = false;
             Map<String, AttributeConfiguration> config = new TreeMap<>();
             for (ConfigLayerSpec spec : entry.getValue()) {
-                //System.out.println("***************** LAYER " + spec.getName());
-                if (layerNode == null) {
-                    layerNode = mapper.createObjectNode();
-                    layerNode.put("name", spec.getName());
-                    layers.add(layerNode);
-                }
+                String layerName = spec.getName();
+                List<Metadata.LayerDependency> layerDependencies = Collections.emptyList();
                 if (spec.hasLayerDeps()) {
-                    if (depsNode == null) {
-                        depsNode = mapper.createArrayNode();
-                    }
-                    for (GalleonLayerDependency dep : spec.getLayerDeps()) {
-                        ObjectNode depNode = mapper.createObjectNode();
-                        depNode.put("name", dep.getName());
-                        depNode.put("optional", dep.isOptional());
-                        depsNode.add(depNode);
-                    }
+                    layerDependencies = spec.getLayerDeps().stream().map(dep -> new Metadata.LayerDependency(dep.getName(), dep.isOptional())).toList();
                 }
                 generateModelUpdates(spec.getItems(), new ArrayList<>(), pl, ops, config);
                 ManagementModel m = new ManagementModel();
                 m.populate(ops);
-                layerNode.putIfAbsent("managementModel", m.export());
+                ObjectNode managementModel = m.export();
+
+                List<Metadata.Property> properties = new ArrayList<>();
                 if (!spec.getProperties().isEmpty() && !propertiesAdded) {
                     propertiesAdded = true;
-                    ArrayNode propertiesNode = mapper.createArrayNode();
-                    for (Map.Entry<String, String> propsEntry : spec.getProperties().entrySet()) {
-                        ObjectNode propertyNode = mapper.createObjectNode();
-                        propertyNode.put("name", propsEntry.getKey());
-                        propertyNode.put("value", propsEntry.getValue());
-                        propertiesNode.add(propertyNode);
-                    }
-                    layerNode.putIfAbsent("properties", propertiesNode);
+                    properties = spec.getProperties().entrySet().stream().map(e -> new Metadata.Property(e.getKey(), e.getValue())).toList();
                 }
-                if (!config.isEmpty()) {
-                    ArrayNode configNode = mapper.createArrayNode();
-                    layerNode.set("configuration", configNode);
-                    for (Map.Entry<String, AttributeConfiguration> configEntry : config.entrySet()) {
-                        ObjectNode attNode = mapper.createObjectNode();
-                        attNode.put("_address", configEntry.getKey());
-                        attNode.put("attribute", configEntry.getValue().attribute);
-                        AttributeConfiguration attConfig = configEntry.getValue();
-                        if (!attConfig.envVariables.isEmpty()) {
-                            ArrayNode envNode = mapper.createArrayNode();
-                            attNode.putIfAbsent("environmentVariables", envNode);
-                            for (String env : attConfig.envVariables) {
-                                envNode.add(env);
-                            }
-                        }
-                        if (!attConfig.systemProperties.isEmpty()) {
-                            ArrayNode propsNode = mapper.createArrayNode();
-                            attNode.putIfAbsent("systemProperties", propsNode);
-                            for (String prop : attConfig.systemProperties) {
-                                propsNode.add(prop);
-                            }
-                        }
-                        configNode.add(attNode);
-                    }
-                }
-                if (spec.hasPackageDeps()) {
-                    ArrayNode packagesNode = mapper.createArrayNode();
-                    layerNode.putIfAbsent("packages", packagesNode);
-                    if (!spec.getLocalPackageDeps().isEmpty()) {
-                        for (PackageDependencySpec p : spec.getLocalPackageDeps()) {
-                            packagesNode.add(p.getName());
-                        }
-                    }
-                    for (String origin : spec.getPackageOrigins()) {
-                        for (PackageDependencySpec p : spec.getExternalPackageDeps(origin)) {
-                            packagesNode.add(p.getName());
-                        }
-                    }
-                }
-            }
-            if (depsNode != null && layerNode != null) {
-                layerNode.putIfAbsent("dependencies", depsNode);
-            }
-        }
 
-        if (!layers.isEmpty()) {
-            fpMetadata.putIfAbsent("layers", layers);
+                List<Metadata.AttributeConfiguration> configurations = config.entrySet().stream().map(e -> {
+                    String address = e.getKey();
+                    String attribute = e.getValue().attribute;
+                    Set<String> envVars = e.getValue().envVariables;
+                    Set<String> sysProps = e.getValue().systemProperties;
+                    return new Metadata.AttributeConfiguration(address, attribute, sysProps, envVars);
+                }).toList();
+
+                List<String> packages = new ArrayList<>();
+                if (spec.hasPackageDeps()) {
+                    List<String> localPackages = spec.getLocalPackageDeps().stream().map(PackageDependencySpec::getName).toList();
+                    packages.addAll(localPackages);
+
+                    for (String origin : spec.getPackageOrigins()) {
+                        List<String> externalPackages = spec.getExternalPackageDeps(origin).stream().map(PackageDependencySpec::getName).toList();
+                        packages.addAll(externalPackages);
+                    }
+                }
+
+                layers.add(new Metadata.Layer(layerName, layerDependencies, managementModel, properties, configurations, packages));
+            }
         }
-        mapper.writerWithDefaultPrettyPrinter().writeValue(metadataTarget.toFile(), fpMetadata);
+        Metadata metadata = new Metadata(project.getGroupId(), project.getArtifactId(), project.getVersion(), project.getName(), project.getDescription(), licenses,
+                project.getUrl(), scmUrl, layers);
+        mapper.writerWithDefaultPrettyPrinter().writeValue(metadataTarget.toFile(), metadata);
     }
 
     private static String retrieveParamValue(List<ConfigItem> parents, String param) {

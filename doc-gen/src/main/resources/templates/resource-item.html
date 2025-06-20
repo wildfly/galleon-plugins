@@ -1,0 +1,6 @@
+<p>{currentUrl}</p>
+{#include breadcrumb /}
+<h1>{breadcrumbs.last.label}</h1>
+<h1></h1>
+<p>Description: {resource.description}</p>
+{#include attributes attributes=resource.attributes /}
