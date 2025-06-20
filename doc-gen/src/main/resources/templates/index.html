@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Documentation for {metadata.name}</title>
+</head>
+<body>
+<h1>Documentation for {metadata.name}</h1>
+<p>{metadata.description}</p>
+<h2>Maven Coordinates</h2>
+<pre>
+    <code>
+&lt;dependency>
+  &lt;groupId>{metadata.groupId}&lt;/groupId>
+  &lt;artifactId>{metadata.artifactId}&lt;/artifactId>
+  &lt;version>{metadata.version}&lt;/version>
+&lt;/dependency>
+    </code>
+</pre>
+<h3>Feature Pack Location</h3>
+<pre>
+    <code>
+&lt;feature-pack>
+    &lt;location>{metadata.groupId}:{metadata.artifactId}:{metadata.version}&lt;/location>
+&lt;/feature-pack>
+    </code>
+</pre>
+{#if metadata.layers}
+<h2>Provided Layers</h2>
+{#for layer in metadata.layers}
+<h3>{layer.name}</h3>
+  {#if layer.dependencies}
+<h4>Dependencies</h4>
+<ul>
+    {#for dep in layer.dependencies}
+  <li>{dep.name} -  <em>{#if dep.optional} optional {#else} required {/if}</em></li>
+    {/for}
+</ul>
+  {/if}
+  {#if layer.packages}
+<h4>Packages</h4>
+<ul>
+    {#for package in layer.packages}
+  <li>{package}</li>
+    {/for}
+</ul>
+  {/if}
+{/for}
+{/if}
+
+{#if hasModel}
+<h2>Model Reference</h2>
+<a href="reference/index.html">Model Reference</a>
+{/if}
+
+<h2>About</h2>
+{#if metadata.url}
+<p>
+This feature pack is hosted at  <a href="{metadata.url}">{metadata.url}</a>
+</p>
+{/if}
+{#if metadata.scmUrl}
+    <p>
+    Source code of this feature pack is hosted at <a href="{metadata.scmUrl}">{metadata.scmUrl}</a>
+</p>
+{/if}
+{#if metadata.licenses}
+<p>This feature pack is licensed under:</p>
+<ul>
+    {#for license in metadata.licenses}
+    <li>{license}</li>
+    {/for}
+</ul>
+{/if}
+</body>
+</html>

@@ -17,6 +17,7 @@
 package org.wildfly.galleon.maven;
 
 import static java.lang.String.format;
+import static org.jboss.galleon.Constants.ZIP;
 import static org.wildfly.galleon.maven.FeatureSpecGeneratorInvoker.MODULE_PATH_SEGMENT;
 import static org.wildfly.galleon.maven.Util.mkdirs;
 
@@ -48,9 +49,9 @@ import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import java.util.TreeSet;
 
 import javax.xml.stream.XMLStreamException;
 
@@ -110,6 +111,7 @@ import org.wildfly.galleon.maven.build.tasks.ResourcesTask;
 import org.wildfly.galleon.plugin.ArtifactCoords;
 import org.wildfly.galleon.plugin.WfConstants;
 import org.wildfly.galleon.plugin.WildFlyChannelResolutionMode;
+import org.wildfly.galleon.plugin.doc.generator.DocGenerator;
 
 /**
  * This Maven mojo creates a WildFly style feature-pack archive from the
@@ -134,11 +136,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
 
     static final String ARTIFACT_LIST_CLASSIFIER = "artifact-list";
     static final String ARTIFACT_LIST_EXTENSION = "txt";
-
-    static final String METADATA_CLASSIFIER = "metadata";
-    static final String METADATA_EXTENSION = "json";
-    static final String MODEL_CLASSIFIER = "model";
-    static final String MODEL_EXTENSION = "json";
+    static final String DOC_CLASSIFIER = "doc";
 
     static boolean isProvided(String module) {
         return module.startsWith("java.")
@@ -534,20 +532,10 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                                     checkFeaturePackContentStability(buildTimestabilityLevel, forbidLowerStatibilityLevelPackageReference, lowerStabilityPackages,
                                             desc.getPackages(), desc.getLayers(), desc.getFeatures(), desc.getConfigs(), getLog());
                                     ZipUtils.zip(versionDir, target);
-                                    final Path metadataTarget = Paths.get(project.getBuild().getDirectory()).resolve(artifactId + '-'
-                                            + versionDir.getFileName() + "-" + METADATA_CLASSIFIER + "." + METADATA_EXTENSION);
+
+                                    final Path metadata = Paths.get(project.getBuild().getDirectory()).resolve("metadata.json");
                                     MetadataGenerator generator = new MetadataGenerator(project, repoSystem, repoSession, repositories, addFeaturePacksDependenciesInMetadata);
-                                    generator.generateMetadata(target, desc, metadataTarget);
-                                    debug("Attaching feature-pack metadata %s as a project artifact", metadataTarget);
-                                    projectHelper.attachArtifact(project, METADATA_EXTENSION, METADATA_CLASSIFIER, metadataTarget.toFile());
-                                    Path model = Paths.get(project.getBuild().getDirectory()).resolve("model.json");
-                                    if (Files.exists(model)) {
-                                        final Path modelTarget = Paths.get(project.getBuild().getDirectory()).resolve(artifactId + '-'
-                                            + versionDir.getFileName() + "-" + MODEL_CLASSIFIER + "." + MODEL_EXTENSION);
-                                        Files.copy(model, modelTarget);
-                                        debug("Attaching feature-pack model %s as a project artifact", modelTarget);
-                                        projectHelper.attachArtifact(project, MODEL_EXTENSION, MODEL_CLASSIFIER, modelTarget.toFile());
-                                    }
+                                    generator.generateMetadata(target, desc, metadata);
                                 } catch (Exception ex) {
                                     throw new RuntimeException(ex);
                                 }
@@ -584,6 +572,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                     }
                 }
             }
+            generateDocumentation();
         } catch (IOException e) {
             throw new MojoExecutionException("Failed to create a feature-pack archives from the layout", e);
         }
@@ -1215,5 +1204,18 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                 return FileVisitResult.CONTINUE;
             }
         });
+    }
+
+    private void generateDocumentation() throws IOException {
+        final Path metadata = Paths.get(project.getBuild().getDirectory()).resolve("metadata.json");
+        final Path model = Paths.get(project.getBuild().getDirectory()).resolve("model.json");
+        final Path docPath = Paths.get(project.getBuild().getDirectory()).resolve("doc");
+        final Path docZipArchive = Paths.get(project.getBuild().getDirectory()).resolve(String.format("%s-%s-%s.%s",
+                project.getArtifactId(), project.getVersion(), DOC_CLASSIFIER, ZIP));
+        DocGenerator.generate(getLog(), docZipArchive, docPath, metadata, model);
+        if (Files.exists(docZipArchive)) {
+            debug("Attaching feature-pack documentation %s as a project artifact", docZipArchive);
+            projectHelper.attachArtifact(project, ZIP, DOC_CLASSIFIER, docZipArchive.toFile());
+        }
     }
 }

@@ -1,0 +1,19 @@
+{#if children.size > 0}
+<h2>Children ({children.size})</h2>
+<ul class="children">
+{#for child in children}
+    <li>
+        {#if child.children.size == 0}
+        <a href="{child.name}/index.html">{child.name}</a>
+        {#else}
+        <b>{child.name}</b>
+        {/if}
+        {#for c in child.children}
+        <ul>
+            <li><a href="{child.name}/{c.name}/index.html">{c.name}</a></li>
+        </ul>
+    </li>
+    {/for}
+{/for}
+</ul>
+{/if}
