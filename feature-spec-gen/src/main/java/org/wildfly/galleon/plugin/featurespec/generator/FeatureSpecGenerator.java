@@ -16,6 +16,9 @@
  */
 package org.wildfly.galleon.plugin.featurespec.generator;
 
+import static org.jboss.as.controller.client.helpers.ClientConstants.DEPLOYMENT;
+import static org.jboss.as.controller.client.helpers.ClientConstants.SUBSYSTEM;
+
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -58,6 +61,9 @@ import org.wildfly.galleon.plugin.server.ConfigGeneratorException;
  */
 public class FeatureSpecGenerator implements ForkCallback {
 
+    private static final String CHILDREN = "children";
+    private static final String DESCRIPTION = "description";
+    private static final String MODEL_DESCRIPTION = "model-description";
     private Map<String, FeatureSpecNode> nodesBySpecName = new HashMap<>();
     private Map<String, Map<String, FeatureSpecNode>> referencedSpecs = new HashMap<>();
     private Map<String, FeatureSpecNode> capProviders = new HashMap<>();
@@ -226,14 +232,14 @@ public class FeatureSpecGenerator implements ForkCallback {
         if (domainRoots != null) {
             rootNode.setDomainDescr(WfConstants.DOMAIN, new ModelNode());
             rootNode.generateDomain = false;
-            for (Property child : domainRoots.get("children").asPropertyList()) {
+            for (Property child : domainRoots.get(CHILDREN).asPropertyList()) {
                 final String specName = child.getName();
                 if (specName.equals(WfConstants.HOST)) {
                     rootNode.setHostDescr(specName, child.getValue());
                 } else if (specName.equals(WfConstants.PROFILE)) {
                     rootNode.setProfileDescr(specName, child.getValue());
                 } else {
-                    rootNode.domainDescr.get("children").add(specName, child.getValue());
+                    rootNode.domainDescr.get(CHILDREN).add(specName, child.getValue());
                 }
             }
         }
@@ -366,20 +372,29 @@ public class FeatureSpecGenerator implements ForkCallback {
     private static ModelNode readModel(final EmbeddedManagedProcess server, String description) throws ProvisioningException {
         List<String> subsystems = listSubsystems(server);
         ModelNode result = new ModelNode().setEmptyObject();
-        ModelNode subsystemNodes = result.get("children").get(ClientConstants.SUBSYSTEM).get("model-description");
-        for(String subsystem : subsystems) {
-            ModelNode address = Operations.createAddress(ClientConstants.SUBSYSTEM, subsystem);
+        ModelNode subsystemNodes = result.get(CHILDREN).get(SUBSYSTEM).get(MODEL_DESCRIPTION);
+        for (String subsystem : subsystems) {
+            ModelNode address = Operations.createAddress(SUBSYSTEM, subsystem);
             ModelNode subsystemDescription = readResourceDescription(server, address, true);
             subsystemDescription.get(ClientConstants.ADDRESS).add(address);
             subsystemNodes.get(subsystem).set(subsystemDescription);
         }
-        ModelNode address = Operations.createAddress(ClientConstants.DEPLOYMENT);
-        result.get("children").get(ClientConstants.DEPLOYMENT).get("model-description").get("*").set(readResourceDescription(server, address, true));
-        result.remove(ClientConstants.RESULT);
         ModelNode subsystemsDescription = readResourceDescription(server, Operations.createAddress().setEmptyList(), false);
-        result.get("children").get(ClientConstants.SUBSYSTEM).get("description").set(subsystemsDescription.get("children").get(ClientConstants.SUBSYSTEM).get("description"));
-        result.get("children").get(ClientConstants.DEPLOYMENT).get("description").set(subsystemsDescription.get("children").get(ClientConstants.DEPLOYMENT).get("description"));
-        result.get("description").set(description);
+        ModelNode deploymentDescription = readResourceDescription(server, Operations.createAddress(DEPLOYMENT), false);
+        if (deploymentDescription.hasDefined(DESCRIPTION)) {
+            deploymentDescription = deploymentDescription.get(DESCRIPTION);
+        }
+        ModelNode deploymentSubsystems = listDeploymentSubsystems(server, subsystems);
+        ModelNode subsystemDescription = subsystemsDescription.get(CHILDREN).get(SUBSYSTEM).get(DESCRIPTION);
+        if (deploymentSubsystems.isDefined() && !deploymentSubsystems.asPropertyList().isEmpty()) {
+            result.get(CHILDREN).get(DEPLOYMENT).get(MODEL_DESCRIPTION).get("*").get(CHILDREN).get(SUBSYSTEM).get(DESCRIPTION).set(subsystemDescription);
+            result.get(CHILDREN).get(DEPLOYMENT).get(MODEL_DESCRIPTION).get("*").get(CHILDREN).get(SUBSYSTEM).get(MODEL_DESCRIPTION).set(deploymentSubsystems);
+            result.get(CHILDREN).get(DEPLOYMENT).get(MODEL_DESCRIPTION).get("*").get(DESCRIPTION).set(deploymentDescription);
+            result.get(CHILDREN).get(DEPLOYMENT).get(DESCRIPTION).set(subsystemsDescription.get(CHILDREN).get(DEPLOYMENT).get(DESCRIPTION));
+        }
+        result.remove(ClientConstants.RESULT);
+        result.get(CHILDREN).get(SUBSYSTEM).get(DESCRIPTION).set(subsystemDescription);
+        result.get(DESCRIPTION).set(description);
         return result;
     }
 
@@ -397,14 +412,14 @@ public class FeatureSpecGenerator implements ForkCallback {
             throw new ProvisioningException(Operations.getFailureDescription(result).asString());
         }
         final ModelNode  effectiveResult = result.get(ClientConstants.RESULT);
-        effectiveResult.get("description").set(description);
+        effectiveResult.get(DESCRIPTION).set(description);
         return effectiveResult;
     }
 
     private static List<String> listSubsystems(final EmbeddedManagedProcess server) throws ProvisioningException {
         ModelNode rootAddress = Operations.createAddress().setEmptyList();
         final ModelNode op = Operations.createOperation(ClientConstants.READ_CHILDREN_NAMES_OPERATION, rootAddress);
-        op.get(ClientConstants.CHILD_TYPE).set(ClientConstants.SUBSYSTEM);
+        op.get(ClientConstants.CHILD_TYPE).set(SUBSYSTEM);
         op.get("include-singletons").set(true);
         final ModelNode result;
         try {
@@ -422,8 +437,23 @@ public class FeatureSpecGenerator implements ForkCallback {
         return names;
     }
 
+    private static ModelNode listDeploymentSubsystems(final EmbeddedManagedProcess server, List<String> subsystems) throws ProvisioningException {
+        ModelNode details = new ModelNode().addEmptyObject();
+        for (String subsystem : subsystems) {
+            ModelNode address = Operations.createAddress(ClientConstants.DEPLOYMENT, "*", SUBSYSTEM, subsystem);
+            try {
+                final ModelNode opResult = readResourceDescription(server, address, true);
+                details.get(subsystem).set(opResult);
+            } catch (ProvisioningException ex) {
+                System.out.println("Couldn't get deployment details for the subsystem " + subsystem);
+            }
+        }
+        return details;
+    }
+
     private static ModelNode readResourceDescription(final EmbeddedManagedProcess server, ModelNode address, boolean recursive) throws ProvisioningException {
         final ModelNode op = Operations.createOperation("read-resource-description", address);
+        final boolean multi = isStarAddress(address);
         op.get(ClientConstants.RECURSIVE).set(recursive);
         final ModelNode opResult;
         try {
@@ -436,6 +466,9 @@ public class FeatureSpecGenerator implements ForkCallback {
         }
         final ModelNode result = opResult.get(ClientConstants.RESULT);
         if (ModelType.LIST == result.getType()) {
+            if (multi) {
+                return result.get(0).get(ClientConstants.RESULT);
+            }
             ModelNode finalResult = new ModelNode().setEmptyList();
             for (ModelNode node : result.asList()) {
                 if (node.hasDefined(ClientConstants.RESULT)) {
@@ -445,6 +478,15 @@ public class FeatureSpecGenerator implements ForkCallback {
             return finalResult;
         }
         return result;
+    }
+
+    private static boolean isStarAddress(ModelNode address) {
+        for (Property elt : address.asPropertyList()) {
+            if ("*".equals(elt.getValue().asString())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static ModelNode readFeatureSpecs(final EmbeddedManagedProcess server) throws ProvisioningException {
