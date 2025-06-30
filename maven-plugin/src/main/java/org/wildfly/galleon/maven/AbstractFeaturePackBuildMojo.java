@@ -135,6 +135,11 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     static final String ARTIFACT_LIST_CLASSIFIER = "artifact-list";
     static final String ARTIFACT_LIST_EXTENSION = "txt";
 
+    static final String METADATA_CLASSIFIER = "metadata";
+    static final String METADATA_EXTENSION = "json";
+    static final String MODEL_CLASSIFIER = "model";
+    static final String MODEL_EXTENSION = "json";
+
     static boolean isProvided(String module) {
         return module.startsWith("java.")
                 || module.startsWith("jdk.")
@@ -259,6 +264,12 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
      */
     @Parameter(alias = "package-stability-level", required = false)
     protected String packageStabilityLevel;
+
+    /**
+     * Add any feature-pack dependency in the generated metadata.
+     */
+    @Parameter(alias = "add-feature-packs-dependencies-in-metadata", required = false, defaultValue = "false")
+    protected boolean addFeaturePacksDependenciesInMetadata;
 
     private MavenProjectArtifactVersions artifactVersions;
 
@@ -522,6 +533,21 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                                     FeaturePackDescription desc = FeaturePackDescriber.describeFeaturePack(versionDir, "UTF-8");
                                     checkFeaturePackContentStability(buildTimestabilityLevel, forbidLowerStatibilityLevelPackageReference, lowerStabilityPackages,
                                             desc.getPackages(), desc.getLayers(), desc.getFeatures(), desc.getConfigs(), getLog());
+                                    ZipUtils.zip(versionDir, target);
+                                    final Path metadataTarget = Paths.get(project.getBuild().getDirectory()).resolve(artifactId + '-'
+                                            + versionDir.getFileName() + "-" + METADATA_CLASSIFIER + "." + METADATA_EXTENSION);
+                                    MetadataGenerator generator = new MetadataGenerator(project, repoSystem, repoSession, repositories, addFeaturePacksDependenciesInMetadata);
+                                    generator.generateMetadata(target, desc, metadataTarget);
+                                    debug("Attaching feature-pack metadata %s as a project artifact", metadataTarget);
+                                    projectHelper.attachArtifact(project, METADATA_EXTENSION, METADATA_CLASSIFIER, metadataTarget.toFile());
+                                    Path model = Paths.get(project.getBuild().getDirectory()).resolve("model.json");
+                                    if (Files.exists(model)) {
+                                        final Path modelTarget = Paths.get(project.getBuild().getDirectory()).resolve(artifactId + '-'
+                                            + versionDir.getFileName() + "-" + MODEL_CLASSIFIER + "." + MODEL_EXTENSION);
+                                        Files.copy(model, modelTarget);
+                                        debug("Attaching feature-pack model %s as a project artifact", modelTarget);
+                                        projectHelper.attachArtifact(project, MODEL_EXTENSION, MODEL_CLASSIFIER, modelTarget.toFile());
+                                    }
                                 } catch (Exception ex) {
                                     throw new RuntimeException(ex);
                                 }
