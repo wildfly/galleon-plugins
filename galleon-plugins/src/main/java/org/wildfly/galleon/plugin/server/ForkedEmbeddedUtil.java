@@ -48,7 +48,7 @@ import org.jboss.galleon.util.IoUtils;
 public class ForkedEmbeddedUtil {
 
     public static final String FORKED_EMBEDDED_ERROR_START = "Forked embedded process has failed with the following error:";
-
+    private static final String CAUSED_BY = "Caused by: ";
     private static int javaVersion = -1;
     private static String javaHome;
     private static String javaCmd;
@@ -195,8 +195,11 @@ public class ForkedEmbeddedUtil {
         }
     }
 
-    private static Throwable parseException(List<String> trace, int offset) {
-        final String classAndMsg = trace.get(offset);
+    static Throwable parseException(List<String> trace, int offset) {
+        String classAndMsg = trace.get(offset);
+        if(classAndMsg.startsWith(CAUSED_BY)) {
+            classAndMsg = classAndMsg.substring(CAUSED_BY.length());
+        }
         String className = null;
         List<Class<?>> ctorArgTypes = Collections.emptyList();
         List<Object> ctorArgs = Collections.emptyList();
@@ -243,6 +246,9 @@ public class ForkedEmbeddedUtil {
     private static StackTraceElement stackTraceElementFromString(String line) {
         int i = line.length() - 1;
         if(i < 0) {
+            return null;
+        }
+        if(line.startsWith(CAUSED_BY)) {
             return null;
         }
         if(line.charAt(i) != ')') {
