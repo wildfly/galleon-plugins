@@ -171,7 +171,7 @@ public class WfConfigGenerator extends BaseConfigGenerator {
             progressTracker.processing(null);
             scriptWriter.close();
             scriptWriter = null;
-            ForkedEmbeddedUtil.fork(new ForkedConfigGenerator(), jbossHome, script.toString());
+            ForkedEmbeddedUtil.fork(new ForkedConfigGenerator(), messageWriter.isVerboseEnabled(), jbossHome, script.toString());
         }
         progressTracker.complete();
     }
