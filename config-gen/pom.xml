@@ -30,7 +30,7 @@
   <packaging>jar</packaging>
 
   <name>WildFly Configuration Generator</name>
-  <url>http://maven.apache.org</url>
+  <description>WildFly Configuration Generator</description>
 
   <dependencies>
     <dependency>

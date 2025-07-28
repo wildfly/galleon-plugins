@@ -8,26 +8,23 @@ First, make sure you don't have pending changes in your main branch.
 * `git checkout main`
 * `git pull --rebase upstream main`
 * Update docs/* content to reference the new released version. 
-* Commit the changes with message: `Update doc to X.X.X.Final`
-* `mvn versions:set -DnewVersion=X.X.X.Final`
-* `mvn versions:commit`
-* `git add *`
+* Update the new version
+** `mvn versions:set -DnewVersion=<new released version>`
+** `mvn versions:commit`
 * Commit the changes with message: `Release X.X.X.Final`
-* Deploy in nexus
-** `mvn clean deploy -DskipTests -Drelease`
-* Create and push a Tag with the new release.
+* Deploy in nexus staging repository
+** `mvn -Pjboss-release -Pjboss-staging-deploy deploy -DskipTests -Drelease`
+* Create a Tag with the new release.
+* Check that all is correct in https://repository.jboss.org/nexus/#browse/browse:wildfly-staging
+* Deploy to nexus release repository
+** `mvn -Pjboss-staging-move nxrm3:staging-move`
+* Push the tag previously created
 * Update docs/* content to reference the new SNAPSHOT version.
 * `mvn versions:set -DnewVersion=X.X.X.Final-SNAPSHOT`
 * `mvn versions:commit`
 * `git add *`
 * Commit the changes with message: `New development iteration X.X.X.Final-SNAPSHOT`
 * `git push upstream main`
-
-== STEP 2: Release in Nexus
-
-* Log to `https://repository.jboss.org/nexus`
-* Close the staging repository.
-* Release the closed repository.
 
 == STEP 3: Release in JIRA
 
