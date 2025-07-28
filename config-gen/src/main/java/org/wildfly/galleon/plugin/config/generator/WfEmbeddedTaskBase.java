@@ -99,7 +99,7 @@ public abstract class WfEmbeddedTaskBase<R> implements ForkCallback {
             if(forkEmbedded) {
                 scriptWriter.close();
                 scriptWriter = null;
-                ForkedEmbeddedUtil.fork(this, getForkArgs());
+                ForkedEmbeddedUtil.fork(this, messageWriter.isVerboseEnabled(), getForkArgs());
             }
             return getResult();
         } finally {

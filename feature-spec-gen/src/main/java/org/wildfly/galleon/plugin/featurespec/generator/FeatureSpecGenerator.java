@@ -184,7 +184,7 @@ public class FeatureSpecGenerator implements ForkCallback {
         ModelNode domainRoots = null;
         if(fork) {
             String minStab = mimimumStability == null ? "" : mimimumStability;
-            ForkedEmbeddedUtil.fork(this, getStoredSystemProps(), installation, getStandaloneSpecsFile().toString(), getDomainSpecsFile().toString(), minStab);
+            ForkedEmbeddedUtil.fork(this, debug, getStoredSystemProps(), installation, getStandaloneSpecsFile().toString(), getDomainSpecsFile().toString(), minStab);
             standaloneFeatures = readSpecsFile(getStandaloneSpecsFile());
             if(Files.exists(Paths.get(installation).resolve(WfConstants.DOMAIN).resolve(WfConstants.CONFIGURATION))) {
                 domainRoots = readSpecsFile(getDomainSpecsFile());

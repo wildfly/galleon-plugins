@@ -78,10 +78,10 @@ public class ForkedEmbeddedUtil {
         return javaCmd == null ? javaCmd = Paths.get(getJavaHome()).resolve("bin").resolve("java").toString() : javaCmd;
     }
 
-    public static void fork(ForkCallback callback, String... args) throws ProvisioningException {
+    public static void fork(ForkCallback callback, boolean debug, String... args) throws ProvisioningException {
         final Path props = storeSystemProps();
         try {
-            fork(callback, props, args);
+            fork(callback, debug, props, args);
             callback.forkedEmbeddedDone(args);
         } catch (ConfigGeneratorException e) {
             throw new ProvisioningException(e);
@@ -90,7 +90,7 @@ public class ForkedEmbeddedUtil {
         }
     }
 
-    public static void fork(ForkCallback callback, Path props, String... args) throws ProvisioningException {
+    public static void fork(ForkCallback callback, boolean debug, Path props, String... args) throws ProvisioningException {
         // prepare the classpath
         final StringBuilder cp = new StringBuilder();
         collectCpUrls(getJavaHome(), Thread.currentThread().getContextClassLoader(), cp);
@@ -117,15 +117,17 @@ public class ForkedEmbeddedUtil {
             throw new ProvisioningException("Failed to start a feature spec reading process", e);
         }
 
-        List<String> trace = null;
+        List<String> exceptionTrace = null;
+        List<String> allTraces = new ArrayList<>();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))) {
             String line = reader.readLine();
             while (line != null) {
                 callback.forkedEmbeddedMessage(line);
-                if(trace != null) {
-                    trace.add(line);
+                allTraces.add(line);
+                if(exceptionTrace != null) {
+                    exceptionTrace.add(line);
                 } else if(FORKED_EMBEDDED_ERROR_START.equals(line)) {
-                    trace = new ArrayList<>();
+                    exceptionTrace = new ArrayList<>();
                 }
                 line = reader.readLine();
             }
@@ -140,16 +142,21 @@ public class ForkedEmbeddedUtil {
             int exitCode = p.exitValue();
             if (exitCode != 0) {
                 Throwable t = null;
-                if(trace != null) {
-                    t = parseException(trace, 0);
-                    if(t == null) {
-                        System.out.println(FORKED_EMBEDDED_ERROR_START);
-                        for(String l : trace) {
-                            System.out.println(l);
-                        }
+                if(exceptionTrace != null) {
+                    t = parseException(exceptionTrace, 0);
+                }
+                if (t == null) {
+                    for (String l : allTraces) {
+                        System.out.println(l);
                     }
                 }
                 throw new ProvisioningException("Forked embedded process has failed", t);
+            } else {
+                if (debug) {
+                    for (String l : allTraces) {
+                        System.out.println(l);
+                    }
+                }
             }
         } catch (IOException e) {
             throw new ProvisioningException("Forked embedded process has failed", e);
