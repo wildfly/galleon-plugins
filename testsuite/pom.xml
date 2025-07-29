@@ -33,10 +33,28 @@
   <packaging>pom</packaging>
 
   <name>WildFly Galleon Plugins testsuite</name>
-  <url>http://maven.apache.org</url>
+  <description>WildFly Galleon Plugins testsuite</description>
 
   <modules>
     <module>test-feature-packs</module>
     <module>tests</module>
   </modules>
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.sonatype.plugins</groupId>
+        <artifactId>nxrm3-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>nexus-deploy</id>
+            <phase>none</phase>
+          </execution>
+          <execution>
+            <id>nexus-staging.deploy</id>
+            <phase>none</phase>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
 </project>

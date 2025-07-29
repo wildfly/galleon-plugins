@@ -30,7 +30,7 @@
   <packaging>jar</packaging>
 
   <name>WildFly Feature Spec Generator</name>
-  <url>http://maven.apache.org</url>
+  <description>WildFly Feature Spec Generator</description>
 
   <dependencies>
     <dependency>

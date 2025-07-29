@@ -30,7 +30,7 @@
   <packaging>jar</packaging>
 
   <name>WildFly Galleon Plugins</name>
-  <url>http://maven.apache.org</url>
+  <description>WildFly Galleon Plugins</description>
 
   <dependencies>
     <dependency>
