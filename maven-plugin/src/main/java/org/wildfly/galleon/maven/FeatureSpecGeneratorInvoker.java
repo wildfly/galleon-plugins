@@ -129,6 +129,7 @@ public class FeatureSpecGeneratorInvoker {
     private WildFlyPackageTasksParser tasksParser;
     private ProvisioningLayoutFactory layoutFactory;
     private ProvisioningLayout<FeaturePackLayout> configLayout;
+    private final boolean generateCompleteModel;
     FeatureSpecGeneratorInvoker(WfFeaturePackBuildMojo mojo) throws MojoExecutionException {
         this.project = mojo.project;
         this.session = mojo.session;
@@ -143,6 +144,7 @@ public class FeatureSpecGeneratorInvoker {
         this.minimumStabilityLevel = mojo.minimumStabilityLevel;
         this.description = this.project.getDescription() == null || this.project.getDescription().isBlank() ? this.project.getName() : this.project.getDescription();
         this.log = mojo.getLog();
+        this.generateCompleteModel = mojo.generateCompleteModel;
     }
 
     public void execute() throws MojoExecutionException, MojoFailureException {
@@ -739,11 +741,11 @@ public class FeatureSpecGeneratorInvoker {
     private Object getFeaturePackGenerator(Class<?> specGenCls) throws NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
         debug("Creating a feature spec generator for stability %s using %s", minimumStabilityLevel, specGenCls);
         try {
-            return specGenCls.getConstructor(String.class, Path.class, Map.class, String.class, String.class, boolean.class, boolean.class)
-                    .newInstance(wildflyHome.toString(), featureSpecsOutput.toPath(), inheritedFeatureSpecs, minimumStabilityLevel, description, forkEmbedded, log.isDebugEnabled());
+            return specGenCls.getConstructor(String.class, Path.class, Map.class, String.class, String.class, boolean.class, boolean.class, boolean.class)
+                    .newInstance(wildflyHome.toString(), featureSpecsOutput.toPath(), inheritedFeatureSpecs, minimumStabilityLevel, description, generateCompleteModel, forkEmbedded, log.isDebugEnabled());
         } catch (NoSuchMethodException e) {
             try {
-                return specGenCls.getConstructor(String.class, Path.class, Map.class, String.class, String.class, String.class, boolean.class, boolean.class)
+                return specGenCls.getConstructor(String.class, Path.class, Map.class, String.class, boolean.class, boolean.class)
                         .newInstance(wildflyHome.toString(), featureSpecsOutput.toPath(), inheritedFeatureSpecs, minimumStabilityLevel, forkEmbedded, log.isDebugEnabled());
             } catch (NoSuchMethodException ex) {
                 if (minimumStabilityLevel != null && !minimumStabilityLevel.isEmpty()) {
