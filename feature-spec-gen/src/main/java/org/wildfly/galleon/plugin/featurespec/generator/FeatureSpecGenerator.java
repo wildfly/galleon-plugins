@@ -81,6 +81,7 @@ public class FeatureSpecGenerator implements ForkCallback {
     private Path domainSpecsFile;
     private String mimimumStability;
     private String description;
+    private boolean generateCompleteModel;
 
     String getBranchId(String spec, int dots) {
         int i = 0;
@@ -148,7 +149,7 @@ public class FeatureSpecGenerator implements ForkCallback {
     }
 
     public FeatureSpecGenerator(String installation, Path outputDir, Map<String, Path> inheritedSpecs,
-            String mimimumStability, String description, boolean fork, boolean debug) {
+            String mimimumStability, String description, boolean generateCompleteModel, boolean fork, boolean debug) {
         this.installation = installation;
         this.outputDir = outputDir;
         this.fork = fork;
@@ -156,6 +157,7 @@ public class FeatureSpecGenerator implements ForkCallback {
         this.inheritedSpecs = inheritedSpecs;
         this.mimimumStability = mimimumStability;
         this.description = description == null ? "" : description;
+        this.generateCompleteModel = generateCompleteModel;
     }
 
     public int generateSpecs() throws ProvisioningException {
@@ -193,7 +195,7 @@ public class FeatureSpecGenerator implements ForkCallback {
         ModelNode domainRoots = null;
         if (fork) {
             String minStab = mimimumStability == null ? "" : mimimumStability;
-            ForkedEmbeddedUtil.fork(this, debug, getStoredSystemProps(), installation, getStandaloneSpecsFile().toString(), getDomainSpecsFile().toString(), description , minStab);
+            ForkedEmbeddedUtil.fork(this, debug, getStoredSystemProps(), installation, getStandaloneSpecsFile().toString(), getDomainSpecsFile().toString(), description , generateCompleteModel ? "true" : "false", minStab);
             standaloneFeatures = readSpecsFile(getStandaloneSpecsFile());
             Path model = getStandaloneSpecsFile().getParent().resolve("model.json");
             try {
@@ -209,8 +211,7 @@ public class FeatureSpecGenerator implements ForkCallback {
             final Path home = Paths.get(installation);
             if (Files.exists(home.resolve(WfConstants.STANDALONE).resolve(WfConstants.CONFIGURATION))) {
                 standaloneFeatures = readFeatureSpecs(createStandaloneServer(installation, mimimumStability, null));
-                Boolean all = Boolean.getBoolean("org.wildfly.galleon.complete.model");
-                ModelNode result = generateModel(createStandaloneServer(installation, mimimumStability, all ? "standalone.xml" : "standalone-local.xml"), all, description);
+                ModelNode result = generateModel(createStandaloneServer(installation, mimimumStability, generateCompleteModel ? "standalone.xml" : "standalone-local.xml"), generateCompleteModel, description);
                 try {
                     if (!Files.exists(outputDir)) {
                         Files.createDirectories(outputDir);
@@ -256,18 +257,18 @@ public class FeatureSpecGenerator implements ForkCallback {
 
     @Override
     public void forkedForEmbedded(String... args) throws ConfigGeneratorException {
-        if(args.length != 4 && args.length != 5) {
+        if(args.length != 5 && args.length != 6) {
             final StringBuilder buf = new StringBuilder();
             StringUtils.append(buf, Arrays.asList(args));
-            throw new IllegalArgumentException("Expected 4-5 arguments but got " + Arrays.asList(args));
+            throw new IllegalArgumentException("Expected 5-6 arguments but got " + Arrays.asList(args));
         }
         try {
             String description = args.length > 3 ? args[3] : null;
-            String mimimumStability = args.length == 5 ? args[4] : null;
+            Boolean generateCompleteModel = args.length > 4 ? Boolean.valueOf(args[4]) : Boolean.FALSE;
+            String mimimumStability = args.length == 6 ? args[5] : null;
             ModelNode result = readFeatureSpecs(createStandaloneServer(args[0], mimimumStability, null));
             writeSpecsFile(Paths.get(args[1]), result);
-            Boolean all = Boolean.getBoolean("org.wildfly.galleon.complete.model");
-            ModelNode resultModel = generateModel(createStandaloneServer(args[0], mimimumStability, all ? "standalone.xml" : "standalone-local.xml"), all, description);
+            ModelNode resultModel = generateModel(createStandaloneServer(args[0], mimimumStability, generateCompleteModel ? "standalone.xml" : "standalone-local.xml"), generateCompleteModel, description);
             writeModelFile(Paths.get(args[1]).toAbsolutePath().getParent().resolve("model.json"), resultModel);
             System.out.println("FORKED TO " + Paths.get(args[1]).toAbsolutePath().getParent().resolve("model.json"));
             if (Files.exists(Paths.get(args[0]).resolve(WfConstants.DOMAIN).resolve(WfConstants.CONFIGURATION))) {
