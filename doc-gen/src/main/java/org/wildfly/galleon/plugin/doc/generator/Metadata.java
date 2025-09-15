@@ -6,6 +6,7 @@
 package org.wildfly.galleon.plugin.doc.generator;
 
 import java.io.IOException;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.nio.file.Path;
@@ -27,7 +28,72 @@ public record Metadata(
 
     static Metadata parse(Path file) throws IOException {
         ObjectMapper mapper = new ObjectMapper();
-        return mapper.readValue(file.toFile(), Metadata.class);
+        Metadata metadata = mapper.readValue(file.toFile(), Metadata.class);
+        return sortedMetadata(metadata);
+    }
+
+    /**
+     * Creates a new Metadata instance with all collections sorted alphabetically
+     */
+    private static Metadata sortedMetadata(Metadata metadata) {
+        // Sort layers by name
+        List<Layer> sortedLayers = metadata.layers() != null ?
+            metadata.layers().stream()
+                .map(Metadata::sortedLayer)
+                .sorted(Comparator.comparing(Layer::name))
+                .toList() : null;
+
+        return new Metadata(
+            metadata.groupId(),
+            metadata.artifactId(),
+            metadata.version(),
+            metadata.name(),
+            metadata.description(),
+            metadata.licenses(),
+            metadata.url(),
+            metadata.scmUrl(),
+            sortedLayers
+        );
+    }
+
+    /**
+     * Creates a new Layer instance with all collections sorted alphabetically
+     */
+    private static Layer sortedLayer(Layer layer) {
+        // Sort dependencies by name
+
+        List<LayerDependency> sortedDependencies = layer.dependencies() != null ?
+            layer.dependencies().stream()
+                .sorted(Comparator.comparing(LayerDependency::name))
+                .toList() : null;
+
+        // Sort properties by name
+        List<Property> sortedProperties = layer.properties() != null ?
+            layer.properties().stream()
+                .sorted(Comparator.comparing(Property::name))
+                .toList() : null;
+
+        // Sort configurations by address, then by attribute
+        List<AttributeConfiguration> sortedConfigurations = layer.configurations() != null ?
+            layer.configurations().stream()
+                .sorted(Comparator.comparing(AttributeConfiguration::address)
+                    .thenComparing(AttributeConfiguration::attribute))
+                .toList() : null;
+
+        // Sort packages alphabetically
+        List<String> sortedPackages = layer.packages() != null ?
+            layer.packages().stream()
+                .sorted()
+                .toList() : null;
+
+        return new Layer(
+            layer.name(),
+            sortedDependencies,
+            layer.managementModel(),
+            sortedProperties,
+            sortedConfigurations,
+            sortedPackages
+        );
     }
 
     public record Layer(

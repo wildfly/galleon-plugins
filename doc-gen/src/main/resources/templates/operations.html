@@ -1,0 +1,78 @@
+{#if operations.size > 0}
+<h2>Operations ({operations.size})</h2>
+<ul class="operations">
+  {#for operation in operations}
+  <li>
+    <span class="toggle-link"><a id="{operation.name}" href="#{operation.name}" class="{#if operation.deprecation.deprecated}deprecated{/if}">{operation.name}</a> - {operation.description}</span>
+    <div class="collapsible">
+
+      {#if operation.deprecation.deprecated}
+      <div class="alert">
+        <strong>Deprecated</strong> Since {operation.deprecation.since}
+        <div>{operation.deprecation.reason}</div>
+      </div>
+      {/if}
+
+      {#if operation.parameters.size > 0}
+      <table>
+        <thead>
+        <tr>
+          <th>Request Parameter</th>
+          <th>Type</th>
+          <th>Required</th>
+          <th>Expressions Allowed</th>
+          <th>Default value</th>
+          <th>Description</th>
+        </tr>
+        </thead>
+        <tbody>
+        {#for param in operation.parameters}
+        <tr>
+          <td>{param.name}</td>
+          <td>{param.type}</td>
+          <td>{param.required}</td>
+          <td>{param.expressionsAllowed}</td>
+          <td>{param.defaultValue}</td>
+          <td>{param.description}</td>
+        </tr>
+        {/for}
+        </tbody>
+      </table>
+      {/if}
+
+      {#if operation.reply}
+      <h3>Reply properties</h3>
+      <div>{operation.reply.description}</div>
+      <dl>
+        <dt>Type</dt>
+        <dd>{operation.reply.type}</dd>
+        {#if operation.reply.valueType}
+        <dt>Value Type</dt>
+        <dd>
+          <div class="code-block-container">
+            <pre><code class="language-json">
+{operation.reply.valueType}</code></pre>
+          </div>
+        </dd>
+        {/if}
+      </dl>
+      {/if}
+
+      <table>
+        {#if operation.jsonRepresentation}
+        <tr>
+          <td class="toggle-link">Raw DMR model</td>
+          <td class="collapsible">
+            <div class="code-block-container">
+                            <pre><code class="language-json">
+{operation.jsonRepresentation}</code></pre>
+            </div>
+          </td>
+        </tr>
+        {/if}
+      </table>
+    </div>
+  </li>
+  {/for}
+</ul>
+{/if}
