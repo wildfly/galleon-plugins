@@ -36,6 +36,9 @@ public class DocGenerator {
         Files.createDirectories(manifestPath);
         Files.copy(metadataPath, manifestPath.resolve("metadata.json"), REPLACE_EXISTING);
 
+        // Copy CSS & JavaScript resources
+        copyResources(outputDirectory);
+
         Metadata metadata = Metadata.parse(metadataPath);
 
         Optional<ModelNode> rootDescription = Optional.empty();
@@ -139,5 +142,18 @@ public class DocGenerator {
         System.arraycopy(path, 0, newPath, 0, path.length);
         newPath[path.length] = new PathElement(key, value);
         return newPath;
+    }
+
+    private static void copyResources(Path outputDirectory) throws IOException {
+        try (InputStream cssStream = DocGenerator.class.getResourceAsStream("/styles.css")) {
+            if (cssStream != null) {
+                Files.copy(cssStream, outputDirectory.resolve("styles.css"), REPLACE_EXISTING);
+            }
+        }
+        try (InputStream cssStream = DocGenerator.class.getResourceAsStream("/scripts.js")) {
+            if (cssStream != null) {
+                Files.copy(cssStream, outputDirectory.resolve("scripts.js"), REPLACE_EXISTING);
+            }
+        }
     }
 }

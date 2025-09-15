@@ -403,6 +403,8 @@ public class FeatureSpecGenerator implements ForkCallback {
         ModelNode rootAddress = Operations.createAddress().setEmptyList();
         final ModelNode op = Operations.createOperation("read-resource-description", rootAddress);
         op.get(ClientConstants.RECURSIVE).set(true);
+        op.get("operations").set(true);
+        op.get("inherited").set(false);
         final ModelNode result;
         try {
             result = server.getModelControllerClient().execute(op);
@@ -456,6 +458,8 @@ public class FeatureSpecGenerator implements ForkCallback {
         final ModelNode op = Operations.createOperation("read-resource-description", address);
         final boolean multi = isStarAddress(address);
         op.get(ClientConstants.RECURSIVE).set(recursive);
+        op.get("operations").set(true);
+        op.get("inherited").set(false);
         final ModelNode opResult;
         try {
             opResult = server.getModelControllerClient().execute(op);

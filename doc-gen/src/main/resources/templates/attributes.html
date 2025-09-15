@@ -3,8 +3,16 @@
 <ul class="attributes">
 {#for attribute in attributes}
     <li>
-        <span class="toggle-link"><a id="{attribute.name}" href="#{attribute.name}">{attribute.name}</a> - {attribute.description}</span>
+        <span class="toggle-link"><a id="{attribute.name}" href="#{attribute.name}" class="{#if attribute.deprecation.deprecated}deprecated{/if}">{attribute.name}</a> - {attribute.description}</span>
         <div class="collapsible">
+
+            {#if attribute.deprecation.deprecated}
+            <div class="alert">
+                <strong>Deprecated</strong> Since {attribute.deprecation.since}
+                <div>{attribute.deprecation.reason}</div>
+            </div>
+            {/if}
+
             <table>
                 <tr>
                     <td>Type</td>
@@ -78,6 +86,17 @@
                 <tr>
                     <td>Stability Level</td>
                     <td>{attribute.stability}</td>
+                </tr>
+                {/if}
+                {#if attribute.jsonRepresentation}
+                <tr>
+                    <td class="toggle-link">Raw DMR model</td>
+                    <td class="collapsible">
+                        <div class="code-block-container">
+                            <pre><code class="language-json">
+{attribute.jsonRepresentation}</code></pre>
+                        </div>
+                    </td>
                 </tr>
                 {/if}
             </table>

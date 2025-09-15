@@ -8,11 +8,14 @@ package org.wildfly.galleon.plugin.doc.generator;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.sort;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.Collection;
-import java.util.HashSet;
+import java.util.Collections;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.Property;
@@ -21,21 +24,31 @@ record Capability(String name, boolean dynamic) {
 
 }
 
-record Resource(String description, String storage, List<Child> children, List<Attribute> attributes) {
+record Resource(String description, String storage, List<Child> children, List<Attribute> attributes, List<Operation> operations) {
     public static Resource fromModelNode(final ModelNode node, Map<String, Capability> capabilities) {
-        final List<Child> children = new ArrayList<>();
+        List<Child> children = emptyList();
         if (node.hasDefined("children")) {
-            for (Property property : node.get("children").asPropertyList()) {
-                children.add(Child.fromProperty(property));
-            }
-            sort(children);
+            children = node.get("children").asPropertyList()
+                    .stream()
+                    .map(Child::fromProperty)
+                    .sorted()
+                    .toList();
         }
-        final List<Attribute> attributes = new ArrayList<Attribute>();
+        List<Attribute> attributes = emptyList();
         if (node.hasDefined("attributes")) {
-            for (Property i : node.get("attributes").asPropertyList()) {
-                attributes.add(Attribute.fromProperty(i));
-            }
-            sort(attributes);
+            attributes = node.get("attributes").asPropertyList()
+                    .stream()
+                    .map(Attribute::fromProperty)
+                    .sorted()
+                    .toList();
+        }
+        List<Operation> operations = emptyList();
+        if (node.hasDefined("operations")) {
+            operations = node.get("operations").asPropertyList()
+                    .stream()
+                    .map(Operation::fromProperty)
+                    .sorted()
+                    .toList();
         }
         String storage = null;
         if (node.hasDefined("storage")) {
@@ -46,30 +59,28 @@ record Resource(String description, String storage, List<Child> children, List<A
             description = node.get("description").asString();
         }
 
-        return new Resource(description, storage, children, attributes);
+        return new Resource(description, storage, children, attributes, operations);
     }
 }
 
-record Child(String name, String description, Deprecated deprecated,
+record Child(String name, String description, Deprecation deprecation,
              List<Child> children) implements Comparable<Child> {
     public static Child fromProperty(final Property property) {
         String name = property.getName();
         String description = property.getValue().get("description").asString();
 
-        final List<Child> registrations = new ArrayList<Child>();
+        final List<Child> registrations = new ArrayList<>();
         ModelNode modelDesc = property.getValue().get("model-description");
         if (modelDesc.isDefined()) {
             for (Property child : modelDesc.asPropertyList()) {
                 if (!child.getName().equals("*")) {
-                    registrations.add(new Child(child.getName(), child.getValue().get("description").asString(""), Deprecated.fromModel(child.getValue()), emptyList()));
+                    registrations.add(new Child(child.getName(), child.getValue().get("description").asString(""), Deprecation.fromModel(child.getValue()), emptyList()));
                 }
             }
         }
         sort(registrations);
 
-        Child op = new Child(name, description, Deprecated.fromModel(property.getValue()), registrations);
-
-        return op;
+        return new Child(name, description, Deprecation.fromModel(property.getValue()), registrations);
     }
 
     @Override
@@ -78,8 +89,8 @@ record Child(String name, String description, Deprecated deprecated,
     }
 }
 
-record Deprecated(boolean deprecated, String reason, String since) {
-    public static Deprecated fromModel(final ModelNode model) {
+record Deprecation(boolean deprecated, String reason, String since) {
+    public static Deprecation fromModel(final ModelNode model) {
         final boolean deprecated = model.hasDefined("deprecated");
         final String reason;
         final String since;
@@ -91,15 +102,15 @@ record Deprecated(boolean deprecated, String reason, String since) {
             reason = null;
             since = null;
         }
-        return new Deprecated(deprecated, reason, since);
+        return new Deprecation(deprecated, reason, since);
     }
 }
 
 record Attribute(String name, String description, String type, boolean nillable, boolean expressionsAllowed,
                  String defaultValue, String min, String max, String accessType, String storage,
-                 Deprecated deprecated,
+                 Deprecation deprecation,
                  String unit, String restartRequired, String capabilityReference, String stability,
-                 Collection<String> allowedValues) implements Comparable<Attribute> {
+                 Collection<String> allowedValues, String jsonRepresentation) implements Comparable<Attribute> {
     public static Attribute fromProperty(final Property property) {
         String name = property.getName();
         String description = property.getValue().get("description").asString();
@@ -133,18 +144,87 @@ record Attribute(String name, String description, String type, boolean nillable,
         String restartRequired = property.getValue().get("restart-required").asStringOrNull();
         String capabilityReference = property.getValue().get("capability-reference").asStringOrNull();
         String stability = property.getValue().get("stability").asStringOrNull();
-        Collection<String> allowedValues = new HashSet<>();
+        Collection<String> allowedValues = Collections.emptySet();
         if (property.getValue().hasDefined("allowed")) {
-            for (ModelNode allowed : property.getValue().get("allowed").asList()) {
-                allowedValues.add(allowed.asString());
-            }
+            allowedValues = property.getValue().get("allowed").asList()
+                    .stream()
+                    .map(ModelNode::asString)
+                    .collect(Collectors.toSet());
         }
-        return new Attribute(name, description, type, nilable, expressionsAllowed, defaultValue, min, max, accessType, storage, Deprecated.fromModel(property.getValue()), unit, restartRequired, capabilityReference, stability, allowedValues);
+        String jsonRepresentation = property.getValue().toJSONString(false);
+        return new Attribute(name, description, type, nilable, expressionsAllowed, defaultValue, min, max, accessType, storage, Deprecation.fromModel(property.getValue()), unit, restartRequired, capabilityReference, stability, allowedValues, jsonRepresentation);
     }
 
     @Override
     public int compareTo(Attribute o) {
         return name.compareTo(o.name);
+    }
+}
+
+record Operation(String name, String description, boolean readOnly, boolean runtimeOnly, String stability,
+                 Deprecation deprecation, List<Parameter> parameters, Reply reply, String jsonRepresentation) implements Comparable<Operation> {
+    public static Operation fromProperty(final Property property) {
+        String name = property.getName();
+        ModelNode model = property.getValue();
+        String description = model.get("description").asString();
+        boolean readOnly = false;
+        if (model.hasDefined("read-only")) {
+            readOnly = model.get("read-only").asBoolean();
+        }
+        boolean runtimeOnly = false;
+        if (model.hasDefined("runtime-only")) {
+            runtimeOnly = model.get("runtime-only").asBoolean();
+        }
+        String stability = model.get("stability").asStringOrNull();
+        String jsonRepresentation = model.toJSONString(false);
+        List<Parameter> parameters = emptyList();
+        if (model.hasDefined("request-properties")) {
+            parameters = model.get("request-properties").asPropertyList()
+                    .stream()
+                    .map(Parameter::fromProperty)
+                    .toList();
+        }
+        Reply reply = null;
+        if (model.hasDefined("reply-properties")) {
+            reply = Reply.fromModelNode(model.get("reply-properties"));
+        }
+
+        return new Operation(name, description, readOnly, runtimeOnly, stability, Deprecation.fromModel(model), parameters, reply, jsonRepresentation);
+    }
+
+    @Override
+    public int compareTo(Operation o) {
+        return name.compareTo(o.name);
+    }
+
+    record Parameter(String name, String type, String description, boolean required, boolean nillable, boolean expressionsAllowed, String defaultValue) {
+        public static Parameter fromProperty(final Property property) {
+            String name = property.getName();
+            ModelNode value = property.getValue();
+            String type = value.get("type").asString();
+            String description = value.get("description").asStringOrNull();
+            boolean required = value.get("required").asBoolean();
+            boolean nillable = value.get("nillable").asBoolean();
+            boolean expressionsAllowed = value.get("expressions-allowed").asBoolean();
+            String defaultValue = value.get("default").asStringOrNull();
+
+            return new Parameter(name, type, description, required, nillable, expressionsAllowed, defaultValue);
+        }
+    }
+
+    record Reply(String type, String valueType, String description) {
+        public static Reply fromModelNode(final ModelNode model) {
+            if (!model.hasDefined("type")) {
+                return null;
+            }
+            String returnType = model.get("type").asString();
+            String returnDescription = model.get("description").asString("");
+            ModelNode returnValueType = model.get("value-type");
+            StringWriter writer = new StringWriter();
+            returnValueType.writeString(new PrintWriter(writer), false);
+            String valueType = writer.toString();
+            return new Reply(returnType, returnValueType.isDefined() ? valueType : null, returnDescription);
+        }
     }
 }
 
