@@ -116,5 +116,30 @@ function showCopyFeedback(elementId) {
     }, 1500);
 }
 
+/**
+ * Switch between tabs in the tab interface
+ * @param {Event} event - The click event
+ * @param {string} tabId - The ID of the tab content to show
+ */
+function switchTab(event, tabId) {
+    // Remove active class from all tab buttons and content
+    const tabButtons = document.querySelectorAll('.tab-button');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabButtons.forEach(button => {
+        button.classList.remove('active');
+        button.setAttribute('aria-selected', 'false');
+    });
+
+    tabContents.forEach(content => {
+        content.classList.remove('active');
+    });
+
+    // Add active class to clicked button and corresponding content
+    event.target.classList.add('active');
+    event.target.setAttribute('aria-selected', 'true');
+    document.getElementById(tabId).classList.add('active');
+}
+
 // Initialize when the DOM is loaded
 document.addEventListener('DOMContentLoaded', initializeCollapsibleLinks);

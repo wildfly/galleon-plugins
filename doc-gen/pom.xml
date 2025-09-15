@@ -42,5 +42,13 @@
       <groupId>io.quarkus.qute</groupId>
       <artifactId>qute-core</artifactId>
     </dependency>
+    <dependency>
+      <groupId>org.javassist</groupId>
+      <artifactId>javassist</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.jboss.logging</groupId>
+      <artifactId>jboss-logging</artifactId>
+    </dependency>
   </dependencies>
 </project>

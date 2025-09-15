@@ -35,6 +35,7 @@ import java.util.Map;
 
 import javax.xml.stream.XMLStreamException;
 
+import org.jboss.as.controller.client.ModelControllerClient;
 import org.jboss.as.controller.client.helpers.ClientConstants;
 import org.jboss.as.controller.client.helpers.Operations;
 import org.jboss.dmr.ModelNode;
@@ -197,10 +198,10 @@ public class FeatureSpecGenerator implements ForkCallback {
             String minStab = mimimumStability == null ? "" : mimimumStability;
             ForkedEmbeddedUtil.fork(this, debug, getStoredSystemProps(), installation, getStandaloneSpecsFile().toString(), getDomainSpecsFile().toString(), description , generateCompleteModel ? "true" : "false", minStab);
             standaloneFeatures = readSpecsFile(getStandaloneSpecsFile());
-            Path model = getStandaloneSpecsFile().getParent().resolve("model.json");
+            Path managementApiPath = getStandaloneSpecsFile().getParent().resolve("management-api.json");
             try {
                 Files.createDirectories(outputDir);
-                Files.copy(model, outputDir.resolve("model.json"));
+                Files.copy(managementApiPath, outputDir.resolve("management-api.json"));
             } catch (IOException ex) {
                 throw new ProvisioningException(ex);
             }
@@ -216,7 +217,7 @@ public class FeatureSpecGenerator implements ForkCallback {
                     if (!Files.exists(outputDir)) {
                         Files.createDirectories(outputDir);
                     }
-                    Files.write(outputDir.resolve("model.json"), result.toJSONString(false).getBytes());
+                    Files.write(outputDir.resolve("management-api.json"), result.toJSONString(false).getBytes());
                 } catch (IOException ex) {
                     throw new ProvisioningException(ex);
                 }
@@ -269,8 +270,8 @@ public class FeatureSpecGenerator implements ForkCallback {
             ModelNode result = readFeatureSpecs(createStandaloneServer(args[0], mimimumStability, null));
             writeSpecsFile(Paths.get(args[1]), result);
             ModelNode resultModel = generateModel(createStandaloneServer(args[0], mimimumStability, generateCompleteModel ? "standalone.xml" : "standalone-local.xml"), generateCompleteModel, description);
-            writeModelFile(Paths.get(args[1]).toAbsolutePath().getParent().resolve("model.json"), resultModel);
-            System.out.println("FORKED TO " + Paths.get(args[1]).toAbsolutePath().getParent().resolve("model.json"));
+            writeModelFile(Paths.get(args[1]).toAbsolutePath().getParent().resolve("management-api.json"), resultModel);
+            System.out.println("FORKED TO " + Paths.get(args[1]).toAbsolutePath().getParent().resolve("management-api.json"));
             if (Files.exists(Paths.get(args[0]).resolve(WfConstants.DOMAIN).resolve(WfConstants.CONFIGURATION))) {
                 result = readFeatureSpecs(createEmbeddedHc(args[0], mimimumStability));
                 writeSpecsFile(Paths.get(args[2]), result);
@@ -359,15 +360,34 @@ public class FeatureSpecGenerator implements ForkCallback {
     private static ModelNode generateModel(final EmbeddedManagedProcess server, Boolean all, String description) throws ProvisioningException {
         try {
             server.start();
+            final ModelNode model;
             if (!all) {
-                return readModel(server, description);
+                model = readModel(server, description);
+            } else {
+                model = readAll(server, description);
             }
-            return readAll(server, description);
+            model.get("possible-capabilities").set(getPossibleCapabilities(server.getModelControllerClient()));
+            return model;
         } catch (EmbeddedProcessStartException ex) {
             throw new ProvisioningException("Failed to read feature spec descriptions", ex);
         } finally {
             server.stop();
         }
+    }
+
+    private static ModelNode getPossibleCapabilities(ModelControllerClient client) throws ProvisioningException {
+        final ModelNode address = Operations.createAddress("core-service", "capability-registry");
+        ModelNode result;
+        try {
+            ModelNode op = Operations.createReadAttributeOperation(address, "possible-capabilities");
+            result = client.execute(op);
+        } catch (IOException e) {
+            throw new ProvisioningException("Failed to read capabilities", e);
+        }
+        if (!Operations.isSuccessfulOutcome(result)) {
+            throw new ProvisioningException(Operations.getFailureDescription(result).asString());
+        }
+        return Operations.readResult(result);
     }
 
     private static ModelNode readModel(final EmbeddedManagedProcess server, String description) throws ProvisioningException {

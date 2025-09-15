@@ -1,107 +1,118 @@
 {#if attributes.size > 0}
 <h2>Attributes ({attributes.size})</h2>
 <ul class="attributes">
-{#for attribute in attributes}
-    <li>
-        <span class="toggle-link"><a id="{attribute.name}" href="#{attribute.name}" class="{#if attribute.deprecation.deprecated}deprecated{/if}">{attribute.name}</a> - {attribute.description}</span>
-        <div class="collapsible">
+  {#for attribute in attributes}
+  <li>
+    <span class="toggle-link">
+      <a id="{attribute.name}" href="#{attribute.name}" class="{#if attribute.deprecation.deprecated}deprecated{/if}">
+        {#switch attribute.stability}
+        {#case "experimental"}
+         <abbr title="Experimental feature">&#x1F174;</abbr>&nbsp;
+         {#case "preview"}
+         <abbr title="Preview feature">&#x1F17F;</abbr>&nbsp;
+         {#case "community"}
+         <abbr title="Community feature">&#x1F172;</abbr>&nbsp;
+         {/switch}
+         {attribute.name}</a> - {attribute.description}
+    </span>
+    <div class="collapsible">
 
-            {#if attribute.deprecation.deprecated}
-            <div class="alert">
-                <strong>Deprecated</strong> Since {attribute.deprecation.since}
-                <div>{attribute.deprecation.reason}</div>
-            </div>
-            {/if}
+      {#if attribute.deprecation.deprecated}
+      <div class="alert">
+        <strong>Deprecated</strong> Since {attribute.deprecation.since}
+        <div>{attribute.deprecation.reason}</div>
+      </div>
+      {/if}
 
-            <table>
-                <tr>
-                    <td>Type</td>
-                    <td>{attribute.type}</td>
-                </tr>
-                {#if attribute.defaultValue}
-                <tr>
-                    <td>Default Value</td>
-                    <td>{attribute.defaultValue}</td>
-                </tr>
-                {/if}
-                {#if attribute.unit}
-                <tr>
-                    <td>Unit</td>
-                    <td>{attribute.unit}</td>
-                </tr>
-                {/if}
-                {#if attribute.nillable}
-                <tr>
-                    <td>Is the attribute nillable?</td>
-                    <td>{attribute.nillable}</td>
-                </tr>
-                {/if}
-                {#if attribute.expressionsAllowed}
-                <tr>
-                    <td>Does the attribute allow expression?</td>
-                    <td>{attribute.expressionsAllowed}</td>
-                </tr>
-                {/if}
-                {#if attribute.storage}
-                <tr>
-                    <td>Where is the attribute stored?</td>
-                    <td>{attribute.storage}</td>
-                </tr>
-                {/if}
-                {#if attribute.accessType}
-                <tr>
-                    <td>Access Type</td>
-                    <td>{attribute.accessType}</td>
-                </tr>
-                {/if}
-                {#if attribute.restartRequired}
-                <tr>
-                    <td>Is restarted required?</td>
-                    <td>{attribute.restartRequired}</td>
-                </tr>
-                {/if}
-                {#if attribute.min}
-                <tr>
-                    <td>Min</td>
-                    <td>{attribute.min}</td>
-                </tr>
-                {/if}
-                {#if attribute.max}
-                <tr>
-                    <td>Max</td>
-                    <td>{attribute.max}</td>
-                </tr>
-                {/if}
-                {#if attribute.allowedValues.size != 0}
-                <tr>
-                    <td>Allowed Values</td>
-                    <td>
-                        {#for v in attribute.allowedValues}
-                        {v}<br />
-                        {/for}
-                    </td>
-                </tr>
-                {/if}
-                {#if attribute.stability}
-                <tr>
-                    <td>Stability Level</td>
-                    <td>{attribute.stability}</td>
-                </tr>
-                {/if}
-                {#if attribute.jsonRepresentation}
-                <tr>
-                    <td class="toggle-link">Raw DMR model</td>
-                    <td class="collapsible">
-                        <div class="code-block-container">
+      <table>
+        <tr>
+          <td>Type</td>
+          <td>{attribute.type}</td>
+        </tr>
+        {#if attribute.defaultValue}
+        <tr>
+          <td>Default Value</td>
+          <td>{attribute.defaultValue}</td>
+        </tr>
+        {/if}
+        {#if attribute.unit}
+        <tr>
+          <td>Unit</td>
+          <td>{attribute.unit}</td>
+        </tr>
+        {/if}
+        {#if attribute.nillable}
+        <tr>
+          <td>Is the attribute nillable?</td>
+          <td>{attribute.nillable}</td>
+        </tr>
+        {/if}
+        {#if attribute.expressionsAllowed}
+        <tr>
+          <td>Does the attribute allow expression?</td>
+          <td>{attribute.expressionsAllowed}</td>
+        </tr>
+        {/if}
+        {#if attribute.storage}
+        <tr>
+          <td>Where is the attribute stored?</td>
+          <td>{attribute.storage}</td>
+        </tr>
+        {/if}
+        {#if attribute.accessType}
+        <tr>
+          <td>Access Type</td>
+          <td>{attribute.accessType}</td>
+        </tr>
+        {/if}
+        {#if attribute.restartRequired}
+        <tr>
+          <td>Is restarted required?</td>
+          <td>{attribute.restartRequired}</td>
+        </tr>
+        {/if}
+        {#if attribute.min}
+        <tr>
+          <td>Min</td>
+          <td>{attribute.min}</td>
+        </tr>
+        {/if}
+        {#if attribute.max}
+        <tr>
+          <td>Max</td>
+          <td>{attribute.max}</td>
+        </tr>
+        {/if}
+        {#if attribute.allowedValues.size != 0}
+        <tr>
+          <td>Allowed Values</td>
+          <td>
+            {#for v in attribute.allowedValues}
+            {v}<br />
+            {/for}
+          </td>
+        </tr>
+        {/if}
+        {#if attribute.stability}
+        <tr>
+          <td>Stability Level</td>
+          <td>{attribute.stability}</td>
+        </tr>
+        {/if}
+        {#if attribute.jsonRepresentation}
+        <tr>
+          <td class="toggle-link">Raw DMR model</td>
+          <td class="collapsible">
+            <div class="code-block-container">
                             <pre><code class="language-json">
 {attribute.jsonRepresentation}</code></pre>
-                        </div>
-                    </td>
-                </tr>
-                {/if}
-            </table>
-        </div>
-    </li>
-{/for}
+            </div>
+          </td>
+        </tr>
+        {/if}
+      </table>
+    </div>
+  </li>
+  {/for}
 </ul>
 {/if}

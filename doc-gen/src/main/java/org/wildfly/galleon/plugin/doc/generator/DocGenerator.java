@@ -6,6 +6,7 @@
 package org.wildfly.galleon.plugin.doc.generator;
 
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
+import static org.wildfly.galleon.plugin.doc.generator.LogMessageGenerator.exportLogMessages;
 import static org.wildfly.galleon.plugin.doc.generator.SimpleLog.SYSTEM_LOG;
 import static org.wildfly.galleon.plugin.doc.generator.TemplateUtils.ENGINE;
 
@@ -13,8 +14,14 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
+import java.util.stream.Stream;
 
 import io.quarkus.qute.Template;
 import org.jboss.dmr.ModelNode;
@@ -25,29 +32,30 @@ public class DocGenerator {
      * Generate the model reference in the {@code outputDirectory}
      *
      * @param outputDirectory the root directory to generate the model reference
-     * @param modelPath the path to the model.json file
+     * @param managementAPIPath the path to the management-api.json file
      *
      * @return true if the model is generated
      */
-    public static boolean generateModel(Path outputDirectory, Path modelPath) throws IOException {
-        return generateModel(SYSTEM_LOG, outputDirectory, modelPath);
+    public static boolean generateModel(Path outputDirectory, Path managementAPIPath) throws IOException {
+        return generateModel(SYSTEM_LOG, outputDirectory, managementAPIPath);
     }
 
-    static boolean generateModel(SimpleLog log, Path outputDirectory, Path modelPath) throws IOException {
+    static boolean generateModel(SimpleLog log, Path outputDirectory, Path managementAPIPath) throws IOException {
         Path referencePath = outputDirectory.resolve("reference");
         Files.createDirectories(referencePath);
 
         copyResources(outputDirectory);
 
         Optional<ModelNode> rootDescription = Optional.empty();
-        if (Files.exists(modelPath)) {
-            try (InputStream in = Files.newInputStream(modelPath)) {
+        if (Files.exists(managementAPIPath)) {
+            try (InputStream in = Files.newInputStream(managementAPIPath)) {
                 rootDescription = Optional.of(ModelNode.fromJSONStream(in));
             }
         }
 
         if (rootDescription.isPresent()) {
-            generateResource(referencePath, ENGINE.getTemplate("resource"), rootDescription.get());
+            final Map<String, Capability> globalCapabilities = new LinkedHashMap<>(getCapabilityMap(rootDescription.get()));
+            generateResource(referencePath, ENGINE.getTemplate("resource"), rootDescription.get(), globalCapabilities);
             if (log.isDebugEnabled()) {
                 log.debug("✏️ Model reference pages generated");
             }
@@ -63,41 +71,84 @@ public class DocGenerator {
      * The documentation is generated in the {@code outputDirectory}. A zip archive
      * that contains the generated documentation is created at {@code docZipArchive}
      */
-    public static void generate(SimpleLog log, Path docZipArchive, Path outputDirectory, Path metadataPath, Path modelPath) throws IOException {
+    public static void generate(SimpleLog log, Path docZipArchive, Path outputDirectory, Path metadataPath, Path managementAPIPath, Path localRepositoryPath) throws IOException {
         log.info("🔎 Generating Feature Pack Documentation");
 
         Path manifestPath = outputDirectory.resolve("META-INF");
         Files.createDirectories(manifestPath);
         Files.copy(metadataPath, manifestPath.resolve("metadata.json"), REPLACE_EXISTING);
-        if (Files.exists(modelPath)) {
-            Files.copy(modelPath, manifestPath.resolve("model.json"), REPLACE_EXISTING);
+        if (Files.exists(managementAPIPath)) {
+            Files.copy(managementAPIPath, manifestPath.resolve("management-api.json"), REPLACE_EXISTING);
         }
 
-        final boolean hasModel = generateModel(log, outputDirectory, modelPath);
+        final boolean hasModel = generateModel(log, outputDirectory, managementAPIPath);
 
         Metadata metadata = Metadata.parse(metadataPath);
 
-        generateIndex(outputDirectory, ENGINE.getTemplate("index"), metadata, hasModel);
+        final boolean hasLogMessages = generateLogMessages(log, outputDirectory, localRepositoryPath, metadataPath.getParent());
+
+        generateIndex(outputDirectory, ENGINE.getTemplate("index"), metadata, hasModel, hasLogMessages);
         if (log.isDebugEnabled()) {
             log.debug("✏️ Index page generated");
         }
+
 
         FileUtils.zipDirectory(outputDirectory, docZipArchive);
         log.info("📦 Archive generated at " + docZipArchive);
     }
 
-    private static void generateIndex(Path outputDirectory, Template index, Metadata metadata, boolean hasModel) throws IOException {
+    static boolean generateLogMessages(SimpleLog log, Path outputDirectory, Path localRepositoryPath, Path artifactListsParentPath) throws IOException {
+        log.info("🔎 Exporting log messages from artifact lists...");
+
+        List<LogMessage> messages = new ArrayList<>();
+
+        List<Path> artifactListPaths;
+        try(Stream<Path> stream = Files.list(artifactListsParentPath)) {
+            artifactListPaths = stream
+                    .filter(path -> Files.isRegularFile(path) &&
+                            path.getFileName().toString().endsWith("-artifact-list.txt"))
+                    .toList();
+        }
+        for (Path path : artifactListPaths) {
+            messages.addAll(exportLogMessages(log, path, localRepositoryPath));
+        }
+
+        if (messages.isEmpty()) {
+            return false;
+        }
+        // Sort the log messages by their codes and then ids.
+        Map<String, List<LogMessage>> map = new TreeMap<>();
+        for (LogMessage msg : messages) {
+            if(msg.code().isEmpty()) {
+                continue;
+            }
+            map.computeIfAbsent(msg.code(), (i) -> new ArrayList<>()).add(msg);
+        }
+        map.forEach((s, msgs) -> Collections.sort(msgs));
+
+        String content = ENGINE.getTemplate("log-message-reference")
+                .data("codes", map)
+                .render();
+        FileUtils.writeToFile(outputDirectory.resolve("log-message-reference.html"), content);
+        log.info("✏️ Log Message Reference page generated");
+        return true;
+    }
+
+    private static void generateIndex(Path outputDirectory, Template index, Metadata metadata, boolean hasManagementAPI, boolean hasLogMessages) throws IOException {
         String content = index
                 .data("metadata", metadata)
-                .data("hasModel", hasModel)
+                .data("hasManagementAPI", hasManagementAPI)
+                .data("hasLogMessages", hasLogMessages)
                 .render();
         FileUtils.writeToFile(outputDirectory.resolve("index.html"), content);
     }
 
     private static void generateResource(Path outputDirectory,
                                          Template resourceTemplate,
-                                         ModelNode model, PathElement... path) throws IOException {
-        final Resource resource = Resource.fromModelNode(model, Collections.emptyMap());
+                                         ModelNode model,
+                                         Map<String, Capability> globalCapabilities,
+                                         PathElement... path) throws IOException {
+        final Resource resource = Resource.fromModelNode(PathAddress.pathAddress(path), model, globalCapabilities);
         final String currentUrl = buildCurrentUrl(path);
         final String relativePathToContextRoot = createRelativePathToContextRoot(currentUrl);
 
@@ -119,7 +170,7 @@ public class DocGenerator {
                     if (newModel.hasDefined("operations")) {
                         newModel.get("operations");
                     }
-                    generateResource(outputDirectory, resourceTemplate, newModel, newPath);
+                    generateResource(outputDirectory, resourceTemplate, newModel, globalCapabilities, newPath);
                 }
             } else {
                 for (Child registration : child.children()) {
@@ -128,11 +179,23 @@ public class DocGenerator {
                     ModelNode childModel = model.get("children").get(child.name());
                     if (childModel.hasDefined("model-description") && childModel.get("model-description").hasDefined(registration.name())) {
                         ModelNode newModel = childModel.get("model-description").get(registration.name());
-                        generateResource(outputDirectory, resourceTemplate, newModel, newPath);
+                        generateResource(outputDirectory, resourceTemplate, newModel, globalCapabilities, newPath);
                     }
                 }
             }
         }
+    }
+
+    private static Map<String, Capability> getCapabilityMap(ModelNode fullModel) {
+        ModelNode capabilitiesModel = fullModel.get("possible-capabilities");
+        Map<String, Capability> capabilityMap = new TreeMap<>();
+        if (capabilitiesModel.isDefined()) {
+            capabilitiesModel.asList().forEach(cap -> {
+                Capability capability = Capability.fromModel(cap, Collections.emptyMap(), null);
+                capabilityMap.put(capability.name(), capability);
+            });
+        }
+        return capabilityMap;
     }
 
     static String buildCurrentUrl(final PathElement... path) {
