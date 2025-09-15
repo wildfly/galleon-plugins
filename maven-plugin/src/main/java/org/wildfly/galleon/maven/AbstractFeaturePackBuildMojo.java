@@ -263,11 +263,8 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     @Parameter(alias = "package-stability-level", required = false)
     protected String packageStabilityLevel;
 
-    /**
-     * Add any feature-pack dependency in the generated metadata.
-     */
-    @Parameter(alias = "add-feature-packs-dependencies-in-metadata", required = false, defaultValue = "false")
-    protected boolean addFeaturePacksDependenciesInMetadata;
+    @Parameter(alias = "generate-complete-model", defaultValue = "false", required = true)
+    protected Boolean generateCompleteModel;
 
     private MavenProjectArtifactVersions artifactVersions;
 
@@ -534,7 +531,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                                     ZipUtils.zip(versionDir, target);
 
                                     final Path metadata = Paths.get(project.getBuild().getDirectory()).resolve("metadata.json");
-                                    MetadataGenerator generator = new MetadataGenerator(project, repoSystem, repoSession, repositories, addFeaturePacksDependenciesInMetadata);
+                                    MetadataGenerator generator = new MetadataGenerator(project, repoSystem, repoSession, repositories, generateCompleteModel);
                                     generator.generateMetadata(target, desc, metadata);
                                 } catch (Exception ex) {
                                     throw new RuntimeException(ex);
