@@ -143,9 +143,6 @@ public class WfFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
     @Parameter(alias = "feature-specs-output", defaultValue = "${project.build.directory}/resources/features", required = true)
     protected File featureSpecsOutput;
 
-    @Parameter(alias = "generate-complete-model", defaultValue = "false", required = true)
-    protected Boolean generateCompleteModel;
-
     private WildFlyFeaturePackBuild buildConfig;
     private Map<String, PackageSpec.Builder> extendedPackages = Collections.emptyMap();
 
