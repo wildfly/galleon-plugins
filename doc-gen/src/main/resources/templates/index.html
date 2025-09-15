@@ -13,38 +13,60 @@
 <div class="container">
   <h1>Documentation for {metadata.name}</h1>
   <p>{metadata.description}</p>
-  <h2>Maven Coordinates</h2>
-  <div class="code-block-container">
-    <pre>
-        <code id="maven-dependency" class="language-xml">
+  <h2 id="coords">Coordinates&nbsp;<a href="#coords" class="anchor-link">§</a></h2>
+  <div class="tabs">
+    <ul class="tab-list" role="tablist">
+      <li><button class="tab-button active" onclick="switchTab(event, 'maven-tab')" role="tab" aria-selected="true" aria-controls="maven-tab">Maven Dependency</button></li>
+      <li><button class="tab-button" onclick="switchTab(event, 'feature-pack-tab')" role="tab" aria-selected="false" aria-controls="feature-pack-tab">Feature Pack Location</button></li>
+    </ul>
+
+    <div id="maven-tab" class="tab-content active" role="tabpanel">
+      <div class="code-block-container">
+        <pre>
+            <code id="maven-dependency" class="language-xml">
 &lt;dependency>
   &lt;groupId>{metadata.groupId}&lt;/groupId>
   &lt;artifactId>{metadata.artifactId}&lt;/artifactId>
   &lt;version>{metadata.version}&lt;/version>
 &lt;/dependency>
-        </code>
-    </pre>
-    <button class="copy-btn" onclick="copyToClipboard('maven-dependency')" title="Copy to clipboard">📋</button>
-  </div>
-  <h3>Feature Pack Location</h3>
-  <div class="code-block-container">
-    <pre>
-        <code id="feature-pack-location" class="language-xml">
+            </code>
+        </pre>
+        <button class="copy-btn" onclick="copyToClipboard('maven-dependency')" title="Copy to clipboard">📋</button>
+      </div>
+    </div>
+
+    <div id="feature-pack-tab" class="tab-content" role="tabpanel">
+      <div class="code-block-container">
+        <pre>
+            <code id="feature-pack-location" class="language-xml">
 &lt;feature-pack>
     &lt;location>{metadata.groupId}:{metadata.artifactId}:{metadata.version}&lt;/location>
 &lt;/feature-pack>
-        </code>
-    </pre>
-    <button class="copy-btn" onclick="copyToClipboard('feature-pack-location')" title="Copy to clipboard">📋</button>
+            </code>
+        </pre>
+        <button class="copy-btn" onclick="copyToClipboard('feature-pack-location')" title="Copy to clipboard">📋</button>
+      </div>
+    </div>
   </div>
 
-  {#if hasModel}
-  <h2>Model Reference</h2>
-  <a href="reference/index.html">Model Reference</a>
+  {#if hasManagementAPI || hasLogMessages}
+  <h2 id="refs">References&nbsp;<a href="#refs" class="anchor-link">§</a></h2>
+  <ul>
+    {#if hasManagementAPI}
+    <li>
+      <a href="reference/index.html">Management API</a>
+    </li>
+    {/if}
+    {#if hasLogMessages}
+    <li>
+    <a href="log-message-reference.html">Log and Exception Message Code</a>
+    {/if}
+    </li>
+  </ul>
   {/if}
 
   {#if metadata.layers}
-  <h2>Provided Layers</h2>
+  <h2 id="layers">Provided Layers&nbsp;<a href="#layers" class="anchor-link">§</a></h2>
   <div class="table-of-contents">
     <ul>
       {#for layer in metadata.layers}
@@ -53,7 +75,27 @@
     </ul>
   </div>
   {#for layer in metadata.layers}
-  <h3 id="layer-{layer.name}">{layer.name}</h3>
+  <h3 id="layer-{layer.name}">{layer.name}&nbsp;<a href="#layer-{layer.name}" class="anchor-link">§</a></h3>
+  {#if layer.description}
+  <p>{layer.description}</p>
+  {/if}
+
+  {#if layer.note}
+  <div class="alert">
+    <div>{layer.note}</div>
+  </div>
+  {/if}
+
+  {#if layer.prettyManagementModel}
+  <h4 class="toggle-link">
+    <a href="#">Management Model</a>
+  </h4>
+  <div class="collapsible code-block-container">
+    <pre><code class="language-json">
+{layer.prettyManagementModel}</code></pre>
+    </div>
+  {/if}
+
   {#if layer.dependencies}
   <h4 class="toggle-link">
     <a href="#">Dependencies</a>

@@ -476,3 +476,80 @@ tr:hover {
     color: #424242;
     line-height: 1.5;
 }
+
+/* Anchor link styling */
+.anchor-link {
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    color: #6c757d;
+    font-weight: normal;
+}
+
+h2:hover .anchor-link,
+h3:hover .anchor-link,
+h4:hover .anchor-link {
+    opacity: 1;
+}
+
+/* Tab interface styles */
+.tabs {
+    margin: 1rem 0;
+}
+
+.tab-list {
+    display: flex;
+    margin-bottom: 0;
+    list-style: none;
+    padding: 0;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.tab-button {
+    background: none;
+    border: none;
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #6b7280;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-family: inherit;
+    position: relative;
+    flex: 1;
+    text-align: center;
+    border-radius: 0;
+}
+
+.tab-button:hover {
+    color: #374151;
+    background-color: #e5e7eb;
+}
+
+.tab-button.active {
+    color: #905;
+    background-color: #f5f2f0;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+}
+
+.tab-button:first-child {
+    border-top-left-radius: 5px;
+    border-bottom-left-radius: 5px;
+}
+
+.tab-button:last-child {
+    border-top-right-radius: 5px;
+    border-bottom-right-radius: 5px;
+}
+
+.tab-button:not(:last-child) {
+    border-right: 1px solid #e5e7eb;
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}

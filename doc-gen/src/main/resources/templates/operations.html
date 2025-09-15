@@ -3,7 +3,18 @@
 <ul class="operations">
   {#for operation in operations}
   <li>
-    <span class="toggle-link"><a id="{operation.name}" href="#{operation.name}" class="{#if operation.deprecation.deprecated}deprecated{/if}">{operation.name}</a> - {operation.description}</span>
+    <span class="toggle-link">
+      <a id="{operation.name}" href="#{operation.name}" class="{#if operation.deprecation.deprecated}deprecated{/if}">
+      {#switch operation.stability}
+      {#case "experimental"}
+      <abbr title="Experimental feature">&#x1F174;</abbr>&nbsp;
+      {#case "preview"}
+      <abbr title="Preview feature">&#x1F17F;</abbr>&nbsp;
+      {#case "community"}
+      <abbr title="Community feature">&#x1F172;</abbr>&nbsp;
+      {/switch}
+      {operation.name}</a> - {operation.description}
+    </span>
     <div class="collapsible">
 
       {#if operation.deprecation.deprecated}
@@ -64,7 +75,7 @@
           <td class="toggle-link">Raw DMR model</td>
           <td class="collapsible">
             <div class="code-block-container">
-                            <pre><code class="language-json">
+              <pre><code class="language-json">
 {operation.jsonRepresentation}</code></pre>
             </div>
           </td>

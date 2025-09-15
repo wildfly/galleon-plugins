@@ -12,6 +12,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Map;
@@ -20,12 +21,59 @@ import java.util.stream.Collectors;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.Property;
 
-record Capability(String name, boolean dynamic) {
+record Capability(String name, boolean dynamic, List<String> providerPoints) {
 
+    static Capability fromModel(ModelNode capability, Map<String, Capability> globalCaps, String currentResourcePath) {
+        String name = capability.get("name").asString();
+        boolean dynamic = capability.get("dynamic").asBoolean(false);
+        List<String> providerPoints;
+        if (capability.hasDefined("registration-points")) {
+            List<ModelNode> registrationPoints = capability.get("registration-points").asList();
+            providerPoints = registrationPoints.stream().map(ModelNode::asString)
+                    .collect(Collectors.toList());
+        } else {
+            if (globalCaps.containsKey(name)) {
+                providerPoints = globalCaps.get(name).providerPoints().stream().filter(s -> !s.equals(currentResourcePath)).collect(Collectors.toList());
+            } else {
+                providerPoints = Collections.emptyList();
+            }
+
+        }
+        return new Capability(name, dynamic, providerPoints);
+    }
+
+    public Map<String, String> providerPointsUrls() {
+        return providerPoints.stream().collect(Collectors.toMap(s -> s, v -> {
+            PathAddress address = PathAddress.parseCLIStyleAddress(v);
+            StringBuilder url = new StringBuilder();
+            for (PathElement pe : address) {
+                if (pe.isWildcard()) {
+                    url.append(pe.getKey()).append('/');
+                } else {
+                    url.append(pe.getKey()).append('/').append(pe.getValue()).append('/');
+                }
+
+            }
+            return url.toString();
+        }));
+    }
+
+    static List<Capability> fromModelList(ModelNode capModel, Map<String, Capability> capabilities, PathAddress pathElements) {
+        if (!capModel.isDefined()) {
+            return Collections.emptyList();
+        }
+        List<Capability> r = new LinkedList<>();
+        capModel.asList().forEach(c -> r.add(fromModel(c, capabilities, pathElements.toCLIStyleString())));
+        return r;
+    }
+
+    public String getCapabilityDescriptionUrl() {
+        return "https://github.com/wildfly/wildfly-capabilities/tree/main/" + name.replaceAll("\\.", "/") + "/capability.adoc";
+    }
 }
 
-record Resource(String description, String storage, List<Child> children, List<Attribute> attributes, List<Operation> operations) {
-    public static Resource fromModelNode(final ModelNode node, Map<String, Capability> capabilities) {
+record Resource(String description, String storage, Deprecation deprecation, List<Capability> capabilities, List<Child> children, List<Attribute> attributes, List<Operation> operations) {
+    public static Resource fromModelNode(PathAddress pathAddress, ModelNode node, Map<String, Capability> capabilities) {
         List<Child> children = emptyList();
         if (node.hasDefined("children")) {
             children = node.get("children").asPropertyList()
@@ -59,7 +107,7 @@ record Resource(String description, String storage, List<Child> children, List<A
             description = node.get("description").asString();
         }
 
-        return new Resource(description, storage, children, attributes, operations);
+        return new Resource(description, storage, Deprecation.fromModel(node), Capability.fromModelList(node.get("capabilities"), capabilities, pathAddress), children, attributes, operations);
     }
 }
 
@@ -246,7 +294,7 @@ record GAV(String groupId, String artifactId, String version) {
 record Breadcrumb(String label, String url) {
     static List<Breadcrumb> build(PathElement... path) {
         final List<Breadcrumb> crumbs = new ArrayList<>();
-        crumbs.add(new Breadcrumb("home", "index.html"));
+        crumbs.add(new Breadcrumb("root", "index.html"));
         StringBuilder currentUrl = new StringBuilder();
         for (PathElement i : path) {
             if (!currentUrl.toString().isEmpty()) {
@@ -264,3 +312,13 @@ record Breadcrumb(String label, String url) {
     }
 }
 
+record LogMessage(String level, String code, String message, int length, int id, String returnType) implements Comparable<LogMessage> {
+
+    public String realId() {
+        return code + String.format("%0" + length + "d", id);
+    }
+    @Override
+    public int compareTo(LogMessage o) {
+        return Integer.compare(id, o.id);
+    }
+}

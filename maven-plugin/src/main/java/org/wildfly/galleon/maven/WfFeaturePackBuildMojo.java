@@ -176,9 +176,9 @@ public class WfFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
         if(buildConfig.hasStandaloneExtensions() || buildConfig.hasDomainExtensions() || buildConfig.hasHostExtensions()) {
             try {
                 new FeatureSpecGeneratorInvoker(this).execute();
-                // Move the generated model.json outside
-                Path p = featureSpecsOutput.toPath().resolve("model.json");
-                Files.move(p, Paths.get(buildName).resolve("model.json"));
+                // Move the generated management-api.json outside
+                Path p = featureSpecsOutput.toPath().resolve("management-api.json");
+                Files.move(p, Paths.get(buildName).resolve("management-api.json"));
             } catch (IOException ex) {
                 throw new MojoExecutionException(ex);
             }
