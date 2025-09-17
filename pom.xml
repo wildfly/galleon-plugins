@@ -82,11 +82,11 @@
     <version.org.eclipse.aether>1.1.0</version.org.eclipse.aether>
     <version.org.javassist>3.30.2-GA</version.org.javassist>
 
-    <version.org.jboss.galleon>6.1.1.Final</version.org.jboss.galleon>
+    <version.org.jboss.galleon>7.0.0.Beta1</version.org.jboss.galleon>
     <version.org.jboss.dmr>1.5.0.Final</version.org.jboss.dmr>
     <version.org.jboss.logging>3.6.0.Final</version.org.jboss.logging>
     <version.org.wildfly.channel>1.2.1.Final</version.org.wildfly.channel>
-    <version.org.wildfly.core.wildfly-core>28.0.1.Final</version.org.wildfly.core.wildfly-core>
+    <version.org.wildfly.core.wildfly-core>31.0.0.Beta1</version.org.wildfly.core.wildfly-core>
     <version.org.wildfly.launcher>1.0.0.Final</version.org.wildfly.launcher>
     <version.org.wildfly.maven.plugins>2.0.0.Final</version.org.wildfly.maven.plugins>
 

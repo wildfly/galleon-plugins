@@ -91,6 +91,7 @@ import org.jboss.galleon.maven.plugin.util.MavenArtifactRepositoryManager;
 import org.jboss.galleon.spec.ConfigLayerSpec;
 import org.jboss.galleon.spec.FeaturePackPlugin;
 import org.jboss.galleon.spec.FeaturePackSpec;
+import org.jboss.galleon.spec.FeaturePackSpec.Family;
 import org.jboss.galleon.spec.FeatureSpec;
 import org.jboss.galleon.spec.PackageDependencySpec;
 import org.jboss.galleon.spec.PackageSpec;
@@ -273,7 +274,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     private MavenProjectArtifactVersions artifactVersions;
 
     private Map<String, FeaturePackDescription> fpDependencies = Collections.emptyMap();
-
+    private final Map<String, Set<Family.Criteria>> inheritedCriteria = new HashMap<>();
     private Path workDir;
     private Path fpDir;
     private Path fpPackagesDir;
@@ -509,9 +510,22 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         try {
             fpBuilder.getSpecBuilder().setConfigStability(defaultConfigStabilityLevel);
             fpBuilder.getSpecBuilder().setPackageStability(defaultPackageStabilityLevel);
+            Family family = buildConfig.getFamily();
+            if (family != null) {
+                Set<Family.Criteria> inherited = inheritedCriteria.get(family.getName());
+                if(inherited != null) {
+                    Set<Family.Criteria> all = new HashSet<>();
+                    all.addAll(family.getCriteria());
+                    for (Family.Criteria c : inherited) {
+                        all.add(new Family.Criteria(c.getName(), true));
+                    }
+                    family = new Family(family.getName(), all);
+                }
+            }
+            fpBuilder.getSpecBuilder().setFamily(family);
             fpLayout = fpBuilder.build();
             FeaturePackXmlWriter.getInstance().write(fpLayout.getSpec(), getFpDir().resolve(Constants.FEATURE_PACK_XML));
-        } catch (XMLStreamException | IOException | ProvisioningDescriptionException e) {
+        } catch (XMLStreamException | IOException | ProvisioningException e) {
             throw new MojoExecutionException(Errors.writeFile(getFpDir().resolve(Constants.FEATURE_PACK_XML)), e);
         }
 
@@ -901,7 +915,31 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             final FeaturePackConfig depConfig = depSpec.getTarget();
 
             final FeaturePackDescription fpDescr = FeaturePackDescriber.describeFeaturePackZip(depZip);
-
+            String allowedFamily = depSpec.getAllowedFamily();
+            if (allowedFamily != null) {
+                Family family = fpDescr.getSpec().getFamily();
+                if (family == null) {
+                    throw new MojoExecutionException("The dependency on " + depCoords + " allows to depend on family although the feature-pack doesn't belong to a family");
+                } else {
+                    boolean found = false;
+                    Family dep = Family.fromString(allowedFamily);
+                    if (dep.getName().equals(family.getName())) {
+                        if(family.getCriteria().containsAll(dep.getCriteria())) {
+                            found = true;
+                        }
+                    }
+                    if(!found) {
+                        throw new MojoExecutionException("The feature-pack dependency " + depCoords + " is not part of the family " + allowedFamily + ". Its family is" + family);
+                    }
+                    Set<Family.Criteria> set = inheritedCriteria.get(dep.getName());
+                    if (set == null) {
+                        set = new HashSet<>();
+                        inheritedCriteria.put(dep.getName(), set);
+                    }
+                    set.addAll(dep.getCriteria());
+                    System.out.println("We have a a dependency on " + depConfig + " that allows for family members in the " + allowedFamily + " family");
+                }
+            }
             // here we need to determine which format to use to persist the dependency location:
             // Maven coordinates or the FPL. The format is actually set in the feature-pack build parser.
             // However, the parser can't set the actual FPL value, since it does not have enough information.
@@ -913,7 +951,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             } else if(org.apache.commons.lang3.StringUtils.isEmpty(fpl.getBuild())) {
                 fpl = fpl.replaceBuild(depCoords.getVersion());
             }
-            fpBuilder.addFeaturePackDep(depSpec.getName(), FeaturePackConfig.builder(fpl).init(depConfig).build());
+            fpBuilder.addFeaturePackDep(depSpec.getName(), FeaturePackConfig.builder(fpl, false, allowedFamily).init(depConfig).build());
             fpDependencies.put(depSpec.getName(), fpDescr);
         }
     }
