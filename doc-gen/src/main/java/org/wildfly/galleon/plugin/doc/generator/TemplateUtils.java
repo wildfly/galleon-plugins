@@ -24,7 +24,9 @@ import io.quarkus.qute.Variant;
 
 public class TemplateUtils {
 
-    static Engine engine() {
+    static final Engine ENGINE = engine();
+
+    private static Engine engine() {
         return Engine.builder()
                 .addLocator(new TemplateLocator() {
                     @Override

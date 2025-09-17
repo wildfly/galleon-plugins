@@ -6,6 +6,8 @@
 package org.wildfly.galleon.plugin.doc.generator;
 
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
+import static org.wildfly.galleon.plugin.doc.generator.SimpleLog.SYSTEM_LOG;
+import static org.wildfly.galleon.plugin.doc.generator.TemplateUtils.ENGINE;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -14,53 +16,70 @@ import java.nio.file.Path;
 import java.util.Collections;
 import java.util.Optional;
 
-import io.quarkus.qute.Engine;
 import io.quarkus.qute.Template;
-import org.apache.maven.plugin.logging.Log;
 import org.jboss.dmr.ModelNode;
 
 public class DocGenerator {
+
+    /**
+     * Generate the model reference in the {@code outputDirectory}
+     *
+     * @param outputDirectory the root directory to generate the model reference
+     * @param modelPath the path to the model.json file
+     *
+     * @return true if the model is generated
+     */
+    public static boolean generateModel(Path outputDirectory, Path modelPath) throws IOException {
+        return generateModel(SYSTEM_LOG, outputDirectory, modelPath);
+    }
+
+    static boolean generateModel(SimpleLog log, Path outputDirectory, Path modelPath) throws IOException {
+        Path referencePath = outputDirectory.resolve("reference");
+        Files.createDirectories(referencePath);
+
+        copyResources(outputDirectory);
+
+        Optional<ModelNode> rootDescription = Optional.empty();
+        if (Files.exists(modelPath)) {
+            try (InputStream in = Files.newInputStream(modelPath)) {
+                rootDescription = Optional.of(ModelNode.fromJSONStream(in));
+            }
+        }
+
+        if (rootDescription.isPresent()) {
+            generateResource(referencePath, ENGINE.getTemplate("resource"), rootDescription.get());
+            if (log.isDebugEnabled()) {
+                log.debug("✏️ Model reference pages generated");
+            }
+        } else {
+            return false;
+        }
+
+        return true;
+    }
 
     /**
      * Generate documentation from the feature pack's metadata and model.
      * The documentation is generated in the {@code outputDirectory}. A zip archive
      * that contains the generated documentation is created at {@code docZipArchive}
      */
-    public static void generate(Log log, Path docZipArchive, Path outputDirectory, Path metadataPath, Path modelPath) throws IOException {
+    public static void generate(SimpleLog log, Path docZipArchive, Path outputDirectory, Path metadataPath, Path modelPath) throws IOException {
         log.info("🔎 Generating Feature Pack Documentation");
-
-        Path referencePath = outputDirectory.resolve("reference");
-        Files.createDirectories(referencePath);
 
         Path manifestPath = outputDirectory.resolve("META-INF");
         Files.createDirectories(manifestPath);
         Files.copy(metadataPath, manifestPath.resolve("metadata.json"), REPLACE_EXISTING);
+        if (Files.exists(modelPath)) {
+            Files.copy(modelPath, manifestPath.resolve("model.json"), REPLACE_EXISTING);
+        }
 
-        // Copy CSS & JavaScript resources
-        copyResources(outputDirectory);
+        final boolean hasModel = generateModel(log, outputDirectory, modelPath);
 
         Metadata metadata = Metadata.parse(metadataPath);
 
-        Optional<ModelNode> rootDescription = Optional.empty();
-        if (Files.exists(modelPath)) {
-            Files.copy(modelPath, manifestPath.resolve("model.json"), REPLACE_EXISTING);
-            try (InputStream in = Files.newInputStream(modelPath)) {
-                rootDescription = Optional.of(ModelNode.fromJSONStream(in));
-            }
-        }
-
-        Engine engine = TemplateUtils.engine();
-
-        generateIndex(outputDirectory, engine.getTemplate("index"), metadata, rootDescription.isPresent());
+        generateIndex(outputDirectory, ENGINE.getTemplate("index"), metadata, hasModel);
         if (log.isDebugEnabled()) {
             log.debug("✏️ Index page generated");
-        }
-
-        if (rootDescription.isPresent()) {
-            generateResource(referencePath, engine.getTemplate("resource"), rootDescription.get());
-            if (log.isDebugEnabled()) {
-                log.debug("✏️ Model reference pages generated");
-            }
         }
 
         FileUtils.zipDirectory(outputDirectory, docZipArchive);
@@ -74,6 +93,7 @@ public class DocGenerator {
                 .render();
         FileUtils.writeToFile(outputDirectory.resolve("index.html"), content);
     }
+
     private static void generateResource(Path outputDirectory,
                                          Template resourceTemplate,
                                          ModelNode model, PathElement... path) throws IOException {
