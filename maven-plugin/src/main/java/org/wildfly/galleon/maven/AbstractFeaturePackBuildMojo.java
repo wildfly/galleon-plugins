@@ -112,6 +112,7 @@ import org.wildfly.galleon.plugin.ArtifactCoords;
 import org.wildfly.galleon.plugin.WfConstants;
 import org.wildfly.galleon.plugin.WildFlyChannelResolutionMode;
 import org.wildfly.galleon.plugin.doc.generator.DocGenerator;
+import org.wildfly.galleon.plugin.doc.generator.SimpleLog;
 
 /**
  * This Maven mojo creates a WildFly style feature-pack archive from the
@@ -1209,7 +1210,19 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         final Path docPath = Paths.get(project.getBuild().getDirectory()).resolve("doc");
         final Path docZipArchive = Paths.get(project.getBuild().getDirectory()).resolve(String.format("%s-%s-%s.%s",
                 project.getArtifactId(), project.getVersion(), DOC_CLASSIFIER, ZIP));
-        DocGenerator.generate(getLog(), docZipArchive, docPath, metadata, model);
+        DocGenerator.generate(new SimpleLog() {
+            public boolean isDebugEnabled() {
+                return getLog().isDebugEnabled();
+            }
+
+            public void debug(String msg) {
+                getLog().debug(msg);
+            }
+
+            public void info(String msg) {
+                getLog().info(msg);
+            }
+        }, docZipArchive, docPath, metadata, model);
         if (Files.exists(docZipArchive)) {
             debug("Attaching feature-pack documentation %s as a project artifact", docZipArchive);
             projectHelper.attachArtifact(project, ZIP, DOC_CLASSIFIER, docZipArchive.toFile());
