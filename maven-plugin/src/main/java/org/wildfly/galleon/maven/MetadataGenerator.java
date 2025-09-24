@@ -38,6 +38,8 @@ import org.eclipse.aether.RepositorySystemSession;
 import org.eclipse.aether.repository.RemoteRepository;
 import org.jboss.galleon.ProvisioningDescriptionException;
 import org.jboss.galleon.ProvisioningException;
+import org.jboss.galleon.Stability;
+import org.jboss.galleon.api.GalleonLayerDependency;
 import org.jboss.galleon.config.ConfigItem;
 import org.jboss.galleon.config.FeatureConfig;
 import org.jboss.galleon.config.FeatureGroup;
@@ -229,19 +231,21 @@ class MetadataGenerator {
 
         // do some layers spec manipulation before filling the metatadata with their content....
         Map<String, List<ConfigLayerSpec>> layerSpecs = new HashMap<>();
-        if (addFeaturePacksDependenciesInMetadata) {
-            for (FeaturePackLayout layout : pl.getOrderedFeaturePacks()) {
+        Map<String, List<ConfigLayerSpec>> allLayerSpecs = new HashMap<>();
+        for (FeaturePackLayout layout : pl.getOrderedFeaturePacks()) {
                 Path p = layout.getDir();
                 FeaturePackDescription descDep = FeaturePackDescriber.describeFeaturePack(p, "UTF-8");
                 for (ConfigLayerSpec descLayer : descDep.getLayers()) {
                     List<ConfigLayerSpec> specs = layerSpecs.get(descLayer.getId().getName());
                     if (specs == null) {
                         specs = new ArrayList<>();
-                        layerSpecs.put(descLayer.getId().getName(), specs);
+                        allLayerSpecs.put(descLayer.getId().getName(), specs);
                     }
                     specs.add(descLayer);
                 }
             }
+        if (addFeaturePacksDependenciesInMetadata) {
+            layerSpecs = allLayerSpecs;
         } else {
             for (ConfigLayerSpec spec : desc.getLayers()) {
                 List<ConfigLayerSpec> specs = new ArrayList<>();
@@ -249,7 +253,9 @@ class MetadataGenerator {
                 layerSpecs.put(spec.getName(), specs);
             }
         }
-
+        Map<String, Stability> stabilities = computeMinimalStability(allLayerSpecs, pl);
+//        System.out.println("STABILITIES");
+//        System.out.println(stabilities);
         List<Metadata.Layer> layers = new ArrayList<>();
         for (Map.Entry<String, List<ConfigLayerSpec>> entry : layerSpecs.entrySet()) {
             List<ResourceOperation> ops = new ArrayList<>();
@@ -290,13 +296,115 @@ class MetadataGenerator {
                         packages.addAll(externalPackages);
                     }
                 }
-
-                layers.add(new Metadata.Layer(layerName, layerDependencies, managementModel, properties, configurations, packages));
+                Stability stability = stabilities.get(layerName);
+                if (stability == null) {
+                    throw new Exception("No stability found for layer " + layerName);
+                }
+                layers.add(new Metadata.Layer(layerName, stability.toString(), layerDependencies, managementModel, properties, configurations, packages));
             }
         }
         Metadata metadata = new Metadata(project.getGroupId(), project.getArtifactId(), project.getVersion(), project.getName(), project.getDescription(), licenses,
                 project.getUrl(), scmUrl, layers);
         mapper.writerWithDefaultPrettyPrinter().writeValue(metadataTarget.toFile(), metadata);
+    }
+
+    private static Map<String, Stability> computeMinimalStability(Map<String, List<ConfigLayerSpec>> layerSpecs, ProvisioningLayout<FeaturePackLayout> pl) throws Exception {
+        Map<String, Stability> ret = new TreeMap<>();
+        for (Map.Entry<String, List<ConfigLayerSpec>> entry : layerSpecs.entrySet()) {
+            Stability layerStability = getMinimalStability(layerSpecs, entry.getKey(), entry.getValue(), pl, new HashSet<>());
+            ret.put(entry.getKey(), layerStability);
+        }
+        return ret;
+    }
+
+    private static Stability getMinimalStability(Map<String, List<ConfigLayerSpec>> layerSpecs,
+            String layer, List<ConfigLayerSpec> specs, ProvisioningLayout<FeaturePackLayout> pl, Set<String> seen) throws Exception {
+        if (seen.contains(layer)) {
+            return null;
+        }
+        seen.add(layer);
+        Stability currentStability = Stability.DEFAULT;
+        for (ConfigLayerSpec spec : specs) {
+            if (spec.hasLayerDeps()) {
+                for (GalleonLayerDependency dep : spec.getLayerDeps()) {
+                    List<ConfigLayerSpec> depSpecs = layerSpecs.get(dep.getName());
+                    if (depSpecs == null) {
+                        // For now continue
+                        //throw new Exception("The layer dependency " + dep.getName() + " is unknown, fix the layer spec.");
+                        continue;
+                    }
+                    Stability stabilityDep = getMinimalStability(layerSpecs, dep.getName(), depSpecs, pl, seen);
+                    if (stabilityDep != null) {
+                        if (currentStability == null) {
+                            currentStability = stabilityDep;
+                        } else {
+                           if(!currentStability.enables(stabilityDep)) {
+                               currentStability = stabilityDep;
+                           }
+                        }
+                    }
+                }
+            }
+            Stability featuresStability = getFeaturesMinimalStability(spec.getItems(), new ArrayList<>(), pl);
+            if (featuresStability.enables(currentStability)) {
+                currentStability = featuresStability;
+            }
+        }
+        return currentStability;
+    }
+
+    private static Stability getFeaturesMinimalStability(List<ConfigItem> items, List<ConfigItem> parents, ProvisioningLayout<FeaturePackLayout> pl) throws ProvisioningDescriptionException, ProvisioningException {
+        Stability currentStability = Stability.DEFAULT;
+        for (ConfigItem i : items) {
+            if (i instanceof FeatureConfig) {
+                FeatureConfig fc = (FeatureConfig) i;
+                FeatureSpec fp = getFeatureSpec(pl, fc.getSpecId().getName());
+                if (fp == null) {
+                    // Can happen in tests.
+                    continue;
+                }
+                boolean excluded = isExcluded(parents, fp, fc);
+                if (!excluded) {
+                    Stability fStability = fp.getStability();
+                    if(fStability == null) {
+                        fStability = Stability.DEFAULT;
+                    }
+                    if (!currentStability.enables(fStability)) {
+                        currentStability = fStability;
+                    }
+                    if (!fc.getItems().isEmpty()) {
+                        parents.add(fc);
+                        Stability itemsStability = getFeaturesMinimalStability(fc.getItems(), parents, pl);
+                        parents.remove(parents.size() - 1);
+                        if (!currentStability.enables(itemsStability)) {
+                            currentStability = itemsStability;
+                        }
+                    }
+                }
+            } else {
+                if (i instanceof FeatureGroup) {
+                    FeatureGroup fg = (FeatureGroup) i;
+                    FeatureGroup complete = getFeatureGroup(pl, fg.getName());
+                    if (!complete.getItems().isEmpty()) {
+                        parents.add(fg);
+                        Stability itemsStability = getFeaturesMinimalStability(complete.getItems(), parents, pl);
+                        parents.remove(parents.size() - 1);
+                        if (!currentStability.enables(itemsStability)) {
+                            currentStability = itemsStability;
+                        }
+                    }
+                    if (!fg.getItems().isEmpty()) {
+                        parents.add(fg);
+                        Stability itemsStability = getFeaturesMinimalStability(fg.getItems(), parents, pl);
+                        parents.remove(parents.size() - 1);
+                        if (!currentStability.enables(itemsStability)) {
+                            currentStability = itemsStability;
+                        }
+                    }
+                }
+            }
+        }
+        return currentStability;
     }
 
     private static String retrieveParamValue(List<ConfigItem> parents, String param) {
@@ -314,7 +422,7 @@ class MetadataGenerator {
     }
 
     private static ResourceOperation buildModel(FeatureSpec spec, List<ConfigItem> parents, FeatureConfig config, Map<String, AttributeConfiguration> configuration) throws ProvisioningDescriptionException {
-        System.out.println("FEATURE-SPEC " + spec.getName());
+        //System.out.println("FEATURE-SPEC " + spec.getName());
 
         FeatureAnnotation annot = spec.getAnnotation("jboss-op");
         if (annot == null) {
@@ -554,7 +662,7 @@ class MetadataGenerator {
                             }
                             FeatureId fid = new FeatureId(fc.getSpecId().getName(), idParams);
                             if (fid.equals(id)) {
-                                System.out.println("EXCLUDED FEATURE " + id);
+                                //System.out.println("EXCLUDED FEATURE " + id);
                                 return true;
                             }
                         }
