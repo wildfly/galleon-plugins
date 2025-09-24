@@ -88,6 +88,7 @@ public record Metadata(
 
         return new Layer(
             layer.name(),
+            layer.stability(),
             sortedDependencies,
             layer.managementModel(),
             sortedProperties,
@@ -98,6 +99,7 @@ public record Metadata(
 
     public record Layer(
             String name,
+            String stability,
             List<LayerDependency> dependencies,
             ObjectNode managementModel,
             List<Property> properties,
