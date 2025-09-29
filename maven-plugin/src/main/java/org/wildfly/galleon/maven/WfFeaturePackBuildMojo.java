@@ -179,6 +179,8 @@ public class WfFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
                 // Move the generated management-api.json outside
                 Path p = featureSpecsOutput.toPath().resolve("management-api.json");
                 Files.move(p, Paths.get(buildName).resolve("management-api.json"));
+                Path p2 = featureSpecsOutput.toPath().resolve("features.json");
+                Files.move(p2, Paths.get(buildName).resolve("features.json"));
             } catch (IOException ex) {
                 throw new MojoExecutionException(ex);
             }

@@ -267,7 +267,8 @@ class MetadataGenerator {
                 if (spec.hasLayerDeps()) {
                     layerDependencies = spec.getLayerDeps().stream().map(dep -> new Metadata.LayerDependency(dep.getName(), dep.isOptional())).toList();
                 }
-                generateModelUpdates(spec.getItems(), new ArrayList<>(), pl, ops, config);
+                Set<String> packages = new TreeSet<>();
+                generateModelUpdates(spec.getItems(), new ArrayList<>(), pl, ops, config, packages);
                 ManagementModel m = new ManagementModel();
                 m.populate(ops);
                 ObjectNode managementModel = m.export();
@@ -286,7 +287,6 @@ class MetadataGenerator {
                     return new Metadata.AttributeConfiguration(address, attribute, sysProps, envVars);
                 }).toList();
 
-                List<String> packages = new ArrayList<>();
                 if (spec.hasPackageDeps()) {
                     List<String> localPackages = spec.getLocalPackageDeps().stream().map(PackageDependencySpec::getName).toList();
                     packages.addAll(localPackages);
@@ -595,7 +595,12 @@ class MetadataGenerator {
         return null;
     }
 
-    private static void generateModelUpdates(List<ConfigItem> items, List<ConfigItem> parents, ProvisioningLayout<FeaturePackLayout> pl, List<ResourceOperation> ops, Map<String, AttributeConfiguration> config) throws ProvisioningDescriptionException, ProvisioningException {
+    private static void generateModelUpdates(List<ConfigItem> items,
+            List<ConfigItem> parents,
+            ProvisioningLayout<FeaturePackLayout> pl,
+            List<ResourceOperation> ops,
+            Map<String, AttributeConfiguration> config,
+            Set<String> packages) throws ProvisioningDescriptionException, ProvisioningException {
         for (ConfigItem i : items) {
             if (i instanceof FeatureConfig) {
                 FeatureConfig fc = (FeatureConfig) i;
@@ -610,8 +615,13 @@ class MetadataGenerator {
                     ops.add(op);
                     if (!fc.getItems().isEmpty()) {
                         parents.add(fc);
-                        generateModelUpdates(fc.getItems(), parents, pl, ops, config);
+                        generateModelUpdates(fc.getItems(), parents, pl, ops, config, packages);
                         parents.remove(parents.size() - 1);
+                    }
+                    if(fp.hasLocalPackageDeps()) {
+                        for(PackageDependencySpec d : fp.getLocalPackageDeps()) {
+                            packages.add(d.getName());
+                        }
                     }
                 }
             } else {
@@ -620,12 +630,12 @@ class MetadataGenerator {
                     FeatureGroup complete = getFeatureGroup(pl, fg.getName());
                     if (!complete.getItems().isEmpty()) {
                         parents.add(fg);
-                        generateModelUpdates(complete.getItems(), parents, pl, ops, config);
+                        generateModelUpdates(complete.getItems(), parents, pl, ops, config, packages);
                         parents.remove(parents.size() - 1);
                     }
                     if (!fg.getItems().isEmpty()) {
                         parents.add(fg);
-                        generateModelUpdates(fg.getItems(), parents, pl, ops, config);
+                        generateModelUpdates(fg.getItems(), parents, pl, ops, config, packages);
                         parents.remove(parents.size() - 1);
                     }
                 }

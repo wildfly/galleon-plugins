@@ -1207,6 +1207,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     private void generateDocumentation() throws IOException {
         final Path metadata = Paths.get(project.getBuild().getDirectory()).resolve("metadata.json");
         final Path managementAPI = Paths.get(project.getBuild().getDirectory()).resolve("management-api.json");
+        final Path features = Paths.get(project.getBuild().getDirectory()).resolve("features.json");
         final Path docPath = Paths.get(project.getBuild().getDirectory()).resolve("doc");
         final Path docZipArchive = Paths.get(project.getBuild().getDirectory()).resolve(String.format("%s-%s-%s.%s",
                 project.getArtifactId(), project.getVersion(), DOC_CLASSIFIER, ZIP));
@@ -1223,7 +1224,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             public void info(String msg) {
                 getLog().info(msg);
             }
-        }, docZipArchive, docPath, metadata, managementAPI, localRepositoryPath);
+        }, docZipArchive, docPath, metadata, managementAPI, features, localRepositoryPath);
         if (Files.exists(docZipArchive)) {
             debug("Attaching feature-pack documentation %s as a project artifact", docZipArchive);
             projectHelper.attachArtifact(project, ZIP, DOC_CLASSIFIER, docZipArchive.toFile());

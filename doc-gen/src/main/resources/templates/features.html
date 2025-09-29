@@ -1,0 +1,21 @@
+{#if features.size > 0}
+<h2>Galleon Features</h2>
+<p>Galleon features are to be used when creating Galleon feature-packs.</p>
+<ul class="attributes">
+  {#for feature in features}
+  <li>
+  <span class="toggle-link">{feature.name}</span>
+  <div class="collapsible">
+    <div class="code-block-container">
+      <pre>
+        <code id="feature" class="language-xml">
+{feature.xmlContent}
+        </code>
+      </pre>
+      <button class="copy-btn" onclick="copyToClipboard('feature')" title="Copy to clipboard">📋</button>
+    </div>
+  </div>
+  </li>
+{/for}
+</ul>
+{/if}
