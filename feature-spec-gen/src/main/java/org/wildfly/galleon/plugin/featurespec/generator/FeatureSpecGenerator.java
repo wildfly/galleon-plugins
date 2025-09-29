@@ -30,8 +30,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import javax.xml.stream.XMLStreamException;
 
@@ -228,8 +231,8 @@ public class FeatureSpecGenerator implements ForkCallback {
                 domainRoots = readFeatureSpecs(createEmbeddedHc(installation, mimimumStability));
             }
         }
-
-        final FeatureSpecNode rootNode = new FeatureSpecNode(this, FeatureSpecNode.STANDALONE_MODEL, standaloneFeatures.require(ClientConstants.NAME).asString(), standaloneFeatures);
+        ModelNode features = new ModelNode();
+        final FeatureSpecNode rootNode = new FeatureSpecNode(this, FeatureSpecNode.STANDALONE_MODEL, standaloneFeatures.require(ClientConstants.NAME).asString(), standaloneFeatures, features, generateCompleteModel);
 
         if (domainRoots != null) {
             rootNode.setDomainDescr(WfConstants.DOMAIN, new ModelNode());
@@ -254,6 +257,18 @@ public class FeatureSpecGenerator implements ForkCallback {
         }
 
         rootNode.buildSpecs();
+        try {
+            // Sort features to produce a sorted features.json file
+            Set<String> sortedKeys = features.keys().stream()
+                    .sorted().collect(Collectors.toCollection(LinkedHashSet::new));
+            ModelNode sortedFeatures = new ModelNode();
+            for (String key : sortedKeys) {
+                sortedFeatures.get(key).set(features.get(key));
+            }
+            Files.write(outputDir.resolve("features.json"), sortedFeatures.toJSONString(false).getBytes());
+        } catch (IOException ex) {
+            throw new ProvisioningException(ex);
+        }
     }
 
     @Override
@@ -271,7 +286,6 @@ public class FeatureSpecGenerator implements ForkCallback {
             writeSpecsFile(Paths.get(args[1]), result);
             ModelNode resultModel = generateModel(createStandaloneServer(args[0], mimimumStability, generateCompleteModel ? "standalone.xml" : "standalone-local.xml"), generateCompleteModel, description);
             writeModelFile(Paths.get(args[1]).toAbsolutePath().getParent().resolve("management-api.json"), resultModel);
-            System.out.println("FORKED TO " + Paths.get(args[1]).toAbsolutePath().getParent().resolve("management-api.json"));
             if (Files.exists(Paths.get(args[0]).resolve(WfConstants.DOMAIN).resolve(WfConstants.CONFIGURATION))) {
                 result = readFeatureSpecs(createEmbeddedHc(args[0], mimimumStability));
                 writeSpecsFile(Paths.get(args[2]), result);

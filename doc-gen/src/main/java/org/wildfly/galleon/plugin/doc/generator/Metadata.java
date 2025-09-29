@@ -15,6 +15,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.util.LinkedHashSet;
+import java.util.stream.Collectors;
 
 public record Metadata(
         String groupId,
@@ -82,13 +84,13 @@ public record Metadata(
                 .toList() : null;
 
         // Sort packages alphabetically
-        List<String> sortedPackages = layer.packages() != null ?
+        Set<String> sortedPackages = layer.packages() != null ?
             layer.packages().stream()
-                .sorted()
-                .toList() : null;
+                .sorted().collect(Collectors.toCollection(LinkedHashSet::new)) : null;
 
         return new Layer(
             layer.name(),
+            layer.stability(),
             sortedDependencies,
             layer.managementModel(),
             sortedProperties,
@@ -103,11 +105,12 @@ public record Metadata(
     }
     public record Layer(
             String name,
+            String stability,
             List<LayerDependency> dependencies,
             ObjectNode managementModel,
             List<Property> properties,
             List<AttributeConfiguration> configurations,
-            List<String> packages) {
+            Set<String> packages) {
 
         public String description() {
             return properties.stream()

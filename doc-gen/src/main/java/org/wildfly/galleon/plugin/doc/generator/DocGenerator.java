@@ -18,13 +18,14 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.TreeMap;
 import java.util.stream.Stream;
 
 import io.quarkus.qute.Template;
+import java.util.Map;
+import java.util.TreeMap;
 import org.jboss.dmr.ModelNode;
+import static org.wildfly.galleon.plugin.doc.generator.FeatureUtils.featureToURL;
 
 public class DocGenerator {
 
@@ -33,29 +34,38 @@ public class DocGenerator {
      *
      * @param outputDirectory the root directory to generate the model reference
      * @param managementAPIPath the path to the management-api.json file
-     *
+     * @param featuresPath the path to the features.json file
      * @return true if the model is generated
      */
-    public static boolean generateModel(Path outputDirectory, Path managementAPIPath) throws IOException {
-        return generateModel(SYSTEM_LOG, outputDirectory, managementAPIPath);
+    public static boolean generateModel(Path outputDirectory, Path managementAPIPath, Path featuresPath) throws IOException {
+        return generateModel(SYSTEM_LOG, outputDirectory, managementAPIPath, featuresPath);
     }
 
-    static boolean generateModel(SimpleLog log, Path outputDirectory, Path managementAPIPath) throws IOException {
+    static boolean generateModel(SimpleLog log, Path outputDirectory, Path managementAPIPath, Path featuresPath) throws IOException {
         Path referencePath = outputDirectory.resolve("reference");
         Files.createDirectories(referencePath);
 
         copyResources(outputDirectory);
 
         Optional<ModelNode> rootDescription = Optional.empty();
+        Optional<Map<String, ModelNode>> featuresDescription = Optional.empty();
         if (Files.exists(managementAPIPath)) {
             try (InputStream in = Files.newInputStream(managementAPIPath)) {
                 rootDescription = Optional.of(ModelNode.fromJSONStream(in));
+            }
+            // The features must exist if the model is generated
+            if (!Files.exists(featuresPath)) {
+                throw new RuntimeException("Missing features.json file");
+            }
+            try (InputStream in = Files.newInputStream(featuresPath)) {
+                ModelNode featuresNode = ModelNode.fromJSONStream(in);
+                featuresDescription = Optional.of(getInstantiableFeatures(featuresNode));
             }
         }
 
         if (rootDescription.isPresent()) {
             final Map<String, Capability> globalCapabilities = new LinkedHashMap<>(getCapabilityMap(rootDescription.get()));
-            generateResource(referencePath, ENGINE.getTemplate("resource"), rootDescription.get(), globalCapabilities);
+            generateResource(referencePath, ENGINE.getTemplate("resource"), featuresDescription.get(), rootDescription.get(), globalCapabilities);
             if (log.isDebugEnabled()) {
                 log.debug("✏️ Model reference pages generated");
             }
@@ -67,11 +77,30 @@ public class DocGenerator {
     }
 
     /**
+     * Create a map of resource URL to feature that can be instantiated.
+     * Some Galleon features are generated for runtime-only resources that can't
+     * be created.
+     * @param features The set of features.
+     * @return The mapping.
+     */
+    private static Map<String, ModelNode> getInstantiableFeatures(ModelNode features) {
+        Map<String, ModelNode> map = new TreeMap<>();
+        for (String name : features.keys()) {
+            ModelNode feature = features.get(name);
+            String url = featureToURL(name, feature);
+            if (url != null) {
+                map.put(url, feature);
+            }
+        }
+        return map;
+    }
+
+    /**
      * Generate documentation from the feature pack's metadata and model.
      * The documentation is generated in the {@code outputDirectory}. A zip archive
      * that contains the generated documentation is created at {@code docZipArchive}
      */
-    public static void generate(SimpleLog log, Path docZipArchive, Path outputDirectory, Path metadataPath, Path managementAPIPath, Path localRepositoryPath) throws IOException {
+    public static void generate(SimpleLog log, Path docZipArchive, Path outputDirectory, Path metadataPath, Path managementAPIPath, Path featuresPath, Path localRepositoryPath) throws IOException {
         log.info("🔎 Generating Feature Pack Documentation");
 
         Path manifestPath = outputDirectory.resolve("META-INF");
@@ -80,8 +109,11 @@ public class DocGenerator {
         if (Files.exists(managementAPIPath)) {
             Files.copy(managementAPIPath, manifestPath.resolve("management-api.json"), REPLACE_EXISTING);
         }
+        if (Files.exists(featuresPath)) {
+            Files.copy(featuresPath, manifestPath.resolve("features.json"), REPLACE_EXISTING);
+        }
 
-        final boolean hasModel = generateModel(log, outputDirectory, managementAPIPath);
+        final boolean hasModel = generateModel(log, outputDirectory, managementAPIPath, featuresPath);
 
         Metadata metadata = Metadata.parse(metadataPath);
 
@@ -145,11 +177,12 @@ public class DocGenerator {
 
     private static void generateResource(Path outputDirectory,
                                          Template resourceTemplate,
+                                         Map<String, ModelNode> features,
                                          ModelNode model,
                                          Map<String, Capability> globalCapabilities,
                                          PathElement... path) throws IOException {
-        final Resource resource = Resource.fromModelNode(PathAddress.pathAddress(path), model, globalCapabilities);
         final String currentUrl = buildCurrentUrl(path);
+        final Resource resource = Resource.fromModelNode(PathAddress.pathAddress(path), model, features.get(currentUrl), globalCapabilities);
         final String relativePathToContextRoot = createRelativePathToContextRoot(currentUrl);
 
         String content = resourceTemplate
@@ -170,7 +203,8 @@ public class DocGenerator {
                     if (newModel.hasDefined("operations")) {
                         newModel.get("operations");
                     }
-                    generateResource(outputDirectory, resourceTemplate, newModel, globalCapabilities, newPath);
+                    generateResource(outputDirectory, resourceTemplate, features, newModel, globalCapabilities, newPath);
+
                 }
             } else {
                 for (Child registration : child.children()) {
@@ -179,7 +213,7 @@ public class DocGenerator {
                     ModelNode childModel = model.get("children").get(child.name());
                     if (childModel.hasDefined("model-description") && childModel.get("model-description").hasDefined(registration.name())) {
                         ModelNode newModel = childModel.get("model-description").get(registration.name());
-                        generateResource(outputDirectory, resourceTemplate, newModel, globalCapabilities, newPath);
+                        generateResource(outputDirectory, resourceTemplate, features, newModel, globalCapabilities, newPath);
                     }
                 }
             }

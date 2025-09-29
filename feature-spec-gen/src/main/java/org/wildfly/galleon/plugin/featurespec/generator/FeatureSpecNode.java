@@ -746,9 +746,12 @@ class FeatureSpecNode {
     private Map<String, FeatureSpecNode> children = Collections.emptyMap();
 
     private Set<String> extendedIdParams = Collections.emptySet();
-
-    FeatureSpecNode(FeatureSpecGenerator gen, int type, String name, ModelNode descr) throws ProvisioningException {
+    private final ModelNode features;
+    private final boolean allFeatures;
+    FeatureSpecNode(FeatureSpecGenerator gen, int type, String name, ModelNode descr, ModelNode features, boolean allFeatures) throws ProvisioningException {
         this.gen = gen;
+        this.features = features;
+        this.allFeatures = allFeatures;
         switch(type) {
             case STANDALONE_MODEL:
                 this.standaloneName = name;
@@ -964,7 +967,7 @@ class FeatureSpecNode {
                 throw new IllegalStateException("Unexpected node type " + type);
         }
         if(childNode == null) {
-            childNode = new FeatureSpecNode(gen, type, childName, descr);
+            childNode = new FeatureSpecNode(gen, type, childName, descr, features, allFeatures);
             children = CollectionUtils.put(children, childName, childNode);
         }
         gen.addSpec(childName, childNode);
@@ -1067,6 +1070,19 @@ class FeatureSpecNode {
     private void buildSpec() throws ProvisioningException {
         if(standaloneDescr != null && generateStandalone) {
             persistSpec(standaloneName, standaloneDescr, STANDALONE_MODEL);
+            if (!features.has(standaloneDescr.get("name").asString())) {
+                // All features are put flat in the exported file.
+                standaloneDescr.remove("children");
+                features.get(standaloneDescr.get("name").asString()).set(standaloneDescr);
+            }
+        } else {
+            if (standaloneDescr != null && allFeatures) {
+                if (!features.has(standaloneDescr.get("name").asString())) {
+                    // All features are put flat in the exported file.
+                    standaloneDescr.remove("children");
+                    features.get(standaloneDescr.get("name").asString()).set(standaloneDescr);
+                }
+            }
         }
         if(profileDescr != null && generateProfile) {
             persistSpec(profileName, profileDescr, PROFILE_MODEL);
