@@ -97,6 +97,10 @@ public record Metadata(
         );
     }
 
+    public boolean containsLayer(String layerName) {
+        return layers().stream()
+                .anyMatch(l -> layerName.equals(l.name));
+    }
     public record Layer(
             String name,
             List<LayerDependency> dependencies,

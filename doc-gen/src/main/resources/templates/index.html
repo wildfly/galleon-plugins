@@ -102,7 +102,14 @@
   </h4>
   <ul class="collapsible">
     {#for dep in layer.dependencies}
-    <li><a href="#layer-{dep.name}">{dep.name}</a> -  <em>{#if dep.optional} optional {#else} required {/if}</em></li>
+    <li>
+      {#if metadata.containsLayer(dep.name)}
+      <a href="#layer-{dep.name}">{dep.name}</a>
+      {#else}
+      <code>{dep.name}</code>
+      {/if}
+      - <em>{#if dep.optional} optional {#else} required {/if}</em>
+    </li>
     {/for}
   </ul>
   {/if}
