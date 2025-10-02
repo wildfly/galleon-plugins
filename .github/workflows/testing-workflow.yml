@@ -85,7 +85,7 @@ jobs:
     name: WildFly Preview - Linux- JDK21
     uses: wildfly/wildfly/.github/workflows/shared-wildfly-build-and-test.yml@main
     with:
-      test-arguments: '-fae -Dts.preview'
+      test-arguments: '-fae -Dpreview-server-tests -Dts.preview'
       build-arguments: '-Dversion.org.jboss.galleon=${{needs.galleon-plugins-build.outputs.galleon-version}} -Dversion.org.wildfly.galleon-plugins=${{needs.galleon-plugins-build.outputs.galleon-plugins-version}}'
       java-versions: "['21']"
       os: "['ubuntu-latest']"
