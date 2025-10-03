@@ -1,0 +1,21 @@
+{#if children.size > 0}
+<h2>Children ({children.size})</h2>
+<ul class="children">
+  {#for child in children}
+  <li>
+    {#if child.children.size == 0}
+    <a href="{child.name}/index.html" class="{#if child.deprecation.deprecated}deprecated{/if}">{child.name}</a>
+    {#else}
+    <b>{child.name}</b>
+    {/if}
+    {#if child.children.size > 0}
+    <ul>
+      {#for c in child.children}
+      <li><a href="{child.name}/{c.name}/index.html" class="{#if c.deprecation.deprecated}deprecated{/if}">{c.name}</a></li>
+      {/for}
+    </ul>
+    {/if}
+  </li>
+  {/for}
+</ul>
+{/if}

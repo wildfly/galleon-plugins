@@ -1,0 +1,30 @@
+{#if capabilities.size > 0}
+<h2>Provided Capabilities ({capabilities.size})</h2>
+
+<table>
+  <thead>
+  <tr>
+    <th>Name</th>
+    <th>Dynamic</th>
+    <th>Other provider points</th>
+  </tr>
+  </thead>
+  <tbody>
+  {#for capability in capabilities}
+  <tr>
+    <td><a href="{capability.capabilityDescriptionUrl}">{capability.name}</a></td>
+    <td>{capability.dynamic}</td>
+    <td>
+      {#if capability.providerPointsUrls.size > 0}
+      {#for providerPointsUrl in capability.providerPointsUrls }
+      <a href="{relativePathToContextRoot}{providerPointsUrl.value}index.html">{providerPointsUrl.key}</a> <br/>
+      {/for}
+      {#else}
+      <p>none</p>
+      {/if}
+    </td>
+  </tr>
+  {/for}
+  </tbody>
+</table>
+{/if}

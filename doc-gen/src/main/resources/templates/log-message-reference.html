@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Log Message Reference</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="container">
+  <h1>Log and Exception Message Code Reference</h1>
+
+  {#for code in codes.entrySet}
+  <h2 id="{code.key}">{code.key}&nbsp;<a href="#{code.key}" class="anchor-link">§</a></h2>
+
+  <table>
+    <thead>
+    <tr>
+      <th>Code</th>
+      <th>Level</th>
+      <th>Return Type</th>
+      <th>Message</th>
+    </tr>
+    </thead>
+    <tbody>
+      {#for logMessage in code.value}
+      <tr id="{logMessage.realId}">
+        <td><a href="#{logMessage.realId}">{logMessage.realId}</a></td>
+        <td>{logMessage.level}</td>
+        <td>{logMessage.returnType}</td>
+        <td>{logMessage.message}</td>
+      </tr>
+      {/for}
+    </tbody>
+  </table>
+  {/for}
+</div>
+</body>
+</html>

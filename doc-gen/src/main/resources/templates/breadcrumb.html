@@ -1,0 +1,15 @@
+<div>
+  <nav aria-label="Breadcrumb" class="breadcrumb">
+    <ol>
+      {#for crumb in breadcrumbs}
+      {#if crumb_hasNext}
+      <li>
+        <a href="{relativePathToContextRoot}{crumb.url}">{crumb.label}</a>
+      </li>
+      {#else}
+      <li>{crumb.label}</li>
+      {/if}
+      {/for}
+    </ol>
+  </nav>
+</div>
