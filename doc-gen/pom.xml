@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+  ~ Copyright The WildFly Authors
+  ~ SPDX-License-Identifier: Apache-2.0
+  -->
+
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.wildfly.galleon-plugins</groupId>
+    <artifactId>wildfly-provisioning-parent</artifactId>
+    <version>8.0.0.Final-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>doc-gen</artifactId>
+  <packaging>jar</packaging>
+
+  <name>Feature Pack Documentation Generator</name>
+  <description>This library automatically generates documentation when a Feature Pack
+    is built by the Galleon Maven plugin. This documentation is provided as a doc.zip archive that is
+    attached to the Maven Project alongside the feature pack zip.
+  </description>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.jboss</groupId>
+      <artifactId>jboss-dmr</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkus.qute</groupId>
+      <artifactId>qute-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.javassist</groupId>
+      <artifactId>javassist</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.jboss.logging</groupId>
+      <artifactId>jboss-logging</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.jboss.galleon</groupId>
+      <artifactId>galleon-core</artifactId>
+    </dependency>
+  </dependencies>
+</project>

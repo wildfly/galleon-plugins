@@ -102,32 +102,34 @@ public class FeatureSpecGeneratorInvoker {
         TASKS_XML_PATH_END = pmWf + File.separator + WfConstants.TASKS_XML;
     }
 
-    private MavenProject project;
-    private MavenSession session;
-    private List<RemoteRepository> repositories;
-    private RepositorySystem repoSystem;
-    private ArtifactResolver artifactResolver;
-    private WildFlyFeaturePackBuild buildConfig;
-    private Log log;
+    private final MavenProject project;
+    private final MavenSession session;
+    private final List<RemoteRepository> repositories;
+    private final RepositorySystem repoSystem;
+    private final ArtifactResolver artifactResolver;
+    private final WildFlyFeaturePackBuild buildConfig;
+    private final Log log;
 
-    private File featureSpecsOutput;
-    private boolean forkEmbedded;
-    private Path wildflyHome;
-    private Path moduleTemplatesDir;
+    private final File featureSpecsOutput;
+    private final boolean forkEmbedded;
+    private final Path wildflyHome;
+    private final Path moduleTemplatesDir;
 
-    private Map<String, Artifact> mergedArtifacts = new HashMap<>();
-    private Map<String, Map<String, Artifact>> moduleTemplates = new HashMap<>();
+    private final Map<String, Artifact> mergedArtifacts = new HashMap<>();
+    private final Map<String, Map<String, Artifact>> moduleTemplates = new HashMap<>();
 
     private Map<String, Path> inheritedFeatureSpecs = Collections.emptyMap();
     private Set<String> standaloneExtensions = Collections.emptySet();
     private Set<String> domainExtensions = Collections.emptySet();
     private Set<String> hostExtensions = Collections.emptySet();
     private List<Path> layersConfs = Collections.emptyList();
-    private String minimumStabilityLevel;
+    private final String minimumStabilityLevel;
+    private final String description;
 
     private WildFlyPackageTasksParser tasksParser;
     private ProvisioningLayoutFactory layoutFactory;
     private ProvisioningLayout<FeaturePackLayout> configLayout;
+    private final boolean generateCompleteModel;
     FeatureSpecGeneratorInvoker(WfFeaturePackBuildMojo mojo) throws MojoExecutionException {
         this.project = mojo.project;
         this.session = mojo.session;
@@ -140,7 +142,9 @@ public class FeatureSpecGeneratorInvoker {
         this.wildflyHome = mojo.wildflyHome.toPath();
         this.moduleTemplatesDir = mojo.moduleTemplatesDir.toPath();
         this.minimumStabilityLevel = mojo.minimumStabilityLevel;
+        this.description = this.project.getDescription() == null || this.project.getDescription().isBlank() ? this.project.getName() : this.project.getDescription();
         this.log = mojo.getLog();
+        this.generateCompleteModel = mojo.generateCompleteModel;
     }
 
     public void execute() throws MojoExecutionException, MojoFailureException {
@@ -290,6 +294,19 @@ public class FeatureSpecGeneratorInvoker {
             Files.write(wildflyHome.resolve(WfConstants.STANDALONE).resolve(WfConstants.CONFIGURATION).resolve("standalone.xml"), lines);
         }
 
+        // Generate a server config that contains only what this feature-pack brings, used to generate the model description
+        if (buildConfig.hasStandaloneExtensions()) {
+            lines.clear();
+            lines.add("<?xml version='1.0' encoding='UTF-8'?>");
+            lines.add("<server xmlns=\"urn:jboss:domain:6.0\">");
+            lines.add("<extensions>");
+            for (String extension : buildConfig.getStandaloneExtensions()) {
+                lines.add(String.format("<extension module=\"%s\"/>", extension));
+            }
+            lines.add("</extensions>");
+            lines.add("</server>");
+            Files.write(wildflyHome.resolve(WfConstants.STANDALONE).resolve(WfConstants.CONFIGURATION).resolve("standalone-local.xml"), lines);
+        }
         if (!domainExtensions.isEmpty()) {
             lines.clear();
             lines.add("<?xml version='1.0' encoding='UTF-8'?>");
@@ -477,7 +494,7 @@ public class FeatureSpecGeneratorInvoker {
             try(DirectoryStream<Path> stream = Files.newDirectoryStream(p)) {
                 for(Path path : stream) {
                     String specName = path.getFileName().toString();
-                    if(specName.charAt(specName.length() - 1) == '/') {
+                    if (specName.charAt(specName.length() - 1) == '/') {
                         specName = specName.substring(0, specName.length() - 1);
                     }
                     path = path.resolve(Constants.SPEC_XML);
@@ -724,15 +741,20 @@ public class FeatureSpecGeneratorInvoker {
     private Object getFeaturePackGenerator(Class<?> specGenCls) throws NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
         debug("Creating a feature spec generator for stability %s using %s", minimumStabilityLevel, specGenCls);
         try {
-            return specGenCls.getConstructor(String.class, Path.class, Map.class, String.class, boolean.class, boolean.class)
-                    .newInstance(wildflyHome.toString(), featureSpecsOutput.toPath(), inheritedFeatureSpecs, minimumStabilityLevel, forkEmbedded, log.isDebugEnabled());
+            return specGenCls.getConstructor(String.class, Path.class, Map.class, String.class, String.class, boolean.class, boolean.class, boolean.class)
+                    .newInstance(wildflyHome.toString(), featureSpecsOutput.toPath(), inheritedFeatureSpecs, minimumStabilityLevel, description, generateCompleteModel, forkEmbedded, log.isDebugEnabled());
         } catch (NoSuchMethodException e) {
-            if (minimumStabilityLevel != null && !minimumStabilityLevel.isEmpty()) {
-                return specGenCls.getConstructor(String.class, Path.class, Map.class, boolean.class, boolean.class)
-                        .newInstance(wildflyHome.toString(), featureSpecsOutput.toPath(), inheritedFeatureSpecs, forkEmbedded, log.isDebugEnabled());
-            } else {
-                // We've been configured to use a stability but the generator class does not support it
-                throw e;
+            try {
+                return specGenCls.getConstructor(String.class, Path.class, Map.class, String.class, boolean.class, boolean.class)
+                        .newInstance(wildflyHome.toString(), featureSpecsOutput.toPath(), inheritedFeatureSpecs, minimumStabilityLevel, forkEmbedded, log.isDebugEnabled());
+            } catch (NoSuchMethodException ex) {
+                if (minimumStabilityLevel != null && !minimumStabilityLevel.isEmpty()) {
+                    return specGenCls.getConstructor(String.class, Path.class, Map.class, boolean.class, boolean.class)
+                            .newInstance(wildflyHome.toString(), featureSpecsOutput.toPath(), inheritedFeatureSpecs, forkEmbedded, log.isDebugEnabled());
+                } else {
+                    // We've been configured to use a stability but the generator class does not support it
+                    throw ex;
+                }
             }
         }
     }

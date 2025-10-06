@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Documentation for {metadata.name}</title>
+  <link rel="stylesheet" href="styles.css">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" rel="stylesheet" />
+  <script src="scripts.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+</head>
+<body>
+<div class="container">
+  <h1>Documentation for {metadata.name}</h1>
+  <p>{metadata.description}</p>
+  <h2 id="coords">Coordinates&nbsp;<a href="#coords" class="anchor-link">§</a></h2>
+  <div class="tabs">
+    <ul class="tab-list" role="tablist">
+      <li><button class="tab-button active" onclick="switchTab(event, 'maven-tab')" role="tab" aria-selected="true" aria-controls="maven-tab">Maven Dependency</button></li>
+      <li><button class="tab-button" onclick="switchTab(event, 'feature-pack-tab')" role="tab" aria-selected="false" aria-controls="feature-pack-tab">Feature Pack Location</button></li>
+    </ul>
+
+    <div id="maven-tab" class="tab-content active" role="tabpanel">
+      <div class="code-block-container">
+        <pre>
+            <code id="maven-dependency" class="language-xml">
+&lt;dependency>
+  &lt;groupId>{metadata.groupId}&lt;/groupId>
+  &lt;artifactId>{metadata.artifactId}&lt;/artifactId>
+  &lt;version>{metadata.version}&lt;/version>
+&lt;/dependency>
+            </code>
+        </pre>
+        <button class="copy-btn" onclick="copyToClipboard('maven-dependency')" title="Copy to clipboard">📋</button>
+      </div>
+    </div>
+
+    <div id="feature-pack-tab" class="tab-content" role="tabpanel">
+      <div class="code-block-container">
+        <pre>
+            <code id="feature-pack-location" class="language-xml">
+&lt;feature-pack>
+    &lt;location>{metadata.groupId}:{metadata.artifactId}:{metadata.version}&lt;/location>
+&lt;/feature-pack>
+            </code>
+        </pre>
+        <button class="copy-btn" onclick="copyToClipboard('feature-pack-location')" title="Copy to clipboard">📋</button>
+      </div>
+    </div>
+  </div>
+
+  {#if hasManagementAPI || hasLogMessages}
+  <h2 id="refs">References&nbsp;<a href="#refs" class="anchor-link">§</a></h2>
+  <ul>
+    {#if hasManagementAPI}
+    <li>
+      <a href="reference/index.html">Management API</a>
+    </li>
+    {/if}
+    {#if hasLogMessages}
+    <li>
+    <a href="log-message-reference.html">Log and Exception Message Code</a>
+    {/if}
+    </li>
+  </ul>
+  {/if}
+
+  {#if metadata.layers}
+  <h2 id="layers">Provided Layers&nbsp;<a href="#layers" class="anchor-link">§</a></h2>
+  <div class="table-of-contents">
+    <ul>
+      {#for layer in metadata.layers}
+      <li><a href="#layer-{layer.name}">{layer.name}</a></li>
+      {/for}
+    </ul>
+  </div>
+  {#for layer in metadata.layers}
+  <h3 id="layer-{layer.name}">{layer.name}&nbsp;<a href="#layer-{layer.name}" class="anchor-link">§</a></h3>
+  {#if layer.description}
+  <p>{layer.description}</p>
+  {/if}
+
+  {#if layer.note}
+  <div class="alert">
+    <div>{layer.note}</div>
+  </div>
+  {/if}
+
+  {#if layer.prettyManagementModel}
+  <h4 class="toggle-link">
+    <a href="#">Management Model</a>
+  </h4>
+  <div class="collapsible code-block-container">
+    <pre><code class="language-json">
+{layer.prettyManagementModel}</code></pre>
+    </div>
+  {/if}
+
+  {#if layer.dependencies}
+  <h4 class="toggle-link">
+    <a href="#">Dependencies</a>
+  </h4>
+  <ul class="collapsible">
+    {#for dep in layer.dependencies}
+    <li>
+      {#if metadata.containsLayer(dep.name)}
+      <a href="#layer-{dep.name}">{dep.name}</a>
+      {#else}
+      <code>{dep.name}</code>
+      {/if}
+      - <em>{#if dep.optional} optional {#else} required {/if}</em>
+    </li>
+    {/for}
+  </ul>
+  {/if}
+  {#if layer.properties}
+  <h4 class="toggle-link">
+    <a href="#">Layer Properties</a>
+  </h4>
+  <ul class="collapsible">
+    {#for prop in layer.properties}
+    <li>{prop.name}&nbsp;=&nbsp;{prop.value}</li>
+    {/for}
+  </ul>
+  {/if}
+  {#if layer.packages}
+  <h4 class="toggle-link">
+    <a href="#">Packages</a>
+  </h4>
+  <ul class="collapsible">
+    {#for package in layer.packages}
+    <li>{package}</li>
+    {/for}
+  </ul>
+  {/if}
+  {/for}
+  {/if}
+
+  <h2>About</h2>
+  {#if metadata.url}
+  <p>
+    This feature pack is hosted at  <a href="{metadata.url}">{metadata.url}</a>
+  </p>
+  {/if}
+  {#if metadata.scmUrl}
+  <p>
+    Source code of this feature pack is hosted at <a href="{metadata.scmUrl}">{metadata.scmUrl}</a>
+  </p>
+  {/if}
+  {#if metadata.licenses}
+  <p>This feature pack is licensed under:</p>
+  <ul>
+    {#for license in metadata.licenses}
+    <li>{license}</li>
+    {/for}
+  </ul>
+  {/if}
+</div>
+</body>
+</html>
