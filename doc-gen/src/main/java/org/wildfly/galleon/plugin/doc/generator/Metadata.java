@@ -27,6 +27,7 @@ public record Metadata(
         List<String> licenses,
         String url,
         @JsonProperty("scm-url") String scmUrl,
+        String copyright,
         List<Layer> layers) {
 
     static Metadata parse(Path file) throws IOException {
@@ -55,6 +56,7 @@ public record Metadata(
             metadata.licenses(),
             metadata.url(),
             metadata.scmUrl(),
+            metadata.copyright(),
             sortedLayers
         );
     }

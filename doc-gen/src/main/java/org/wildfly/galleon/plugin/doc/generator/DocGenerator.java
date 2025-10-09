@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Year;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -29,6 +30,21 @@ import static org.wildfly.galleon.plugin.doc.generator.FeatureUtils.featureToURL
 
 public class DocGenerator {
 
+    private static final int YEAR = Year.now().getValue();
+
+    /**
+     * Generate the model reference in the {@code outputDirectory}
+     *
+     * @param outputDirectory the root directory to generate the model reference
+     * @param managementAPIPath the path to the management-api.json file
+     * @param featuresPath the path to the features.json file
+     * @param copyright Copyright line (can be {@code null}
+     * @return true if the model is generated
+     */
+    public static boolean generateModel(Path outputDirectory, Path managementAPIPath, Path featuresPath, String copyright) throws IOException {
+        return generateModel(SYSTEM_LOG, outputDirectory, managementAPIPath, featuresPath, copyright);
+    }
+
     /**
      * Generate the model reference in the {@code outputDirectory}
      *
@@ -38,10 +54,10 @@ public class DocGenerator {
      * @return true if the model is generated
      */
     public static boolean generateModel(Path outputDirectory, Path managementAPIPath, Path featuresPath) throws IOException {
-        return generateModel(SYSTEM_LOG, outputDirectory, managementAPIPath, featuresPath);
+        return generateModel(SYSTEM_LOG, outputDirectory, managementAPIPath, featuresPath, null);
     }
 
-    static boolean generateModel(SimpleLog log, Path outputDirectory, Path managementAPIPath, Path featuresPath) throws IOException {
+    static boolean generateModel(SimpleLog log, Path outputDirectory, Path managementAPIPath, Path featuresPath, String copyright) throws IOException {
         Path referencePath = outputDirectory.resolve("reference");
         Files.createDirectories(referencePath);
 
@@ -65,7 +81,7 @@ public class DocGenerator {
 
         if (rootDescription.isPresent()) {
             final Map<String, Capability> globalCapabilities = new LinkedHashMap<>(getCapabilityMap(rootDescription.get()));
-            generateResource(referencePath, ENGINE.getTemplate("resource"), featuresDescription.get(), rootDescription.get(), globalCapabilities);
+            generateResource(referencePath, ENGINE.getTemplate("resource"), copyright, featuresDescription.get(), rootDescription.get(), globalCapabilities);
             if (log.isDebugEnabled()) {
                 log.debug("✏️ Model reference pages generated");
             }
@@ -113,11 +129,10 @@ public class DocGenerator {
             Files.copy(featuresPath, manifestPath.resolve("features.json"), REPLACE_EXISTING);
         }
 
-        final boolean hasModel = generateModel(log, outputDirectory, managementAPIPath, featuresPath);
-
         Metadata metadata = Metadata.parse(metadataPath);
 
-        final boolean hasLogMessages = generateLogMessages(log, outputDirectory, localRepositoryPath, metadataPath.getParent());
+        final boolean hasLogMessages = generateLogMessages(log, outputDirectory, localRepositoryPath, metadataPath.getParent(), metadata.copyright());
+        final boolean hasModel = generateModel(log, outputDirectory, managementAPIPath, featuresPath, metadata.copyright());
 
         generateIndex(outputDirectory, ENGINE.getTemplate("index"), metadata, hasModel, hasLogMessages);
         if (log.isDebugEnabled()) {
@@ -129,7 +144,7 @@ public class DocGenerator {
         log.info("📦 Archive generated at " + docZipArchive);
     }
 
-    static boolean generateLogMessages(SimpleLog log, Path outputDirectory, Path localRepositoryPath, Path artifactListsParentPath) throws IOException {
+    static boolean generateLogMessages(SimpleLog log, Path outputDirectory, Path localRepositoryPath, Path artifactListsParentPath, String copyright) throws IOException {
         log.info("🔎 Exporting log messages from artifact lists...");
 
         List<LogMessage> messages = new ArrayList<>();
@@ -160,6 +175,8 @@ public class DocGenerator {
 
         String content = ENGINE.getTemplate("log-message-reference")
                 .data("codes", map)
+                .data("copyright", copyright)
+                .data("year", YEAR)
                 .render();
         FileUtils.writeToFile(outputDirectory.resolve("log-message-reference.html"), content);
         log.info("✏️ Log Message Reference page generated");
@@ -171,12 +188,14 @@ public class DocGenerator {
                 .data("metadata", metadata)
                 .data("hasManagementAPI", hasManagementAPI)
                 .data("hasLogMessages", hasLogMessages)
+                .data("year", YEAR)
                 .render();
         FileUtils.writeToFile(outputDirectory.resolve("index.html"), content);
     }
 
     private static void generateResource(Path outputDirectory,
                                          Template resourceTemplate,
+                                         String copyright,
                                          Map<String, ModelNode> features,
                                          ModelNode model,
                                          Map<String, Capability> globalCapabilities,
@@ -188,6 +207,8 @@ public class DocGenerator {
         String content = resourceTemplate
                 .data("currentUrl", currentUrl)
                 .data("resource", resource)
+                .data("copyright", copyright)
+                .data("year", YEAR)
                 .data("breadcrumbs", Breadcrumb.build(path))
                 .data("relativePathToContextRoot", relativePathToContextRoot)
                 .render();
@@ -203,7 +224,7 @@ public class DocGenerator {
                     if (newModel.hasDefined("operations")) {
                         newModel.get("operations");
                     }
-                    generateResource(outputDirectory, resourceTemplate, features, newModel, globalCapabilities, newPath);
+                    generateResource(outputDirectory, resourceTemplate, copyright, features, newModel, globalCapabilities, newPath);
 
                 }
             } else {
@@ -213,7 +234,7 @@ public class DocGenerator {
                     ModelNode childModel = model.get("children").get(child.name());
                     if (childModel.hasDefined("model-description") && childModel.get("model-description").hasDefined(registration.name())) {
                         ModelNode newModel = childModel.get("model-description").get(registration.name());
-                        generateResource(outputDirectory, resourceTemplate, features, newModel, globalCapabilities, newPath);
+                        generateResource(outputDirectory, resourceTemplate, copyright, features, newModel, globalCapabilities, newPath);
                     }
                 }
             }
