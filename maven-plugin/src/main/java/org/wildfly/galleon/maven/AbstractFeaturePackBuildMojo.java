@@ -537,7 +537,6 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                                 } catch (Exception ex) {
                                     throw new RuntimeException(ex);
                                 }
-                                ZipUtils.zip(versionDir, target);
                                 if (project.getPackaging().equals(getPackaging())) {
                                     if (project.getArtifact().getFile() != null) {
                                         throw new MojoExecutionException("Cannot set " + target.getFileName()
