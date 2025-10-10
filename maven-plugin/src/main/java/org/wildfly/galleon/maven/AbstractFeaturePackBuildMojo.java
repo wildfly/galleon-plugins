@@ -267,6 +267,9 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     @Parameter(alias = "generate-complete-model", defaultValue = "false", required = true)
     protected Boolean generateCompleteModel;
 
+    @Parameter(alias = "copyright", property = "wildfly.feature.pack.copyright")
+    protected String copyright;
+
     private MavenProjectArtifactVersions artifactVersions;
 
     private Map<String, FeaturePackDescription> fpDependencies = Collections.emptyMap();
@@ -532,7 +535,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                                     ZipUtils.zip(versionDir, target);
 
                                     final Path metadata = Paths.get(project.getBuild().getDirectory()).resolve("metadata.json");
-                                    MetadataGenerator generator = new MetadataGenerator(project, repoSystem, repoSession, repositories, generateCompleteModel);
+                                    MetadataGenerator generator = new MetadataGenerator(project, repoSystem, repoSession, repositories, generateCompleteModel, copyright);
                                     generator.generateMetadata(target, desc, metadata);
                                 } catch (Exception ex) {
                                     throw new RuntimeException(ex);

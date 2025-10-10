@@ -196,17 +196,21 @@ class MetadataGenerator {
     private final List<RemoteRepository> repositories;
     private final MavenProject project;
     private final boolean addFeaturePacksDependenciesInMetadata;
+    private final String copyright;
 
     MetadataGenerator(MavenProject project,
             RepositorySystem repoSystem,
             RepositorySystemSession repoSession,
             List<RemoteRepository> repositories,
-            boolean addFeaturePacksDependenciesInMetadata) {
+            boolean addFeaturePacksDependenciesInMetadata,
+            String copyright
+    ) {
         this.project = project;
         this.repoSystem = repoSystem;
         this.repoSession = repoSession;
         this.repositories = repositories;
         this.addFeaturePacksDependenciesInMetadata = addFeaturePacksDependenciesInMetadata;
+        this.copyright = copyright;
     }
 
     void generateMetadata(Path featurePack, FeaturePackDescription desc, Path metadataTarget) throws Exception {
@@ -302,7 +306,7 @@ class MetadataGenerator {
             }
         }
         Metadata metadata = new Metadata(project.getGroupId(), project.getArtifactId(), project.getVersion(), project.getName(), project.getDescription(), licenses,
-                project.getUrl(), scmUrl, layers);
+                project.getUrl(), scmUrl, copyright, layers);
         mapper.writerWithDefaultPrettyPrinter().writeValue(metadataTarget.toFile(), metadata);
     }
 
