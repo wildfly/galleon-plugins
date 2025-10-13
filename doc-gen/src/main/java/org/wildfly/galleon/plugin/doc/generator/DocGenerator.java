@@ -6,6 +6,7 @@
 package org.wildfly.galleon.plugin.doc.generator;
 
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
+import static org.wildfly.galleon.plugin.doc.generator.FeatureUtils.featureToURL;
 import static org.wildfly.galleon.plugin.doc.generator.LogMessageGenerator.exportLogMessages;
 import static org.wildfly.galleon.plugin.doc.generator.SimpleLog.SYSTEM_LOG;
 import static org.wildfly.galleon.plugin.doc.generator.TemplateUtils.ENGINE;
@@ -14,23 +15,19 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Year;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
 import java.util.stream.Stream;
 
 import io.quarkus.qute.Template;
-import java.util.Map;
-import java.util.TreeMap;
 import org.jboss.dmr.ModelNode;
-import static org.wildfly.galleon.plugin.doc.generator.FeatureUtils.featureToURL;
 
 public class DocGenerator {
-
-    private static final int YEAR = Year.now().getValue();
 
     /**
      * Generate the model reference in the {@code outputDirectory}
@@ -176,7 +173,6 @@ public class DocGenerator {
         String content = ENGINE.getTemplate("log-message-reference")
                 .data("codes", map)
                 .data("copyright", copyright)
-                .data("year", YEAR)
                 .render();
         FileUtils.writeToFile(outputDirectory.resolve("log-message-reference.html"), content);
         log.info("✏️ Log Message Reference page generated");
@@ -186,9 +182,9 @@ public class DocGenerator {
     private static void generateIndex(Path outputDirectory, Template index, Metadata metadata, boolean hasManagementAPI, boolean hasLogMessages) throws IOException {
         String content = index
                 .data("metadata", metadata)
+                .data("copyright", metadata.copyright())
                 .data("hasManagementAPI", hasManagementAPI)
                 .data("hasLogMessages", hasLogMessages)
-                .data("year", YEAR)
                 .render();
         FileUtils.writeToFile(outputDirectory.resolve("index.html"), content);
     }
@@ -208,7 +204,6 @@ public class DocGenerator {
                 .data("currentUrl", currentUrl)
                 .data("resource", resource)
                 .data("copyright", copyright)
-                .data("year", YEAR)
                 .data("breadcrumbs", Breadcrumb.build(path))
                 .data("relativePathToContextRoot", relativePathToContextRoot)
                 .render();

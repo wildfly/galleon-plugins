@@ -553,3 +553,9 @@ h4:hover .anchor-link {
 .tab-content.active {
     display: block;
 }
+
+footer {
+  text-align: center;
+  font-size: 0.875rem;
+  color: #555;
+}
