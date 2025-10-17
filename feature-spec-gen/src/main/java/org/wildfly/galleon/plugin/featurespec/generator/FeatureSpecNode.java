@@ -74,7 +74,7 @@ class FeatureSpecNode {
                                 specName.regionMatches(CORE_SERVICE_MANAGEMENT.length(), ".security-realm", 0, ".security-realm".length()) ||
                                 specName.regionMatches(CORE_SERVICE_MANAGEMENT.length(), ".ldap-connection", 0, ".ldap-connection".length())) ||
 
-                specName.equals(EXTENSION);
+                EXTENSION.equals(specName);
     }
 
     private static boolean sameRequiredCapabilities(ModelNode standaloneDescr, ModelNode domainDescr, String optionalPrefix, boolean failIfDifferent) throws ProvisioningException {
@@ -98,10 +98,7 @@ class FeatureSpecNode {
             return false;
         }
         for (ModelNode capability : capsDescr) {
-            String domainName = capability.get("name").asString();
-            if(optionalPrefix != null && domainName.charAt(0) == '$' && domainName.startsWith(optionalPrefix, 1)) {
-                domainName = domainName.substring(optionalPrefix.length() + 1);
-            }
+            String domainName = processDomainNodeCapability(optionalPrefix, capability.get("name").asString());
             final Boolean standaloneOptional = standaloneCaps.get(domainName);
             final boolean domainOptional = capability.hasDefined("optional") && capability.get("optional").asBoolean();
             if (domainOptional) {
@@ -137,10 +134,7 @@ class FeatureSpecNode {
             return false;
         }
         for (ModelNode capability : capsDescr) {
-            String domainName = capability.asString();
-            if(optionalPrefix != null && domainName.charAt(0) == '$' && domainName.startsWith(optionalPrefix, 1)) {
-                domainName = domainName.substring(optionalPrefix.length() + 1);
-            }
+            String domainName = processDomainNodeCapability(optionalPrefix, capability.asString());
             if(!standaloneCaps.contains(domainName)) {
                 if (failIfDifferent) {
                     throw new ProvisioningException("Domain model spec provides capability " + capability.asString() + " with no equivalent in the standalone one");
@@ -229,17 +223,14 @@ class FeatureSpecNode {
             throw new ProvisioningException("Annotation element 'name' in set to " + domainAnnot.get("name").asString() + " in the domain model and to " + standaloneAnnot.get("name").asString() + " in standalone");
         }
 
-        String domainAddrParams = domainAnnot.get("addr-params").asString();
-        if(domainAddrParams.startsWith(domainNode)) {
-            domainAddrParams = domainAddrParams.substring(domainNode.length() + 1);
-        }
+        String domainAddrParams = processDomainNode(domainNode, domainAnnot.get("addr-params").asString());
         if(!domainAddrParams.equals(standaloneAnnot.get("addr-params").asString())) {
             throw new ProvisioningException("Annotation element 'addr-params' in set to " + domainAddrParams + " in the domain model and to " + standaloneAnnot.get("addr-params").asString() + " in standalone");
         }
 
         String domainOpParams = domainAnnot.get("op-params").asString();
-        if(domainOpParams.startsWith(domainNode)) {
-            domainOpParams = domainOpParams.substring(domainNode.length() + 1);
+        if (domainOpParams.startsWith("__" + domainNode)) {
+            domainOpParams =  domainOpParams.substring(domainNode.length() + 3);
         }
         final String standaloneOpParams = standaloneAnnot.get("op-params").asString();
         if(!domainOpParams.equals(standaloneOpParams)) {
@@ -286,6 +277,37 @@ class FeatureSpecNode {
             throw new ProvisioningException("Expected " + checkedStandaloneElems + " annotation elements in the standalone model but got " + standaloneElems);
         }
         return true;
+    }
+
+    /**
+     * We need to be able to match $profile.capability_base_name with $__profile.capability_base_name
+     * @param domainNode profile or host
+     * @param value the complete capability name
+     * @return capability_base_name.domainNode
+     */
+    private static String processDomainNodeCapability(String domainNode, String value) {
+        if (domainNode != null && value.charAt(0) == '$' && value.startsWith(domainNode, 1)) {
+            return value.substring(domainNode.length() + 1);
+        }
+        if (domainNode != null && value.charAt(0) == '$' && value.startsWith(domainNode, 3)) {
+            return value.substring(domainNode.length() + 3);
+        }
+        return value;
+    }
+ /**
+     * We need to be able to match __host,test with test
+     * @param domainNode profile or host
+     * @param value the complete capability name
+     * @return capability_base_name.domainNode
+     */
+    private static String processDomainNode(String domainNode, String value) {
+        if (value.startsWith(domainNode)) {
+            return value.substring(domainNode.length() + 1);
+        }
+        if (value.startsWith("__" + domainNode)) {
+            return value.substring(domainNode.length() + 3);
+        }
+        return value;
     }
 
     private static boolean sameFeatureRefs(ModelNode standaloneDescr, ModelNode domainDescr, String optionalPrefix, boolean failIfDifferent) throws ProvisioningException {
@@ -866,7 +888,7 @@ class FeatureSpecNode {
                     throw e;
                 }
             }
-            extendedIdParams = Collections.singleton("profile");
+            extendedIdParams = Collections.singleton("__profile");
             mergeCode |= STANDALONE_MODEL | PROFILE_MODEL;
             mergedModel = STANDALONE_MODEL;
             generateMerged = generateStandalone;
@@ -899,7 +921,7 @@ class FeatureSpecNode {
 
         if(standaloneName != null && identicalInAllModels(standaloneName)) {
             assertIdenticalSpecs(standaloneName, standaloneDescr, hostName, hostDescr, HOST_PREFIX);
-            extendedIdParams = CollectionUtils.add(extendedIdParams, "host");
+            extendedIdParams = CollectionUtils.add(extendedIdParams, "__host");
             mergeCode |= STANDALONE_MODEL | HOST_MODEL;
             mergedModel = STANDALONE_MODEL;
             generateMerged = generateStandalone;
@@ -1009,7 +1031,7 @@ class FeatureSpecNode {
         if((mergeCode & PROFILE_MODEL) > 0) {
             if(mergedModel != PROFILE_MODEL) {
                 if(generateMerged) {
-                    ensureCapPrefix(mergedDescr, "$profile.", PROFILE_MODEL | STANDALONE_MODEL);
+                    ensureCapPrefix(mergedDescr, "$__profile.", PROFILE_MODEL | STANDALONE_MODEL);
                     ensureRef(mergedDescr, "profile");
                 }
                 updateReferencingSpecs(profileName, mergedName);
