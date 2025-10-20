@@ -514,7 +514,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         } catch (XMLStreamException | IOException | ProvisioningDescriptionException e) {
             throw new MojoExecutionException(Errors.writeFile(getFpDir().resolve(Constants.FEATURE_PACK_XML)), e);
         }
-
+        System.out.println("THIS VERSION HAS BEEN USED");
         // build feature-packs from the layout and attach as project artifacts
         try (DirectoryStream<Path> wdStream = Files.newDirectoryStream(getWorkDir(), entry -> Files.isDirectory(entry))) {
             for (Path groupDir : wdStream) {
