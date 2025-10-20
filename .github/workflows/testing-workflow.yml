@@ -58,7 +58,7 @@ jobs:
 
   wildfly-build-and-test:
     name: Linux/Windows - JDK17 and JDK21
-    uses: wildfly/jfdenise/.github/workflows/shared-wildfly-build-and-test.yml@test-ci
+    uses: jfdenise/wildfly/.github/workflows/shared-wildfly-build-and-test.yml@test-ci
     with:
       build-arguments: '-fae -Dversion.org.jboss.galleon=${{needs.galleon-plugins-build.outputs.galleon-version}} -Dversion.org.wildfly.galleon-plugins=${{needs.galleon-plugins-build.outputs.galleon-plugins-version}}'
       java-versions: "['17', '21']"
