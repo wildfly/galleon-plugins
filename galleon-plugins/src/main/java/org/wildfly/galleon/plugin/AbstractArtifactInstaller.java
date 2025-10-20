@@ -37,6 +37,7 @@ import org.wildfly.galleon.plugin.WfInstallPlugin.ArtifactResolver;
  *
  * @author jdenise
  */
+FOO
 abstract class AbstractArtifactInstaller implements ShadedModel.Installer {
 
     private final Path generatedMavenRepo;
