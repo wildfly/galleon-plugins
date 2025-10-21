@@ -28,11 +28,8 @@
   {#include attributes attributes=resource.attributes /}
   {#include operations operations=resource.operations /}
   {#include features features=resource.features /}
-  <footer>
-    {#if copyright}
-    <p>&copy; {copyright} {year}</p>
-    {/if}
-  </footer>
+
+  {#include footer /}
 </div>
 </body>
 </html>
