@@ -13,7 +13,7 @@
     <ref feature="extension" include="true"/>
   </refs>
   <params>
-    <param name="host" feature-id="true" default="GLN_UNDEFINED"/>
+    <param name="__host" feature-id="true" default="GLN_UNDEFINED"/>
     <param name="subsystem" feature-id="true" default="test-subsystem"/>
     <param name="extension" default="org.wildfly.galleon.plugins.test.subsystem"/>
   </params>

@@ -157,9 +157,20 @@ public class WfProvisionedConfigHandler implements ProvisionedConfigHandler, Aut
                     continue;
                 }
                 ++i;
-                addr.add(addrParams.get(i++), value);
+                addr.add(convertAliasAddressParam(addrParams.get(i++)), value);
+
             }
             return op;
+        }
+
+        private String convertAliasAddressParam(String pathElementName) {
+            if ("__profile".equals(pathElementName)) {
+                return "profile";
+            }
+            if ("__host".equals(pathElementName)) {
+                return "host";
+            }
+            return pathElementName;
         }
 
         void toCommandLine(ProvisionedFeature feature) throws ProvisioningException {

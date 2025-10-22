@@ -232,8 +232,8 @@ public class FeatureSpecGenerator implements ForkCallback {
             }
         }
         ModelNode features = new ModelNode();
-        final FeatureSpecNode rootNode = new FeatureSpecNode(this, FeatureSpecNode.STANDALONE_MODEL, standaloneFeatures.require(ClientConstants.NAME).asString(), standaloneFeatures, features, generateCompleteModel);
-
+         boolean isLegacy = isLegacy(domainRoots);
+        final FeatureSpecNode rootNode = new FeatureSpecNode(this, FeatureSpecNode.STANDALONE_MODEL, standaloneFeatures.require(ClientConstants.NAME).asString(), standaloneFeatures, features, generateCompleteModel, isLegacy);
         if (domainRoots != null) {
             rootNode.setDomainDescr(WfConstants.DOMAIN, new ModelNode());
             rootNode.generateDomain = false;
@@ -271,6 +271,24 @@ public class FeatureSpecGenerator implements ForkCallback {
         }
     }
 
+    private boolean isLegacy(ModelNode domainRoots) {
+        boolean isLegacy = false;
+        if (domainRoots != null) {
+            for (Property child : domainRoots.get(CHILDREN).asPropertyList()) {
+                final String specName = child.getName();
+                if (specName.equals(WfConstants.HOST)) {
+                    isLegacy = isLegacy || isLegacy(child.getValue().get("annotation").get("addr-params").asString());
+                } else if (specName.equals(WfConstants.PROFILE)) {
+                    isLegacy = isLegacy || isLegacy(child.getValue().get("annotation").get("addr-params").asString());
+                }
+            }
+        }
+        return isLegacy;
+    }
+
+    private boolean isLegacy(String addressParams) {
+        return !(addressParams.contains("__profile") || addressParams.contains("__host"));
+    }
     @Override
     public void forkedForEmbedded(String... args) throws ConfigGeneratorException {
         if(args.length != 5 && args.length != 6) {
