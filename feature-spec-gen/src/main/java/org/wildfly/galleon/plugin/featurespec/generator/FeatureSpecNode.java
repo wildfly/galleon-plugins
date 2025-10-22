@@ -56,15 +56,22 @@ class FeatureSpecNode {
     static final int PROFILE_MODEL = 2;
     static final int DOMAIN_MODEL = 4;
     static final int HOST_MODEL = 8;
+    private boolean isLegacy =  false;
 
-    private static final String DOMAIN_PREFIX = "domain.";
-    private static final String HOST_PREFIX = "host.";
-    private static final String PROFILE_PREFIX = "profile.";
+    private static final String DOMAIN_CAPABILITY_PREFIX = "domain.";
+    private static final String HOST_CAPABILITY_PREFIX = "host.";
+    private static final String PROFILE_CAPABILITY_PREFIX = "profile.";
 
     private static final String CORE_SERVICE_MANAGEMENT = "core-service.management";
     private static final String EXTENSION = "extension";
     private static final String SUBSYSTEM_PREFIX = "subsystem.";
 
+    private String getHostPrefix() {
+        return isLegacy ? "host" : "__host";
+    }
+    private String getProfilePrefix() {
+        return isLegacy ? "profile" : "__profile";
+    }
     private static boolean identicalInAllModels(String specName) {
         return specName.startsWith(SUBSYSTEM_PREFIX) ||
 
@@ -74,7 +81,7 @@ class FeatureSpecNode {
                                 specName.regionMatches(CORE_SERVICE_MANAGEMENT.length(), ".security-realm", 0, ".security-realm".length()) ||
                                 specName.regionMatches(CORE_SERVICE_MANAGEMENT.length(), ".ldap-connection", 0, ".ldap-connection".length())) ||
 
-                specName.equals(EXTENSION);
+                EXTENSION.equals(specName);
     }
 
     private static boolean sameRequiredCapabilities(ModelNode standaloneDescr, ModelNode domainDescr, String optionalPrefix, boolean failIfDifferent) throws ProvisioningException {
@@ -98,10 +105,7 @@ class FeatureSpecNode {
             return false;
         }
         for (ModelNode capability : capsDescr) {
-            String domainName = capability.get("name").asString();
-            if(optionalPrefix != null && domainName.charAt(0) == '$' && domainName.startsWith(optionalPrefix, 1)) {
-                domainName = domainName.substring(optionalPrefix.length() + 1);
-            }
+            String domainName = processDomainNodeCapability(optionalPrefix, capability.get("name").asString());
             final Boolean standaloneOptional = standaloneCaps.get(domainName);
             final boolean domainOptional = capability.hasDefined("optional") && capability.get("optional").asBoolean();
             if (domainOptional) {
@@ -137,10 +141,7 @@ class FeatureSpecNode {
             return false;
         }
         for (ModelNode capability : capsDescr) {
-            String domainName = capability.asString();
-            if(optionalPrefix != null && domainName.charAt(0) == '$' && domainName.startsWith(optionalPrefix, 1)) {
-                domainName = domainName.substring(optionalPrefix.length() + 1);
-            }
+            String domainName = processDomainNodeCapability(optionalPrefix, capability.asString());
             if(!standaloneCaps.contains(domainName)) {
                 if (failIfDifferent) {
                     throw new ProvisioningException("Domain model spec provides capability " + capability.asString() + " with no equivalent in the standalone one");
@@ -229,17 +230,14 @@ class FeatureSpecNode {
             throw new ProvisioningException("Annotation element 'name' in set to " + domainAnnot.get("name").asString() + " in the domain model and to " + standaloneAnnot.get("name").asString() + " in standalone");
         }
 
-        String domainAddrParams = domainAnnot.get("addr-params").asString();
-        if(domainAddrParams.startsWith(domainNode)) {
-            domainAddrParams = domainAddrParams.substring(domainNode.length() + 1);
-        }
+        String domainAddrParams = processDomainNode(domainNode, domainAnnot.get("addr-params").asString());
         if(!domainAddrParams.equals(standaloneAnnot.get("addr-params").asString())) {
             throw new ProvisioningException("Annotation element 'addr-params' in set to " + domainAddrParams + " in the domain model and to " + standaloneAnnot.get("addr-params").asString() + " in standalone");
         }
 
         String domainOpParams = domainAnnot.get("op-params").asString();
-        if(domainOpParams.startsWith(domainNode)) {
-            domainOpParams = domainOpParams.substring(domainNode.length() + 1);
+        if (domainOpParams.startsWith("__" + domainNode)) {
+            domainOpParams =  domainOpParams.substring(domainNode.length() + 3);
         }
         final String standaloneOpParams = standaloneAnnot.get("op-params").asString();
         if(!domainOpParams.equals(standaloneOpParams)) {
@@ -288,6 +286,37 @@ class FeatureSpecNode {
         return true;
     }
 
+    /**
+     * We need to be able to match $profile.capability_base_name with $__profile.capability_base_name
+     * @param domainNode profile or host
+     * @param value the complete capability name
+     * @return capability_base_name.domainNode
+     */
+    private static String processDomainNodeCapability(String domainNode, String value) {
+        if (domainNode != null && value.charAt(0) == '$' && value.startsWith(domainNode, 1)) {
+            return value.substring(domainNode.length() + 1);
+        }
+        if (domainNode != null && value.charAt(0) == '$' && value.startsWith(domainNode, 3)) {
+            return value.substring(domainNode.length() + 3);
+        }
+        return value;
+    }
+ /**
+     * We need to be able to match __host,test with test
+     * @param domainNode profile or host
+     * @param value the complete capability name
+     * @return capability_base_name.domainNode
+     */
+    private static String processDomainNode(String domainNode, String value) {
+        if (value.startsWith(domainNode)) {
+            return value.substring(domainNode.length() + 1);
+        }
+        if (value.startsWith("__" + domainNode)) {
+            return value.substring(domainNode.length() + 3);
+        }
+        return value;
+    }
+
     private static boolean sameFeatureRefs(ModelNode standaloneDescr, ModelNode domainDescr, String optionalPrefix, boolean failIfDifferent) throws ProvisioningException {
         final List<ModelNode> standaloneRefs = standaloneDescr.hasDefined("refs") ? standaloneDescr.get("refs").asList() : Collections.emptyList();
         final List<ModelNode> domainRefs = domainDescr.hasDefined("refs") ? domainDescr.get("refs").asList() : Collections.emptyList();
@@ -306,8 +335,8 @@ class FeatureSpecNode {
                         skippedDomainRoot = 1;
                         continue;
                     }
-                } else if(optionalPrefix.equals(PROFILE_PREFIX) && domainRefName.startsWith(DOMAIN_PREFIX)) {
-                    domainRefName = domainRefName.substring(DOMAIN_PREFIX.length());
+                } else if(optionalPrefix.equals(PROFILE_CAPABILITY_PREFIX) && domainRefName.startsWith(DOMAIN_CAPABILITY_PREFIX)) {
+                    domainRefName = domainRefName.substring(DOMAIN_CAPABILITY_PREFIX.length());
                 }
             }
             if(!standaloneRefNames.contains(domainRefName)) {
@@ -748,10 +777,11 @@ class FeatureSpecNode {
     private Set<String> extendedIdParams = Collections.emptySet();
     private final ModelNode features;
     private final boolean allFeatures;
-    FeatureSpecNode(FeatureSpecGenerator gen, int type, String name, ModelNode descr, ModelNode features, boolean allFeatures) throws ProvisioningException {
+    FeatureSpecNode(FeatureSpecGenerator gen, int type, String name, ModelNode descr, ModelNode features, boolean allFeatures, boolean isLegacy) throws ProvisioningException {
         this.gen = gen;
         this.features = features;
         this.allFeatures = allFeatures;
+        this.isLegacy = isLegacy;
         switch(type) {
             case STANDALONE_MODEL:
                 this.standaloneName = name;
@@ -857,7 +887,7 @@ class FeatureSpecNode {
 
         if(standaloneName != null && identicalInAllModels(standaloneName)) {
             try {
-                assertIdenticalSpecs(standaloneName, standaloneDescr, profileName, profileDescr, PROFILE_PREFIX);
+                assertIdenticalSpecs(standaloneName, standaloneDescr, profileName, profileDescr, PROFILE_CAPABILITY_PREFIX);
             } catch (ProvisioningException e) {
                 if ("Feature spec subsystem.remoting does not match the corresponding feature spec profile.subsystem.remoting"
                         .equals(e.getMessage())) {
@@ -866,7 +896,9 @@ class FeatureSpecNode {
                     throw e;
                 }
             }
-            extendedIdParams = Collections.singleton("profile");
+            String prefix = getProfilePrefix();
+            gen.debug("Using prefix " + prefix + " in the extended ids");
+            extendedIdParams = Collections.singleton(prefix);
             mergeCode |= STANDALONE_MODEL | PROFILE_MODEL;
             mergedModel = STANDALONE_MODEL;
             generateMerged = generateStandalone;
@@ -882,7 +914,7 @@ class FeatureSpecNode {
         generateDomain = !gen.isInherited(name);
 
         if(standaloneName != null && identicalInAllModels(standaloneName)) {
-            assertIdenticalSpecs(standaloneName, standaloneDescr, domainName, domainDescr, DOMAIN_PREFIX);
+            assertIdenticalSpecs(standaloneName, standaloneDescr, domainName, domainDescr, DOMAIN_CAPABILITY_PREFIX);
             mergeCode |= STANDALONE_MODEL | DOMAIN_MODEL;
             mergedModel = STANDALONE_MODEL;
             generateMerged = generateStandalone;
@@ -898,8 +930,10 @@ class FeatureSpecNode {
         generateHost = !gen.isInherited(name);
 
         if(standaloneName != null && identicalInAllModels(standaloneName)) {
-            assertIdenticalSpecs(standaloneName, standaloneDescr, hostName, hostDescr, HOST_PREFIX);
-            extendedIdParams = CollectionUtils.add(extendedIdParams, "host");
+            assertIdenticalSpecs(standaloneName, standaloneDescr, hostName, hostDescr, HOST_CAPABILITY_PREFIX);
+            String prefix = getHostPrefix();
+            gen.debug("Using prefix " + prefix + " in the extended ids for host");
+            extendedIdParams = CollectionUtils.add(extendedIdParams, getHostPrefix());
             mergeCode |= STANDALONE_MODEL | HOST_MODEL;
             mergedModel = STANDALONE_MODEL;
             generateMerged = generateStandalone;
@@ -942,23 +976,23 @@ class FeatureSpecNode {
             case STANDALONE_MODEL:
                 break;
             case PROFILE_MODEL:
-                if (childName.startsWith(PROFILE_PREFIX)) {
-                    childNode = children.get(childName.substring(PROFILE_PREFIX.length()));
+                if (childName.startsWith(PROFILE_CAPABILITY_PREFIX)) {
+                    childNode = children.get(childName.substring(PROFILE_CAPABILITY_PREFIX.length()));
                     if(childNode != null) {
                         childNode.setProfileDescr(childName, descr);
                     }
                 }
                 break;
             case DOMAIN_MODEL:
-                if(childName.startsWith(DOMAIN_PREFIX)) {
-                    childNode = children.get(childName.substring(DOMAIN_PREFIX.length()));
+                if(childName.startsWith(DOMAIN_CAPABILITY_PREFIX)) {
+                    childNode = children.get(childName.substring(DOMAIN_CAPABILITY_PREFIX.length()));
                     if(childNode != null) {
                         childNode.setDomainDescr(childName, descr);
                     }
                 }
                 break;
             case HOST_MODEL:
-                childNode = children.get(childName.substring(HOST_PREFIX.length()));
+                childNode = children.get(childName.substring(HOST_CAPABILITY_PREFIX.length()));
                 if(childNode != null) {
                     childNode.setHostDescr(childName, descr);
                 }
@@ -967,7 +1001,7 @@ class FeatureSpecNode {
                 throw new IllegalStateException("Unexpected node type " + type);
         }
         if(childNode == null) {
-            childNode = new FeatureSpecNode(gen, type, childName, descr, features, allFeatures);
+            childNode = new FeatureSpecNode(gen, type, childName, descr, features, allFeatures, isLegacy);
             children = CollectionUtils.put(children, childName, childNode);
         }
         gen.addSpec(childName, childNode);
@@ -987,6 +1021,7 @@ class FeatureSpecNode {
     }
 
     void buildSpecs() throws ProvisioningException {
+        gen.debug("We are in legacy mode " + isLegacy +" !!!!!!");
         mergeAllSpecs();
         buildSpec();
         buildChildSpecs();
@@ -1009,7 +1044,11 @@ class FeatureSpecNode {
         if((mergeCode & PROFILE_MODEL) > 0) {
             if(mergedModel != PROFILE_MODEL) {
                 if(generateMerged) {
-                    ensureCapPrefix(mergedDescr, "$profile.", PROFILE_MODEL | STANDALONE_MODEL);
+                    String profilePrefix = "$__" + PROFILE_CAPABILITY_PREFIX;
+                    if(isLegacy) {
+                       profilePrefix = "$" + PROFILE_CAPABILITY_PREFIX;
+                    }
+                    ensureCapPrefix(mergedDescr, profilePrefix , PROFILE_MODEL | STANDALONE_MODEL);
                     ensureRef(mergedDescr, "profile");
                 }
                 updateReferencingSpecs(profileName, mergedName);

@@ -60,6 +60,7 @@ jobs:
     name: Linux/Windows - JDK17 and JDK21
     uses: wildfly/wildfly/.github/workflows/shared-wildfly-build-and-test.yml@main
     with:
+      test-arguments: '-Dts.galleon'
       build-arguments: '-fae -Dversion.org.jboss.galleon=${{needs.galleon-plugins-build.outputs.galleon-version}} -Dversion.org.wildfly.galleon-plugins=${{needs.galleon-plugins-build.outputs.galleon-plugins-version}}'
       java-versions: "['17', '21']"
       os: "['ubuntu-latest', 'windows-latest']"
