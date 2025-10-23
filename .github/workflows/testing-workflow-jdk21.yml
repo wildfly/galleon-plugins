@@ -11,11 +11,6 @@ on:
         required: false
         default: "main"
         type: string
-      nightly:
-        description: "A nightly build"
-        required: false
-        default: "false"
-        type: string
 jobs:  
   galleon-plugins-build:
     name: galleon-plugins-${{ matrix.os }}-jdk${{ matrix.java }}
@@ -27,7 +22,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        java: ['17', '21', '25']
+        java: ['17', '21']
     steps:
       - uses: actions/checkout@v4
       - name: Set up JDK ${{ matrix.java }}
@@ -62,26 +57,12 @@ jobs:
           path: '**/surefire-reports/*.txt'
 
   wildfly-build-and-test:
-    name: Linux/Windows - JDK17
+    name: Linux/Windows - JDK17 and JDK21
     uses: wildfly/wildfly/.github/workflows/shared-wildfly-build-and-test.yml@main
     with:
       test-arguments: '-Dts.galleon'
       build-arguments: '-fae -Dversion.org.jboss.galleon=${{needs.galleon-plugins-build.outputs.galleon-version}} -Dversion.org.wildfly.galleon-plugins=${{needs.galleon-plugins-build.outputs.galleon-plugins-version}}'
-      java-versions: "['17']"
-      os: "['ubuntu-latest', 'windows-latest']"
-      maven-repo-name: galleon-plugins-maven-repository
-      maven-repo-path: galleon-plugins-maven-repository.tar.gz
-      ref: ${{ inputs.wildfly-ref }}
-    needs: galleon-plugins-build
- 
-  wildfly-build-and-test-nightly:
-    name: Linux/Windows - JDK17, JDK21 and JDK25
-    uses: wildfly/wildfly/.github/workflows/shared-wildfly-build-and-test.yml@main
-    if: ${{ inputs.nightly == 'true' }}
-    with:
-      test-arguments: '-Dts.galleon'
-      build-arguments: '-fae -Dversion.org.jboss.galleon=${{needs.galleon-plugins-build.outputs.galleon-version}} -Dversion.org.wildfly.galleon-plugins=${{needs.galleon-plugins-build.outputs.galleon-plugins-version}}'
-      java-versions: "['17', '21', '25']"
+      java-versions: "['17', '21']"
       os: "['ubuntu-latest', 'windows-latest']"
       maven-repo-name: galleon-plugins-maven-repository
       maven-repo-path: galleon-plugins-maven-repository.tar.gz
@@ -91,12 +72,11 @@ jobs:
   wildfly-build-and-test-galleon-layers:
     name: Galleon Linux - JDK17
     uses: wildfly/wildfly/.github/workflows/shared-wildfly-build-and-test.yml@main
-    if: ${{ inputs.nightly == 'true' }}
     with:
       test-arguments: '-fae -Dts.layers -Dts.galleon'
       build-arguments: '-Dversion.org.jboss.galleon=${{needs.galleon-plugins-build.outputs.galleon-version}} -Dversion.org.wildfly.galleon-plugins=${{needs.galleon-plugins-build.outputs.galleon-plugins-version}}'
       os: "['ubuntu-latest']"
-      java-versions: "['17', '21', '25']"
+      java-versions: "['17']"
       maven-repo-name: galleon-plugins-maven-repository
       maven-repo-path: galleon-plugins-maven-repository.tar.gz
       ref: ${{ inputs.wildfly-ref }}
@@ -105,11 +85,10 @@ jobs:
   wildfly-build-and-test-preview:
     name: WildFly Preview - Linux- JDK21
     uses: wildfly/wildfly/.github/workflows/shared-wildfly-build-and-test.yml@main
-    if: ${{ inputs.nightly == 'true' }}
     with:
       test-arguments: '-fae -Dpreview-server-tests -Dts.preview'
       build-arguments: '-Dversion.org.jboss.galleon=${{needs.galleon-plugins-build.outputs.galleon-version}} -Dversion.org.wildfly.galleon-plugins=${{needs.galleon-plugins-build.outputs.galleon-plugins-version}}'
-      java-versions: "['21', '25']"
+      java-versions: "['21']"
       os: "['ubuntu-latest']"
       maven-repo-name: galleon-plugins-maven-repository
       maven-repo-path: galleon-plugins-maven-repository.tar.gz
