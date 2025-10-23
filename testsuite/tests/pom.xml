@@ -23,7 +23,7 @@
   <parent>
     <groupId>org.wildfly.galleon-plugins</groupId>
     <artifactId>wildfly-galleon-plugins-testsuite</artifactId>
-    <version>8.0.2.Final</version>
+    <version>8.0.3.Final-SNAPSHOT</version>
   </parent>
 
   <artifactId>wildfly-galleon-plugins-tests</artifactId>
