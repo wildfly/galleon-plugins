@@ -14,6 +14,6 @@ on:
 jobs:
   test-galleon-plugins:
     name: Build test Galleon Plugins
-    uses: wildfly/galleon-plugins/.github/workflows/testing-workflow.yml@main
+    uses: wildfly/galleon-plugins/.github/workflows/testing-workflow.yml@7.3.x
     with:
       wildfly-ref: main
