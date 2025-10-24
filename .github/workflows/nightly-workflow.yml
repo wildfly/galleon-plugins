@@ -37,7 +37,7 @@ jobs:
     if: ${{ needs.check_date.outputs.should_run != 'false' }}
     with:
       wildfly-ref: ${{ inputs.wildfly-ref }}
-      nightly: true
+      nightly: 'true'
   test-galleon-plugins-legacy:
     name: Build test Galleon Plugins
     uses: wildfly/galleon-plugins/.github/workflows/testing-workflow-jdk21.yml@main
@@ -45,4 +45,3 @@ jobs:
     if: ${{ needs.check_date.outputs.should_run != 'false' && inputs.legacy == 'true' }}
     with:
       wildfly-ref: ${{ inputs.wildfly-ref }}
-      nightly: true
