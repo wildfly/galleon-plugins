@@ -11,7 +11,7 @@ on:
         required: false
         default: "main"
         type: string
-      nightly:
+      legacy:
         description: "legacy"
         required: false
         default: "false"
