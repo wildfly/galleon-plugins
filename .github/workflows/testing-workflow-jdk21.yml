@@ -67,6 +67,7 @@ jobs:
       maven-repo-name: galleon-plugins-maven-repository
       maven-repo-path: galleon-plugins-maven-repository.tar.gz
       ref: ${{ inputs.wildfly-ref }}
+      id: "1"
     needs: galleon-plugins-build
  
   wildfly-build-and-test-galleon-layers:
@@ -80,6 +81,7 @@ jobs:
       maven-repo-name: galleon-plugins-maven-repository
       maven-repo-path: galleon-plugins-maven-repository.tar.gz
       ref: ${{ inputs.wildfly-ref }}
+      id: "2"
     needs: galleon-plugins-build
   
   wildfly-build-and-test-preview:
@@ -93,6 +95,7 @@ jobs:
       maven-repo-name: galleon-plugins-maven-repository
       maven-repo-path: galleon-plugins-maven-repository.tar.gz
       ref: ${{ inputs.wildfly-ref }}
+      id: "3"
     needs: galleon-plugins-build
   
   datasources-build-and-test:
