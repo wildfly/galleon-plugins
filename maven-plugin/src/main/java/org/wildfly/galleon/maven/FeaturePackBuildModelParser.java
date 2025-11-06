@@ -36,6 +36,7 @@ public class FeaturePackBuildModelParser {
     private static final QName ROOT_3_2 = new QName(FeaturePackBuildModelParser32.NAMESPACE, FeaturePackBuildModelParser32.Element.BUILD.getLocalName());
     private static final QName ROOT_3_3 = new QName(FeaturePackBuildModelParser33.NAMESPACE, FeaturePackBuildModelParser33.Element.BUILD.getLocalName());
     private static final QName ROOT_3_4 = new QName(FeaturePackBuildModelParser34.NAMESPACE, FeaturePackBuildModelParser34.Element.BUILD.getLocalName());
+    private static final QName ROOT_3_5 = new QName(FeaturePackBuildModelParser35.NAMESPACE, FeaturePackBuildModelParser35.Element.BUILD.getLocalName());
 
     private static final XMLInputFactory INPUT_FACTORY = XMLInputFactory.newInstance();
 
@@ -48,6 +49,7 @@ public class FeaturePackBuildModelParser {
         mapper.registerRootElement(ROOT_3_2, new FeaturePackBuildModelParser32());
         mapper.registerRootElement(ROOT_3_3, new FeaturePackBuildModelParser33());
         mapper.registerRootElement(ROOT_3_4, new FeaturePackBuildModelParser34());
+        mapper.registerRootElement(ROOT_3_5, new FeaturePackBuildModelParser35());
     }
 
     public WildFlyFeaturePackBuild parse(final InputStream input) throws XMLStreamException {

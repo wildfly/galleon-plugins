@@ -34,12 +34,22 @@ public class FeaturePackDependencySpec {
         return new FeaturePackDependencySpec(name, fpConfig);
     }
 
+    public static FeaturePackDependencySpec create(String name, FeaturePackConfig fpConfig, String family) {
+        return new FeaturePackDependencySpec(name, fpConfig, family);
+    }
+
     private final String name;
     private final FeaturePackConfig fpConfig;
+    private final String allowedFamily;
 
     private FeaturePackDependencySpec(String name, FeaturePackConfig fpConfig) {
+        this(name, fpConfig, null);
+    }
+
+    private FeaturePackDependencySpec(String name, FeaturePackConfig fpConfig, String allowedFamily) {
         this.name = name;
         this.fpConfig = fpConfig;
+        this.allowedFamily = allowedFamily;
     }
 
     /**
@@ -52,6 +62,14 @@ public class FeaturePackDependencySpec {
      */
     public String getName() {
         return name;
+    }
+
+    /**
+     * The family in which a member can be used at provisioning time to replace this dependency.
+     * @return The allowed family
+     */
+    public String getAllowedFamily() {
+        return allowedFamily;
     }
 
     /**

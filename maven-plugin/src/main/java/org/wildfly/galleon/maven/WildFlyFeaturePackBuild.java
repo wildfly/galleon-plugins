@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2019 Red Hat, Inc. and/or its affiliates
+ * Copyright 2016-2025 Red Hat, Inc. and/or its affiliates
  * and other contributors as indicated by the @author tags.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,6 +25,7 @@ import java.util.Set;
 
 import org.jboss.galleon.config.ConfigModel;
 import org.jboss.galleon.spec.CapabilitySpec;
+import org.jboss.galleon.spec.FeaturePackSpec.Family;
 import org.jboss.galleon.universe.FeaturePackLocation;
 import org.jboss.galleon.util.CollectionUtils;
 import org.wildfly.galleon.maven.build.tasks.ResourcesTask;
@@ -57,12 +58,18 @@ public class WildFlyFeaturePackBuild {
         private String packageStabilityLevel;
         private String minimumStabilityLevel;
         private String stabilityLevel;
+        private Family family;
 
         private Builder() {
         }
 
         public Builder setProducer(FeaturePackLocation producer) {
             this.producer = producer;
+            return this;
+        }
+
+        public Builder setFamily(Family family) {
+            this.family = family;
             return this;
         }
 
@@ -170,7 +177,7 @@ public class WildFlyFeaturePackBuild {
     private final String packageStabilityLevel;
     private final String minimumStabilityLevel;
     private final String stabilityLevel;
-
+    private final Family family;
     private WildFlyFeaturePackBuild(Builder builder) {
         this.producer = builder.producer;
         this.dependencies = CollectionUtils.unmodifiable(builder.dependencies);
@@ -188,6 +195,7 @@ public class WildFlyFeaturePackBuild {
         this.packageStabilityLevel = builder.packageStabilityLevel;
         this.minimumStabilityLevel = builder.minimumStabilityLevel;
         this.stabilityLevel = builder.stabilityLevel;
+        this.family = builder.family;
     }
 
     public FeaturePackLocation getProducer() {
@@ -200,6 +208,10 @@ public class WildFlyFeaturePackBuild {
 
     public Map<Gav, FeaturePackDependencySpec> getDependencies() {
         return dependencies;
+    }
+
+    public Family getFamily() {
+        return family;
     }
 
     public boolean hasSchemaGroups() {

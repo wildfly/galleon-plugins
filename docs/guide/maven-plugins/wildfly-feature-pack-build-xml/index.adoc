@@ -128,4 +128,36 @@ NOTE: If the `<config-stability-level>` and the `<package-stability-level>` are 
 the `<package-stability-level>` must imply the level of the `<config-stability-level>`.
 
 NOTE: Stability options set in the Maven Plugin override the values set in the file.
- 
+
+##### Feature-pack family and criteria
+
+A feature-pack can be part of a family and expose some criteria it is implementing.
+Add the following XML element to make the feature-pack be part of a family:
+
+```
+...
+ <family name="myfamily">
+   <criteria name="feature1"/>
+   <criteria name="feature2"/>
+ </family>
+...
+```
+
+Note that at least one criteria element is required.
+
+##### Dependency on any member of a feature-pack family
+
+A feature-pack can be part of a family and implement some criteria. 
+Members of the family that implement the same criteria can be used at provisioning time in place of other members.
+By default, a feature-pack expresses a dependency on a given feature-pack. 
+To allow to depend on any member of the feature-pack family that offers the expected criteria, you can use the `allowedFamily` attribute. For example:
+
+```
+...
+ <dependency group-id="org.wildfly.core" artifact-id="wildfly-core-galleon-pack" allowedFamily="wildfly+jakarta-ee">
+ ...
+ </dependency>
+...
+```
+
+Note that all the criteria found in the `allowedFamily` attribute are added to this feature-pack if the family is the same. The added criteria are tagged 'inherited'.
