@@ -13,7 +13,7 @@
   <parent>
     <groupId>org.wildfly.galleon-plugins</groupId>
     <artifactId>wildfly-galleon-plugins-test-feature-packs</artifactId>
-    <version>8.1.0.Final-SNAPSHOT</version>
+    <version>8.1.0.Beta1</version>
   </parent>
 
   <artifactId>community-feature-pack</artifactId>
