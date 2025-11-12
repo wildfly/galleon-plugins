@@ -121,10 +121,6 @@
     </dependency>
     <dependency>
       <groupId>${project.groupId}</groupId>
-      <artifactId>wildfly-config-gen</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>${project.groupId}</groupId>
       <artifactId>wildfly-feature-spec-gen</artifactId>
     </dependency>
     <dependency>
