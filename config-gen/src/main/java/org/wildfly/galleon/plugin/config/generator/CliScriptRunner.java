@@ -35,13 +35,21 @@ import org.wildfly.core.launcher.CliCommandBuilder;
  *
  */
 public class CliScriptRunner {
+    private static final String MAVEN_REPO_LOCAL = "maven.repo.local";
 
-    public static void runCliScript(Path installHome, Path script, MessageWriter messageWriter) throws ProvisioningException {
+    public static void runCliScript(Path installHome, Path script, Path properties, MessageWriter messageWriter) throws ProvisioningException {
         final CliCommandBuilder builder = CliCommandBuilder
                 .of(installHome)
                 .addCliArgument("--no-operation-validation")
                 .addCliArgument("--echo-command")
                 .addCliArgument("--file=" + script);
+        if (properties != null) {
+            builder.addCliArgument("--properties="+properties);
+        }
+        String localMavenRepo = System.getProperty(MAVEN_REPO_LOCAL);
+        if (localMavenRepo != null) {
+            builder.addJavaOption("-D"+MAVEN_REPO_LOCAL+"="+localMavenRepo);
+        }
         List<String> arguments = builder.build();
         messageWriter.verbose("Executing CLI process: %s", arguments.stream().collect(Collectors.joining(" ")));
         final ProcessBuilder processBuilder = new ProcessBuilder(arguments).redirectErrorStream(true);
