@@ -469,11 +469,8 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         // built artifacts.
         DefaultRepositorySystemSession noWorkspaceSession = new DefaultRepositorySystemSession(repoSession);
         noWorkspaceSession.setWorkspaceReader(null);
-        noWorkspaceSession.setOffline(true);
-        // Using maven 3.9, having the remote repositories is required for the SNAPSHOT deployed artifacts
-        // to have their version properly resolved. We set the session to be offline, so no remote resolution.
         ArtifactListBuilder builder = new ArtifactListBuilder(new MavenArtifactRepositoryManager(repoSystem,
-                noWorkspaceSession, repositories), repoSession.getLocalRepository().getBasedir().toPath(), getLog());
+                noWorkspaceSession), repoSession.getLocalRepository().getBasedir().toPath(), getLog());
         buildArtifactList(builder);
         addConfigPackages(resourcesDir.resolve(Constants.PACKAGES), fpDir.resolve(Constants.PACKAGES), fpBuilder);
         Util.copyIfExists(resourcesDir, fpDir, Constants.LAYERS);
