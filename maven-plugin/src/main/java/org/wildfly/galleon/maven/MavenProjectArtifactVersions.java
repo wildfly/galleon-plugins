@@ -55,7 +55,7 @@ class MavenProjectArtifactVersions {
             if (TEST_JAR.equals(artifact.getType()) || SYSTEM.equals(artifact.getScope())) {
                 continue;
             }
-            put(artifact.getGroupId(), artifact.getArtifactId(), artifact.getClassifier(), artifact.getVersion(), artifact.getType());
+            put(artifact.getGroupId(), artifact.getArtifactId(), artifact.getClassifier(), artifact.getBaseVersion(), artifact.getType());
         }
     }
 

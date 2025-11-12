@@ -728,7 +728,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         // append all feature-pack artifacts dependencies as streams (except zip and pom dependencies)
         List<org.wildfly.channel.Stream> streams = MavenProjectArtifactVersions.getFilteredArtifacts(project, buildConfig).stream()
                 .filter(a -> !"zip".equals(a.getType()) && !"pom".equals(a.getType()))
-                .map(artifact -> new org.wildfly.channel.Stream(artifact.getGroupId(), artifact.getArtifactId(), artifact.getVersion()))
+                .map(artifact -> new org.wildfly.channel.Stream(artifact.getGroupId(), artifact.getArtifactId(), artifact.getBaseVersion()))
                 .collect(Collectors.toList());
         // add a stream for this feature pack
         streams.add(new org.wildfly.channel.Stream(project.getGroupId(), project.getArtifactId(), project.getVersion()));
