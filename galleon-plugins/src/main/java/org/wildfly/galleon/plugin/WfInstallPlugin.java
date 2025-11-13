@@ -94,6 +94,7 @@ import org.wildfly.galleon.plugin.config.DeletePath;
 import org.wildfly.galleon.plugin.config.ExampleFpConfigs;
 import org.wildfly.galleon.plugin.config.LineEndingsTask;
 import org.wildfly.galleon.plugin.config.XslTransform;
+import org.wildfly.galleon.plugin.server.ForkedEmbeddedUtil;
 
 /**
  * WildFly install plugin. Handles all WildFly specifics that occur during provisioning.
@@ -119,7 +120,6 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private static final String CLI_SCRIPT_RUNNER_CLASS = "org.wildfly.galleon.plugin.config.generator.CliScriptRunner";
     private static final String CLI_SCRIPT_RUNNER_METHOD = "runCliScript";
     private static final String JBOSS_MODULES_GA = "org.jboss.modules:jboss-modules";
-    private static final String MAVEN_REPO_LOCAL = "maven.repo.local";
     private static final String WILDFLY_CLI_GA = "org.wildfly.core:wildfly-cli";
     private static final String WILDFLY_LAUNCHER_GA = "org.wildfly.launcher:wildfly-launcher";
 
@@ -512,10 +512,12 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                             throw new ProvisioningException(ex.getLocalizedMessage(), ex);
                         }
                         Thread.currentThread().setContextClassLoader(cliScriptCl);
+                        Path props = ForkedEmbeddedUtil.storeSystemProps();
+                        props.toFile().deleteOnExit();
                         try {
                             final Class<?> cliScriptRunnerCls = cliScriptCl.loadClass(CLI_SCRIPT_RUNNER_CLASS);
-                            final Method m = cliScriptRunnerCls.getMethod(CLI_SCRIPT_RUNNER_METHOD, Path.class, Path.class, MessageWriter.class);
-                            m.invoke(null, runtime.getStagedDir(), script, log);
+                            final Method m = cliScriptRunnerCls.getMethod(CLI_SCRIPT_RUNNER_METHOD, Path.class, Path.class, Path.class, MessageWriter.class);
+                            m.invoke(null, runtime.getStagedDir(), script, props, log);
                         } catch (Throwable e) {
                             throw new ProvisioningException("Failed to initialize CLI script runner " + CLI_SCRIPT_RUNNER_CLASS, e);
                         }
