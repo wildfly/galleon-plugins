@@ -74,6 +74,9 @@ public class ArtifactListBuilder {
             throw new RuntimeException(ex);
         }
     }
+    public ArtifactListBuilder(Path localMvnRepoPath, Log log) {
+        this(null, localMvnRepoPath, log);
+    }
 
     Path resolveArtifact(ArtifactCoords coords) throws ProvisioningException {
         MavenArtifact artifact = new MavenArtifact();
@@ -82,8 +85,12 @@ public class ArtifactListBuilder {
         artifact.setVersion(coords.getVersion());
         artifact.setClassifier(coords.getClassifier());
         artifact.setExtension(coords.getExtension());
-        artifactResolver.resolve(artifact);
-        return artifact.getPath();
+        if (artifactResolver == null) {
+            return getArtifactPath(artifact);
+        } else {
+            artifactResolver.resolve(artifact);
+            return artifact.getPath();
+        }
     }
 
     private String checksum(String filepath) throws IOException {
@@ -175,5 +182,17 @@ public class ArtifactListBuilder {
         if (log.isDebugEnabled()) {
             log.debug(String.format(msg, args));
         }
+    }
+    private Path getArtifactPath(MavenArtifact artifact) throws ProvisioningException {
+        if (artifact.getGroupId() == null) {
+            throw new ProvisioningException("Missing groupId");
+        }
+        Path p = localMvnRepoPath;
+        final String[] groupParts = artifact.getGroupId().split("\\.");
+        for (String part : groupParts) {
+            p = p.resolve(part);
+        }
+        final String artifactFileName = artifact.getArtifactFileName();
+        return p.resolve(artifact.getArtifactId()).resolve(artifact.getVersion()).resolve(artifactFileName);
     }
 }
