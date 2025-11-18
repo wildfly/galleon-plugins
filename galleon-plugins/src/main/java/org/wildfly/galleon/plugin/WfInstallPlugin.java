@@ -173,7 +173,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private TransformerFactory xsltFactory;
     private Map<String, Transformer> xslTransformers = Collections.emptyMap();
 
-    private Map<FPID, ExampleFpConfigs> exampleConfigs = Collections.emptyMap();
+    private Map<FPID, ExampleFpConfigs> exampleConfigs = new LinkedHashMap<>();
 
     private ProgressTracker<PackageRuntime> pkgProgressTracker;
 
@@ -1096,7 +1096,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
         ExampleFpConfigs existingConfigs = this.exampleConfigs.get(originFpId);
         if(existingConfigs == null) {
-            this.exampleConfigs = CollectionUtils.put(this.exampleConfigs, originFpId, exampleConfigs);
+            this.exampleConfigs = CollectionUtils.putLinked(this.exampleConfigs, originFpId, exampleConfigs);
         } else {
             existingConfigs.addAll(exampleConfigs);
         }
