@@ -71,7 +71,6 @@ import org.apache.maven.project.ProjectBuildingRequest;
 import org.apache.maven.shared.artifact.resolve.ArtifactResolver;
 import org.apache.maven.shared.artifact.resolve.ArtifactResolverException;
 import org.apache.maven.shared.artifact.resolve.ArtifactResult;
-import org.eclipse.aether.DefaultRepositorySystemSession;
 import org.eclipse.aether.RepositorySystem;
 import org.eclipse.aether.RepositorySystemSession;
 import org.eclipse.aether.repository.RemoteRepository;
@@ -86,7 +85,6 @@ import org.jboss.galleon.config.FeaturePackConfig;
 import org.jboss.galleon.layout.FeaturePackDescriber;
 import org.jboss.galleon.layout.FeaturePackDescription;
 import org.jboss.galleon.maven.plugin.FpMavenErrors;
-import org.jboss.galleon.maven.plugin.util.MavenArtifactRepositoryManager;
 import org.jboss.galleon.spec.ConfigLayerSpec;
 import org.jboss.galleon.spec.FeaturePackPlugin;
 import org.jboss.galleon.spec.FeaturePackSpec;
@@ -444,15 +442,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         } catch (ProvisioningException | IOException e) {
             throw new MojoExecutionException("Failed to store artifact versions", e);
         }
-        // Build a maven artifact resolver that looks into the local maven repo, not in the project
-        // built artifacts.
-        DefaultRepositorySystemSession noWorkspaceSession = new DefaultRepositorySystemSession(repoSession);
-        noWorkspaceSession.setWorkspaceReader(null);
-        noWorkspaceSession.setOffline(true);
-        // Using maven 3.9, having the remote repositories is required for the SNAPSHOT deployed artifacts
-        // to have their version properly resolved. We set the session to be offline, so no remote resolution.
-        ArtifactListBuilder builder = new ArtifactListBuilder(new MavenArtifactRepositoryManager(repoSystem,
-                noWorkspaceSession, repositories), repoSession.getLocalRepository().getBasedir().toPath(), getLog());
+        ArtifactListBuilder builder = new ArtifactListBuilder(repoSession.getLocalRepository().getBasedir().toPath(), getLog());
         buildArtifactList(builder);
         addConfigPackages(resourcesDir.resolve(Constants.PACKAGES), fpDir.resolve(Constants.PACKAGES), fpBuilder);
         Util.copyIfExists(resourcesDir, fpDir, Constants.LAYERS);
