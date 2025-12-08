@@ -23,7 +23,7 @@
   <parent>
     <groupId>org.wildfly.galleon-plugins</groupId>
     <artifactId>wildfly-provisioning-parent</artifactId>
-    <version>8.1.0.Beta4</version>
+    <version>8.1.0.Final-SNAPSHOT</version>
   </parent>
 
   <artifactId>wildfly-galleon-plugins</artifactId>
