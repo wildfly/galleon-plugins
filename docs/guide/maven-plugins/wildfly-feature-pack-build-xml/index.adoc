@@ -70,6 +70,11 @@ The presence of element `package-schemas` instructs the mojo to create a package
 includes no content but a file with Maven artifact groupIds from which XSD schemas should be extracted into the
 distribution's docs/schema directory, in case `docs.schema` package was selected to be installed (it is by default).
 
+IMPORTANT: The schema file name syntax is expected to follow the following rule: `<schema name>[_<stability level>_]_<major version>_<minor version>.xsd`
+The stability part is optional, no stability meaning `default` stability.
+The schema stability is discovered at provisioning time, if the currently enabled package stability level doesn't enable the schema stability,
+the schema is not provisioned.
+
 ##### Feature specs generation
 
 Feature-pack may or may not include feature specs (XML files describing configuration features). Feature specs are included only if the feature-pack includes one or more subsystems that should be added to the confuration when the feature-pack is installed.

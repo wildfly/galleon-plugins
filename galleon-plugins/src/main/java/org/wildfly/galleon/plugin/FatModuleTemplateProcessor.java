@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Map;
 import org.jboss.galleon.ProvisioningException;
+import org.jboss.galleon.Stability;
 import org.jboss.galleon.universe.maven.MavenUniverseException;
 
 /**
@@ -34,8 +35,8 @@ class FatModuleTemplateProcessor extends AbstractModuleTemplateProcessor {
 
     public FatModuleTemplateProcessor(WfInstallPlugin plugin, AbstractArtifactInstaller installer,
             Path targetPath, ModuleTemplate template,
-            Map<String, String> versionProps, boolean channelArtifactResolution, boolean requireChannel) {
-        super(plugin, installer, targetPath, template, versionProps, channelArtifactResolution, requireChannel);
+            Map<String, String> versionProps, boolean channelArtifactResolution, boolean requireChannel, Stability stability) {
+        super(plugin, installer, targetPath, template, versionProps, channelArtifactResolution, requireChannel, stability);
     }
 
     @Override
