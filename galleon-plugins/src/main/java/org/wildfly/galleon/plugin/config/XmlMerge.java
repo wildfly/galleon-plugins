@@ -23,8 +23,10 @@ import java.io.OutputStream;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import javax.xml.transform.Transformer;
 import javax.xml.transform.dom.DOMSource;
@@ -89,22 +91,24 @@ public class XmlMerge implements WildFlyPackageTask {
         }
 
         // collect the files to merge into a comma-separated list
-        final StringBuilder buf = new StringBuilder();
+        List<Path> includedFiles = new ArrayList<>();
         try(DirectoryStream<Path> stream = Files.newDirectoryStream(srcDir)) {
             for(Path p : stream) {
                 if(includeFile(p.toString())) {
-                    if(buf.length() > 0) {
-                        buf.append(',');
-                    }
-                    buf.append(p.toUri().toString());
+                    includedFiles.add(p);
                 }
             }
         } catch (IOException e) {
             throw new ProvisioningException(Errors.readDirectory(srcDir));
         }
-        if(buf.length() == 0) {
+        if(includedFiles.isEmpty()) {
             return;
         }
+
+        final String fileList = includedFiles.stream()
+                .sorted()
+                .map(p -> p.toUri().toString())
+                .collect(Collectors.joining(","));
 
         final Path pmWf = pkg.getResource(WfConstants.PM, WfConstants.WILDFLY);
         final Path mergerXsl = pmWf.resolve("merger.xsl");
@@ -116,7 +120,7 @@ public class XmlMerge implements WildFlyPackageTask {
 
         try(OutputStream out = Files.newOutputStream(mergedXml)) {
             final Transformer transformer = plugin.getXslTransformer(mergerXsl);
-            transformer.setParameter("fileList", buf.toString());
+            transformer.setParameter("fileList", fileList);
             transformer.setParameter("fileSeparator", File.separator);
 
             final DOMSource source = new DOMSource(plugin.getXmlDocumentBuilderFactory().newDocumentBuilder().newDocument());
