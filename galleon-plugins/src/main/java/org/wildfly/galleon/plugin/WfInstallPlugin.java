@@ -50,6 +50,9 @@ import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.function.Predicate;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -66,6 +69,7 @@ import org.jboss.galleon.MessageWriter;
 import org.jboss.galleon.ProvisioningException;
 import org.jboss.galleon.ProvisioningManager;
 import org.jboss.galleon.ProvisioningOption;
+import org.jboss.galleon.Stability;
 import org.jboss.galleon.config.ConfigId;
 import org.jboss.galleon.config.ConfigModel;
 import org.jboss.galleon.config.FeaturePackConfig;
@@ -86,7 +90,6 @@ import org.jboss.galleon.universe.maven.MavenUniverseException;
 import org.jboss.galleon.universe.maven.repo.MavenRepoManager;
 import org.jboss.galleon.util.IoUtils;
 import org.jboss.galleon.util.CollectionUtils;
-import org.jboss.galleon.util.ZipUtils;
 import org.wildfly.galleon.plugin.config.AssembleShadedArtifact;
 import org.wildfly.galleon.plugin.config.CopyArtifact;
 import org.wildfly.galleon.plugin.config.CopyPath;
@@ -152,6 +155,9 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private static final ProvisioningOption OPTION_RECORD_ARTIFACTS = ProvisioningOption.builder("jboss-resolved-artifacts-cache")
             .setDefaultValue(".installation" + File.separator + ".cache")
             .build();
+
+    private static final Pattern SCHEMA_PATTERN = Pattern.compile(".*_(.*)_.*_.*\\.xsd");
+
     private ProvisioningRuntime runtime;
     MessageWriter log;
 
@@ -1073,17 +1079,18 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         AbstractModuleTemplateProcessor processor;
         final Map<String, String> versionProps = fpArtifactVersions.get(pkg.getFeaturePackRuntime().getFPID().getProducer());
         final Path targetDir = runtime.getStagedDir().resolve(moduleXmlRelativePath.toString());
+        Stability stability = pkg.getFeaturePackRuntime().getPackageStability();
         if (thinServer) {
             processor = new ThinModuleTemplateProcessor(this,
                     artifactInstaller,
                     moduleXmlRelativePath,
                     moduleTemplate,
                     versionProps, channelArtifactResolution,
-                    requireChannel(pkg.getFeaturePackRuntime().getFPID().getProducer()));
+                    requireChannel(pkg.getFeaturePackRuntime().getFPID().getProducer()), stability);
         } else {
             processor = new FatModuleTemplateProcessor(this, artifactInstaller,
                     targetDir, moduleTemplate, versionProps,
-                    channelArtifactResolution,requireChannel(pkg.getFeaturePackRuntime().getFPID().getProducer()));
+                    channelArtifactResolution,requireChannel(pkg.getFeaturePackRuntime().getFPID().getProducer()), stability);
         }
         processor.process();
         moduleTemplate.store();
@@ -1104,15 +1111,70 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
     }
 
-    private void extractSchemas(Path moduleArtifact) throws IOException {
+    private void extractSchemas(Path moduleArtifact, Stability stability) throws IOException {
         final Path targetSchemasDir = this.runtime.getStagedDir().resolve(WfConstants.DOCS).resolve(WfConstants.SCHEMA);
         Files.createDirectories(targetSchemasDir);
+        Predicate<Path> predicate = (path)-> {
+            if (Files.isDirectory(path)) {
+               return true;
+            }
+            String fileName = path.getFileName().toString();
+            if (!fileName.endsWith(".xsd")) {
+                return true;
+            }
+            Stability schemaStability = getSchemaStability(fileName, log);
+            return stability.enables(schemaStability);
+        };
         try (FileSystem jarFS = FileSystems.newFileSystem(moduleArtifact, (ClassLoader) null)) {
             final Path schemaSrc = jarFS.getPath(WfConstants.SCHEMA);
             if (Files.exists(schemaSrc)) {
-                ZipUtils.copyFromZip(schemaSrc.toAbsolutePath(), targetSchemasDir);
+                copyFromZip(schemaSrc.toAbsolutePath(), targetSchemasDir, predicate);
             }
         }
+    }
+
+    public static Stability getSchemaStability(String name, MessageWriter log) {
+        Stability stability = Stability.DEFAULT;
+        Matcher matcher = SCHEMA_PATTERN.matcher(name);
+        if (matcher.find()) {
+            try {
+                String group = matcher.group(1);
+                stability = Stability.fromString(group);
+            } catch(Exception ex) {
+                log.verbose("Schema stability is incorrect for " + name + ". Due to " + ex);
+            }
+        }
+        return stability;
+    }
+
+    public static void copyFromZip(Path source, Path target, Predicate<Path> predicate) throws IOException {
+        Files.walkFileTree(source, EnumSet.of(FileVisitOption.FOLLOW_LINKS), Integer.MAX_VALUE,
+                new SimpleFileVisitor<Path>() {
+                    @Override
+                    public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs)
+                        throws IOException {
+                        final Path targetDir = target.resolve(source.relativize(dir).toString());
+                        try {
+                            if (predicate.test(dir)) {
+                                Files.copy(dir, targetDir);
+                            } else {
+                                return FileVisitResult.SKIP_SUBTREE;
+                            }
+                        } catch (FileAlreadyExistsException e) {
+                             if (!Files.isDirectory(targetDir))
+                                 throw e;
+                        }
+                        return FileVisitResult.CONTINUE;
+                    }
+                    @Override
+                    public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
+                        throws IOException {
+                        if (predicate.test(file)) {
+                            Files.copy(file, target.resolve(source.relativize(file).toString()), StandardCopyOption.REPLACE_EXISTING);
+                        }
+                        return FileVisitResult.CONTINUE;
+                    }
+                });
     }
 
     private boolean requireChannel(String artifactGA) {
@@ -1189,16 +1251,17 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             // only attempt to extract schemas if the artifact is a zip archive
             if(schemaGroups.contains(artifact.getGroupId())
                     && (artifact.getExtension().equals("jar") || artifact.getExtension().equals("zip"))) {
-                extractSchemas(jarSrc);
+                Stability stability = pkg.getFeaturePackRuntime().getPackageStability();
+                extractSchemas(jarSrc, stability);
             }
         } catch (IOException e) {
             throw new ProvisioningException("Failed to copy artifact " + artifact, e);
         }
     }
 
-    void processSchemas(String groupId, Path artifactPath) throws IOException {
+    void processSchemas(String groupId, Path artifactPath, Stability stability) throws IOException {
         if (schemaGroups.contains(groupId)) {
-            extractSchemas(artifactPath);
+            extractSchemas(artifactPath, stability);
         }
     }
 

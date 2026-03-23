@@ -12,6 +12,9 @@
       </default-configs>
     </dependency>
   </dependencies>
+  <package-schemas>
+    <group name="org.wildfly.galleon-plugins"/>
+  </package-schemas>
   <default-packages>
     <package name="modules.all"/>
   </default-packages>

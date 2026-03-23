@@ -19,11 +19,17 @@ package org.wildfly.galleon.plugins.test;
 import java.io.BufferedReader;
 import java.io.File;
 import java.nio.file.DirectoryStream;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import org.jboss.galleon.Constants;
+import org.jboss.galleon.DefaultMessageWriter;
 import org.jboss.galleon.ProvisioningException;
 import org.jboss.galleon.ProvisioningManager;
 import org.jboss.galleon.Stability;
@@ -42,6 +48,7 @@ import org.jboss.galleon.xml.PackageXmlParser;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.wildfly.galleon.plugin.WfInstallPlugin;
 
 /**
  * Check stability. Check that what has been provisioned is
@@ -112,7 +119,7 @@ public class FeaturePackContentTestCase {
                                         throw new Exception("Package " + pkgSpec.getName() + " shouldn't be contained by feature-pack " + fl.getFPID() + " stability " + minStability);
                                     }
                                 }
-                                if (!"modules.all".equals(pkgSpec.getName())) {
+                                if (!"modules.all".equals(pkgSpec.getName()) && !"docs".equals(pkgSpec.getName())) {
                                     if (packageStability == null || (enforcedStability != null && enforcedStability.enables(packageStability))) {
                                         expectedPackages.add(pkgSpec.getName());
                                     } else {
@@ -179,6 +186,34 @@ public class FeaturePackContentTestCase {
                             System.out.println(s);
                         }
                         Assert.assertTrue("ALL " + provisionedFeatures + " EXPECTED " + expectedFeatures, provisionedFeatures.containsAll(expectedFeatures));
+                        // Handle schemas
+                        Path schemasDir = home.resolve("docs").resolve("schema");
+                        Assert.assertTrue(Files.exists(schemasDir));
+                        List<Integer> numSchemas = new ArrayList<>();
+                        numSchemas.add(0);
+                        Stability actualFpPackageStability = enforcedStability == null ? defaultPackageStability : enforcedStability;
+                        Files.walkFileTree(schemasDir, new SimpleFileVisitor<Path>() {
+                            @Override
+                            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+                                if (!Files.isDirectory(file)) {
+                                    if (file.getFileName().toString().endsWith(".xsd")) {
+                                        if (enforcedStability == null) {
+                                            // We test only the schema of this feature-pack, som other schema at lower stability level
+                                            // can be provisioned according to their own stability level.
+                                            if (!file.getFileName().toString().startsWith("wildfly-test-subsystem")) {
+                                                return FileVisitResult.CONTINUE;
+                                            }
+                                        }
+                                        numSchemas.set(0, numSchemas.get(0)+1);
+                                        Stability fileStability = WfInstallPlugin.getSchemaStability(file.getFileName().toString(), new DefaultMessageWriter());
+                                        Assert.assertTrue("The enabled stability " + actualFpPackageStability + " doesn't allow for this schema " + file,
+                                                actualFpPackageStability.enables(fileStability));
+                                    }
+                                }
+                                return FileVisitResult.CONTINUE;
+                            }
+                        });
+                        Assert.assertTrue(numSchemas.get(0) > 0);
                     }
                 }
 

@@ -24,6 +24,7 @@ import nu.xom.Element;
 import nu.xom.Elements;
 import org.jboss.galleon.MessageWriter;
 import org.jboss.galleon.ProvisioningException;
+import org.jboss.galleon.Stability;
 import org.jboss.galleon.universe.maven.MavenArtifact;
 import org.jboss.galleon.universe.maven.MavenUniverseException;
 
@@ -127,10 +128,10 @@ abstract class AbstractModuleTemplateProcessor {
     private final Path targetDir;
     private final boolean channelArtifactResolution;
     private final boolean requireChannel;
-
+    private final Stability stability;
     AbstractModuleTemplateProcessor(WfInstallPlugin plugin, AbstractArtifactInstaller installer, Path targetPath,
             ModuleTemplate template, Map<String, String> versionProps, boolean channelArtifactResolution,
-                       boolean requireChannel) {
+                       boolean requireChannel, Stability stability) {
         this.template = template;
         this.versionProps = versionProps;
         this.plugin = plugin;
@@ -138,6 +139,7 @@ abstract class AbstractModuleTemplateProcessor {
         this.targetDir = targetPath.getParent();
         this.channelArtifactResolution = channelArtifactResolution;
         this.requireChannel = requireChannel;
+        this.stability = stability;
     }
 
     AbstractArtifactInstaller getInstaller() {
@@ -196,7 +198,7 @@ abstract class AbstractModuleTemplateProcessor {
             if (moduleArtifact.hasMavenArtifact()) {
                 Path artifactPath = moduleArtifact.getMavenArtifact().getPath();
                 processArtifact(moduleArtifact);
-                plugin.processSchemas(moduleArtifact.getMavenArtifact().getGroupId(), artifactPath);
+                plugin.processSchemas(moduleArtifact.getMavenArtifact().getGroupId(), artifactPath, stability);
             }
         }
     }
