@@ -103,7 +103,7 @@
     <license.failIfUnknown>true</license.failIfUnknown>
 
     <!-- test suite -->
-    <version.org.wildfly.common>1.6.0.Final</version.org.wildfly.common>    
+    <version.org.wildfly.common>2.0.1</version.org.wildfly.common>    
     <maven.repo.local>${settings.localRepository}</maven.repo.local>
 
     <galleon-plugins.repo.scm.connection>git@github.com:wildfly/galleon-plugins.git</galleon-plugins.repo.scm.connection>
