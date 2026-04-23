@@ -61,15 +61,15 @@
         versions, add the artifactId or other qualifier to the property name.
         For example: <version.org.jboss.as.console>
     -->
-    <maven.compiler.target>11</maven.compiler.target>
-    <maven.compiler.source>11</maven.compiler.source>
+    <maven.compiler.target>17</maven.compiler.target>
+    <maven.compiler.source>17</maven.compiler.source>
     <version.junit>4.13.1</version.junit>
     <version.adoc-maven-plugin-descriptor>1.0.0.Alpha3</version.adoc-maven-plugin-descriptor>
     <version.plugin.plugin>3.6.4</version.plugin.plugin>
     <version.org.apache.commons.lang3>3.12.0</version.org.apache.commons.lang3>
     <version.org.apache.maven>3.8.4</version.org.apache.maven>
     <version.org.apache.maven.plugin-tools>${version.plugin.plugin}</version.org.apache.maven.plugin-tools>
-    <version.org.apache.maven.plugins.maven-shade-plugin>3.1.0</version.org.apache.maven.plugins.maven-shade-plugin>
+    <version.org.apache.maven.plugins.maven-shade-plugin>3.6.2</version.org.apache.maven.plugins.maven-shade-plugin>
     <version.org.apache.maven.shared>3.2.0</version.org.apache.maven.shared>
     <version.org.apache.maven.shared.transfer>0.9.1</version.org.apache.maven.shared.transfer>
     <version.maven-aether-provider>3.3.9</version.maven-aether-provider>
@@ -85,10 +85,18 @@
 
     <version.xom>1.3.7</version.xom>
     <version.jaxen>1.1.6</version.jaxen>
+    <version.org.cyclonedx>13.2.0</version.org.cyclonedx>
+    <version.dev.cyberstamp.assembly-sbom>0.1.7</version.dev.cyberstamp.assembly-sbom>
 
     <!-- Checkstyle configuration -->
     <linkXRef>false</linkXRef>
     <version.org.wildfly.checkstyle-config>1.0.8.Final</version.org.wildfly.checkstyle-config>
+    <!-- Overrides jboss-parent's checkstyle plugin (3.0.0) with a version whose
+         Checkstyle core can parse Java 17 sources (records, pattern matching). -->
+    <version.checkstyle.plugin>3.6.0</version.checkstyle.plugin>
+    <version.com.puppycrawl.tools.checkstyle>10.21.0</version.com.puppycrawl.tools.checkstyle>
+    <!-- Kept in sync with the jackson-dataformat-xml pulled by cyclonedx-core-java. -->
+    <version.com.fasterxml.jackson.core>2.22.1</version.com.fasterxml.jackson.core>
     <version.org.jboss.staxmapper>1.5.0.Final</version.org.jboss.staxmapper>
 
     <!-- license-maven-plugin configuration -->
@@ -135,6 +143,17 @@
 
   <dependencyManagement>
     <dependencies>
+
+      <!-- Align all Jackson artifacts: cyclonedx-core-java pulls jackson-dataformat-xml
+           which is newer than the jackson-core inherited transitively, causing a
+           NoSuchMethodError when writing XML SBOMs. -->
+      <dependency>
+        <groupId>com.fasterxml.jackson</groupId>
+        <artifactId>jackson-bom</artifactId>
+        <version>${version.com.fasterxml.jackson.core}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
 
       <!-- Modules in this project -->
 
@@ -308,6 +327,16 @@
         <groupId>jaxen</groupId>
         <artifactId>jaxen</artifactId>
         <version>${version.jaxen}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.cyclonedx</groupId>
+        <artifactId>cyclonedx-core-java</artifactId>
+        <version>${version.org.cyclonedx}</version>
+      </dependency>
+      <dependency>
+        <groupId>dev.cyberstamp.maven.assembly.sbom</groupId>
+        <artifactId>assembly-sbom-core</artifactId>
+        <version>${version.dev.cyberstamp.assembly-sbom}</version>
       </dependency>
       <dependency>
         <groupId>org.eclipse.aether</groupId>
@@ -513,6 +542,11 @@
               <groupId>org.wildfly.checkstyle</groupId>
               <artifactId>wildfly-checkstyle-config</artifactId>
               <version>${version.org.wildfly.checkstyle-config}</version>
+            </dependency>
+            <dependency>
+              <groupId>com.puppycrawl.tools</groupId>
+              <artifactId>checkstyle</artifactId>
+              <version>${version.com.puppycrawl.tools.checkstyle}</version>
             </dependency>
           </dependencies>
           <executions>

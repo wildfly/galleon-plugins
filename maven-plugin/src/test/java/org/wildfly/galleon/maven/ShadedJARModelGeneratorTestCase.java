@@ -80,7 +80,7 @@ public class ShadedJARModelGeneratorTestCase {
         ShadedModel shadedModel = new ShadedModel(false,
                 model,
                 target,
-                (MavenArtifact artifact) -> {
+                (java.util.Collection<MavenArtifact> artifacts) -> {
                 },
                 new MessageWriter() {
             @Override
