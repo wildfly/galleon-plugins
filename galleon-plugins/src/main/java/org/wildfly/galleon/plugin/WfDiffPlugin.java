@@ -39,6 +39,7 @@ import org.jboss.galleon.layout.FeaturePackLayout;
 import org.jboss.galleon.layout.ProvisioningLayout;
 import org.jboss.galleon.plugin.StateDiffPlugin;
 import org.jboss.galleon.repo.RepositoryArtifactResolver;
+import org.jboss.galleon.universe.maven.MavenUniverseException;
 
 /**
  *
@@ -70,7 +71,17 @@ public class WfDiffPlugin implements StateDiffPlugin {
             cp[0] = maven.resolve(toArtifactCoords("org.wildfly.galleon-plugins:wildfly-config-gen", propertyResolver)).toUri().toURL();
             cp[1] = resolve(homeEntry.getPath(), "jboss-modules.jar").toUri().toURL();
             cp[2] = maven.resolve(toArtifactCoords("org.wildfly.core:wildfly-cli::client", propertyResolver)).toUri().toURL();
-            cp[3] = maven.resolve(toArtifactCoords("org.wildfly.core:wildfly-launcher", propertyResolver)).toUri().toURL();
+            try {
+                cp[3] = maven.resolve(toArtifactCoords("org.wildfly.launcher:wildfly-launcher", propertyResolver)).toUri().toURL();
+            } catch (MavenUniverseException e) {
+                try {
+                    // Try the old launcher GA in case this is an old installation
+                    cp[3] = maven.resolve(toArtifactCoords("org.wildfly.core:wildfly-launcher", propertyResolver)).toUri().toURL();
+                } catch (MavenUniverseException e2) {
+                    e.addSuppressed(e2);
+                    throw e;
+                }
+            }
         } catch (IOException e) {
             throw new ProvisioningException("Failed to init classpath", e);
         }
