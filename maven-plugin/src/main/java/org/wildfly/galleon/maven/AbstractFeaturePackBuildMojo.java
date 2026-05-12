@@ -919,7 +919,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                         }
                     }
                     if(!found) {
-                        throw new MojoExecutionException("The feature-pack dependency " + depCoords + " is not part of the family " + allowedFamily + ". Its family is" + family);
+                        throw new MojoExecutionException("The feature-pack dependency " + depCoords + " is not part of the family " + allowedFamily + ". Its family is " + family);
                     }
                     Set<Family.Criteria> set = inheritedCriteria.get(dep.getName());
                     if (set == null) {
