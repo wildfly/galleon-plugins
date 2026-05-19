@@ -74,8 +74,13 @@ public class ForkedEmbeddedUtil {
         return javaHome == null ? javaHome = System.getProperty("java.home") : javaHome;
     }
 
+    private static final boolean IS_WINDOWS = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
+
     private static String getJavaCmd() {
-        return javaCmd == null ? javaCmd = Paths.get(getJavaHome()).resolve("bin").resolve("java").toString() : javaCmd;
+        if (javaCmd == null) {
+            javaCmd = Paths.get(getJavaHome()).resolve("bin").resolve(IS_WINDOWS ? "java.exe" : "java").toString();
+        }
+        return javaCmd;
     }
 
     public static void fork(ForkCallback callback, boolean debug, String... args) throws ProvisioningException {
