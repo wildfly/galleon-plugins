@@ -592,7 +592,7 @@ class MetadataGenerator {
                 return layout.loadFeatureGroupSpec(name);
             }
         }
-        return null;
+        throw new ProvisioningException("feature-group " + name + " not found in the provisioning config.");
     }
 
     private static void generateModelUpdates(List<ConfigItem> items,
