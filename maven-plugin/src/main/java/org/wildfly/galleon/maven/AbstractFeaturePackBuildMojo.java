@@ -269,6 +269,10 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     @Parameter(alias = "copyright", property = "wildfly.feature.pack.copyright")
     protected String copyright;
 
+    @Parameter(alias = "skip-doc", required = false, defaultValue = "false",
+            property = "wildfly.feature.pack.skip-doc")
+    protected boolean skipDoc;
+
     private MavenProjectArtifactVersions artifactVersions;
 
     private Map<String, FeaturePackDescription> fpDependencies = Collections.emptyMap();
@@ -576,7 +580,9 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                     }
                 }
             }
-            generateDocumentation();
+            if (!skipDoc) {
+                generateDocumentation();
+            }
         } catch (IOException e) {
             throw new MojoExecutionException("Failed to create a feature-pack archives from the layout", e);
         }
