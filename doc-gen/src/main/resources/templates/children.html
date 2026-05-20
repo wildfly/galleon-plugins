@@ -4,14 +4,18 @@
   {#for child in children}
   <li>
     {#if child.children.size == 0}
-    <a href="{child.name}/index.html" class="{#if child.deprecation.deprecated}deprecated{/if}">{child.name}</a>
+    <a href="{child.name}/index.html" class="{#if child.deprecation.deprecated}deprecated{/if}">
+      {#include stability-badge stability=child.stability /}
+      {child.name}</a>
     {#else}
     <b>{child.name}</b>
     {/if}
     {#if child.children.size > 0}
     <ul>
       {#for c in child.children}
-      <li><a href="{child.name}/{c.name}/index.html" class="{#if c.deprecation.deprecated}deprecated{/if}">{c.name}</a></li>
+      <li><a href="{child.name}/{c.name}/index.html" class="{#if c.deprecation.deprecated}deprecated{/if}">
+        {#include stability-badge stability=c.stability /}
+        {c.name}</a></li>
       {/for}
     </ul>
     {/if}
