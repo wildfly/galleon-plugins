@@ -933,7 +933,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                         inheritedCriteria.put(dep.getName(), set);
                     }
                     set.addAll(dep.getCriteria());
-                    System.out.println("We have a a dependency on " + depConfig + " that allows for family members in the " + allowedFamily + " family");
+                    System.out.println("The dependency on " + depConfig + " allows for members in the " + allowedFamily + " family");
                 }
             }
             // here we need to determine which format to use to persist the dependency location:
