@@ -101,7 +101,7 @@ import org.wildfly.galleon.plugin.server.ForkedEmbeddedUtil;
  * @author Alexey Loubyansky
  */
 public class WfInstallPlugin extends ProvisioningPluginWithOptions implements InstallPlugin {
-
+    private static ThreadLocal<Map<MavenArtifact, MavenArtifact>> threadContext = new ThreadLocal<>();
     // If tooling used for provisioning has wildfly channels setup, the artifacts must be resolved from the channel
     public static final String REQUIRES_CHANNEL_FOR_ARTIFACT_RESOLUTION_PROPERTY = "org.wildfly.plugins.galleon.all.artifact.requires.channel.resolution";
     private static final String TRACK_MODULES_BUILD = "JBMODULES";
@@ -111,6 +111,10 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
     public interface ArtifactResolver {
         void resolve(MavenArtifact artifact) throws ProvisioningException;
+    }
+
+    public interface ArtifactGroupResolver {
+        void resolve(Collection<MavenArtifact> artifacts) throws ProvisioningException;
     }
 
     private static final String CONFIG_GEN_METHOD = "generate";
@@ -169,6 +173,9 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private List<WildFlyPackageTask> finalizingTasks = Collections.emptyList();
     private List<PackageRuntime> finalizingTasksPkgs = Collections.emptyList();
 
+    private List<WildFlyPackageTask> processingTasks = Collections.emptyList();
+    private List<PackageRuntime> processingTasksPkgs = Collections.emptyList();
+
     private DocumentBuilderFactory docBuilderFactory;
     private TransformerFactory xsltFactory;
     private Map<String, Transformer> xslTransformers = Collections.emptyMap();
@@ -185,11 +192,12 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
     private AbstractArtifactInstaller artifactInstaller;
     private ArtifactResolver artifactResolver;
+    private ArtifactGroupResolver artifactGroupResolver;
     private boolean channelArtifactResolution;
 
     private boolean bulkResolveArtifacts;
 
-    private final Map<MavenArtifact, MavenArtifact> artifactCache = new HashMap<>();
+    private Map<MavenArtifact, MavenArtifact> artifactCache;
     private final Map<Path, ModuleTemplate> moduleTemplateCache = new HashMap<>();
 
     private final Map<String, String> resolvedVersionsProperties = new HashMap<>();
@@ -234,7 +242,11 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     }
 
     private boolean isBulkResolveArtifacts() throws ProvisioningException {
-        return getBooleanOption(OPTION_BULK_RESOLVE_ARTIFACTS);
+        if (!runtime.isOptionSet(OPTION_BULK_RESOLVE_ARTIFACTS)) {
+            return true;
+        }
+        final String value = runtime.getOptionValue(OPTION_BULK_RESOLVE_ARTIFACTS);
+        return value == null ? true : Boolean.parseBoolean(value);
     }
 
     private boolean isForkEmbedded(ProvisioningRuntime runtime) throws ProvisioningException {
@@ -284,272 +296,298 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         this.runtime = runtime;
         log = runtime.getMessageWriter();
         log.verbose("WildFly Galleon Installation Plugin");
-
-        if (runtime.isOptionSet(OPTION_RECORD_ARTIFACTS)) {
-            final String pathValue = runtime.getOptionValue(OPTION_RECORD_ARTIFACTS);
-            if (pathValue != null && !pathValue.isEmpty()) {
-                try {
-                    log.verbose("Starting artifact log");
-                    artifactRecorder = Optional.of(new ArtifactRecorder(runtime.getStagedDir(), Path.of(pathValue)));
-                } catch (IOException e) {
-                    throw new ProvisioningException("Unable to create artifact.log", e);
-                }
-            }
+        // Retrieve the cache from the threadLocal in case we do provision example configs
+        artifactCache = threadContext.get();
+        final boolean cacheOwner;
+        if (artifactCache == null) {
+           log.verbose("Creating a new artifact cache");
+           artifactCache =  new HashMap<>();
+           threadContext.set(artifactCache);
+           cacheOwner = true;
         } else {
-            artifactRecorder = Optional.empty();
+            log.verbose("Reusing the artifact cache, size: " + artifactCache.size());
+            cacheOwner = false;
         }
-
-        this.bulkResolveArtifacts = isBulkResolveArtifacts();
-
-        thinServer = isThinServer();
-        generatedMavenRepo = getGeneratedMavenRepo();
-        if (generatedMavenRepo != null) {
-            IoUtils.recursiveDelete(generatedMavenRepo);
-        }
-        maven = (MavenRepoManager) runtime.getArtifactResolver(MavenRepoManager.REPOSITORY_ID);
-        // The Channel resolution depends on the tool in use.
-        // Generic Galleon provisioning doesn't support it.
         try {
-            Class<?> clazz = Class.forName("org.wildfly.channel.spi.ChannelResolvable");
-            channelArtifactResolution = clazz.isAssignableFrom(maven.getClass());
-        } catch(ClassNotFoundException ex) {
-            log.verbose("Channel not present in classpath.");
-        }
-        log.verbose("Channel artifact resolution enabled=" + channelArtifactResolution);
-        // Overridden artifacts
-        overriddenArtifactVersions.putAll(getOverriddenArtifacts());
-        for(FeaturePackRuntime fp : runtime.getFeaturePacks()) {
-            final Path wfRes = fp.getResource(WfConstants.WILDFLY);
-            if(!Files.exists(wfRes)) {
-                continue;
-            }
-
-            final Path artifactProps = wfRes.resolve(WfConstants.ARTIFACT_VERSIONS_PROPS);
-            if(Files.exists(artifactProps)) {
-                final Map<String, String> versionProps = Utils.readProperties(artifactProps);
-                for (Entry<String, String> entry : overriddenArtifactVersions.entrySet()) {
-                    if (versionProps.containsKey(entry.getKey())) {
-                        versionProps.put(entry.getKey(), entry.getValue());
-                    }
-                }
-                fpArtifactVersions.put(fp.getFPID().getProducer(), versionProps);
-                // Handle artifacts that are directly resolved from the plugin
-                // org.wildfly.core:wildfly-launcher
-                // org.jboss.modules:jboss-modules
-                // org.wildfly.core:wildfly-cli
-                // org.wildfly.galleon-plugins:wildfly-config-gen
-                // org.wildfly.galleon-plugins:wildfly-galleon-plugins
-                if (versionProps.containsKey(CONFIG_GEN_GA)) {
-                    gaToProducer.put(CONFIG_GEN_GA, fp.getFPID().getProducer());
-                }
-                if (versionProps.containsKey(GALLEON_PLUGINS_GA)) {
-                    gaToProducer.put(GALLEON_PLUGINS_GA, fp.getFPID().getProducer());
-                }
-                if (versionProps.containsKey(WILDFLY_CLI_GA)) {
-                    gaToProducer.put(WILDFLY_CLI_GA, fp.getFPID().getProducer());
-                }
-                if (versionProps.containsKey(WILDFLY_LAUNCHER_GA)) {
-                    gaToProducer.put(WILDFLY_LAUNCHER_GA, fp.getFPID().getProducer());
-                }
-                if (versionProps.containsKey(JBOSS_MODULES_GA)) {
-                    gaToProducer.put(JBOSS_MODULES_GA, fp.getFPID().getProducer());
-                }
-                mergedArtifactVersions.putAll(versionProps);
-            }
-
-            final Path tasksPropsPath = wfRes.resolve(WfConstants.WILDFLY_TASKS_PROPS);
-            if(Files.exists(tasksPropsPath)) {
-                final Map<String, String> fpProps = Utils.readProperties(tasksPropsPath);
-                fpTasksProps = CollectionUtils.put(fpTasksProps, fp.getFPID().getProducer(), fpProps);
-                mergedTaskProps.putAll(fpProps);
-            }
-
-            final Path channelsPropsPath = wfRes.resolve(WfConstants.WILDFLY_CHANNEL_PROPS);
-            if(Files.exists(channelsPropsPath)) {
-                final Map<String, String> channelProps = Utils.readProperties(channelsPropsPath);
-                String mode = channelProps.get(WfConstants.WILDFLY_CHANNEL_RESOLUTION_PROP);
-                if (mode != null) {
-                    channelResolutionModes = CollectionUtils.put(channelResolutionModes, fp.getFPID().getProducer(), WildFlyChannelResolutionMode.valueOf(mode));
-                }
-            }
-
-            if(fp.containsPackage(WfConstants.DOCS_SCHEMA)) {
-                final Path schemaGroupsTxt = fp.getPackage(WfConstants.DOCS_SCHEMA).getResource(
-                        WfConstants.PM, WfConstants.WILDFLY, WfConstants.SCHEMA_GROUPS_TXT);
-                try(BufferedReader reader = Files.newBufferedReader(schemaGroupsTxt)) {
-                    String line = reader.readLine();
-                    while(line != null) {
-                        schemaGroups = CollectionUtils.add(schemaGroups, line);
-                        line = reader.readLine();
-                    }
-                } catch (IOException e) {
-                    throw new ProvisioningException(Errors.readFile(schemaGroupsTxt), e);
-                }
-            }
-        }
-        // Check that all overridden artifacts are actually known.
-        for (String key : overriddenArtifactVersions.keySet()) {
-            if (!mergedArtifactVersions.containsKey(key)) {
-                throw new ProvisioningException("Overridden artifacts " + key + " is not found in the set of known server artifacts");
-            }
-        }
-        mergedArtifactVersions.putAll(overriddenArtifactVersions);
-        mergedTaskPropsResolver = new MapPropertyResolver(mergedTaskProps);
-
-        // We must create resolver and installer at this point, prior to process the packges.
-        // The CopyArtifact tasks could need the resolver and installer we are instantiating there.
-        artifactResolver = this::resolveMaven;
-        artifactInstaller = new SimpleArtifactInstaller(artifactResolver, generatedMavenRepo, artifactRecorder);
-
-        // Resolution of provisioning artifacts that we would need in the generated licenses.
-        MavenArtifact configGen = Utils.toArtifactCoords(mergedArtifactVersions, CONFIG_GEN_GA,
-                false, channelArtifactResolution, requireChannel(gaToProducer.get(CONFIG_GEN_GA)));
-        artifactResolver.resolve(configGen);
-        MavenArtifact plugin = Utils.toArtifactCoords(mergedArtifactVersions, GALLEON_PLUGINS_GA,
-                false, channelArtifactResolution, requireChannel(gaToProducer.get(GALLEON_PLUGINS_GA)));
-        artifactResolver.resolve(plugin);
-
-        final ProvisioningLayoutFactory layoutFactory = runtime.getLayout().getFactory();
-        pkgProgressTracker = layoutFactory.getProgressTracker(ProvisioningLayoutFactory.TRACK_PACKAGES);
-        long pkgsTotal = 0;
-        for(FeaturePackRuntime fp : runtime.getFeaturePacks()) {
-            pkgsTotal += fp.getPackageNames().size();
-        }
-        pkgProgressTracker.starting(pkgsTotal);
-        // Must first retrieve the shaded that could be required by other packages
-        for(FeaturePackRuntime fp : runtime.getFeaturePacks()) {
-            processShaded(fp);
-        }
-        for(FeaturePackRuntime fp : runtime.getFeaturePacks()) {
-            processPackages(fp);
-        }
-        pkgProgressTracker.complete();
-        if (!jbossModules.isEmpty()) {
-
-            if (bulkResolveArtifacts) {
-                log.verbose("Preloading artifacts");
-                final ProgressTracker<MavenArtifact> artifactTracker = layoutFactory.getProgressTracker(TRACK_ARTIFACTS_RESOLVE);
-                populateArtifactCache();
-                artifactTracker.starting(artifactCache.size());
-                resolveArtifactsInCache(artifactTracker);
-                artifactTracker.complete();
-                log.verbose("Finished preloading artifacts");
-            }
-
-            final ProgressTracker<PackageRuntime> modulesTracker = layoutFactory.getProgressTracker(TRACK_MODULES_BUILD);
-            modulesTracker.starting(jbossModules.size());
-
-            for (Map.Entry<Path, PackageRuntime> entry : jbossModules.entrySet()) {
-                final PackageRuntime pkg = entry.getValue();
-                modulesTracker.processing(pkg);
-                try {
-                    processModuleTemplate(pkg, entry.getKey());
-                } catch (IOException e) {
-                    throw new ProvisioningException("Failed to process JBoss module XML template for feature-pack "
-                            + pkg.getFeaturePackRuntime().getFPID() + " package " + pkg.getName(), e);
-                }
-                modulesTracker.processed(pkg);
-            }
-            modulesTracker.complete();
-        }
-
-        final Path layersConf = runtime.getStagedDir().resolve(WfConstants.MODULES).resolve(WfConstants.LAYERS_CONF);
-        if (Files.exists(layersConf)) {
-            mergeLayerConfs(runtime);
-        }
-
-         generateConfigs(runtime);
-
-        // If the dir doesn't exist, no configuration has been generated, no need to execute CLI scripts.
-        if (Files.exists(runtime.getStagedDir())) {
-            for (FeaturePackRuntime fp : runtime.getFeaturePacks()) {
-                final Path finalizeCli = fp.getResource(WfConstants.WILDFLY, WfConstants.SCRIPTS, "finalize.cli");
-                if (Files.exists(finalizeCli)) {
-                    final URL[] cp = new URL[2];
+            if (runtime.isOptionSet(OPTION_RECORD_ARTIFACTS)) {
+                final String pathValue = runtime.getOptionValue(OPTION_RECORD_ARTIFACTS);
+                if (pathValue != null && !pathValue.isEmpty()) {
                     try {
-                        MavenArtifact artifact = Utils.toArtifactCoords(mergedArtifactVersions, CONFIG_GEN_GA,
-                                false, channelArtifactResolution, requireChannel(gaToProducer.get(CONFIG_GEN_GA)));
-                        artifactResolver.resolve(artifact);
-                        cp[0] = artifact.getPath().toUri().toURL();
-                        artifact = Utils.toArtifactCoords(mergedArtifactVersions, WILDFLY_LAUNCHER_GA,
-                                false, channelArtifactResolution, requireChannel(gaToProducer.get(WILDFLY_LAUNCHER_GA)));
-                        artifactResolver.resolve(artifact);
-                        cp[1] = artifact.getPath().toUri().toURL();
+                        log.verbose("Starting artifact log");
+                        artifactRecorder = Optional.of(new ArtifactRecorder(runtime.getStagedDir(), Path.of(pathValue)));
                     } catch (IOException e) {
-                        throw new ProvisioningException("Failed to init classpath to run CLI finalize script for " + runtime.getStagedDir(), e);
+                        throw new ProvisioningException("Unable to create artifact.log", e);
                     }
-                    final ClassLoader originalCl = Thread.currentThread().getContextClassLoader();
-                    final URLClassLoader cliScriptCl = new URLClassLoader(cp, originalCl);
-                    Path script;
+                }
+            } else {
+                artifactRecorder = Optional.empty();
+            }
+
+            this.bulkResolveArtifacts = isBulkResolveArtifacts();
+
+            thinServer = isThinServer();
+            generatedMavenRepo = getGeneratedMavenRepo();
+            if (generatedMavenRepo != null) {
+                IoUtils.recursiveDelete(generatedMavenRepo);
+            }
+            maven = (MavenRepoManager) runtime.getArtifactResolver(MavenRepoManager.REPOSITORY_ID);
+            // The Channel resolution depends on the tool in use.
+            // Generic Galleon provisioning doesn't support it.
+            try {
+                Class<?> clazz = Class.forName("org.wildfly.channel.spi.ChannelResolvable");
+                channelArtifactResolution = clazz.isAssignableFrom(maven.getClass());
+            } catch(ClassNotFoundException ex) {
+                log.verbose("Channel not present in classpath.");
+            }
+            log.verbose("Channel artifact resolution enabled=" + channelArtifactResolution);
+            // Overridden artifacts
+            overriddenArtifactVersions.putAll(getOverriddenArtifacts());
+            for(FeaturePackRuntime fp : runtime.getFeaturePacks()) {
+                final Path wfRes = fp.getResource(WfConstants.WILDFLY);
+                if(!Files.exists(wfRes)) {
+                    continue;
+                }
+
+                final Path artifactProps = wfRes.resolve(WfConstants.ARTIFACT_VERSIONS_PROPS);
+                if(Files.exists(artifactProps)) {
+                    final Map<String, String> versionProps = Utils.readProperties(artifactProps);
+                    for (Entry<String, String> entry : overriddenArtifactVersions.entrySet()) {
+                        if (versionProps.containsKey(entry.getKey())) {
+                            versionProps.put(entry.getKey(), entry.getValue());
+                        }
+                    }
+                    fpArtifactVersions.put(fp.getFPID().getProducer(), versionProps);
+                    // Handle artifacts that are directly resolved from the plugin
+                    // org.wildfly.core:wildfly-launcher
+                    // org.jboss.modules:jboss-modules
+                    // org.wildfly.core:wildfly-cli
+                    // org.wildfly.galleon-plugins:wildfly-config-gen
+                    // org.wildfly.galleon-plugins:wildfly-galleon-plugins
+                    if (versionProps.containsKey(CONFIG_GEN_GA)) {
+                        gaToProducer.put(CONFIG_GEN_GA, fp.getFPID().getProducer());
+                    }
+                    if (versionProps.containsKey(GALLEON_PLUGINS_GA)) {
+                        gaToProducer.put(GALLEON_PLUGINS_GA, fp.getFPID().getProducer());
+                    }
+                    if (versionProps.containsKey(WILDFLY_CLI_GA)) {
+                        gaToProducer.put(WILDFLY_CLI_GA, fp.getFPID().getProducer());
+                    }
+                    if (versionProps.containsKey(WILDFLY_LAUNCHER_GA)) {
+                        gaToProducer.put(WILDFLY_LAUNCHER_GA, fp.getFPID().getProducer());
+                    }
+                    if (versionProps.containsKey(JBOSS_MODULES_GA)) {
+                        gaToProducer.put(JBOSS_MODULES_GA, fp.getFPID().getProducer());
+                    }
+                    mergedArtifactVersions.putAll(versionProps);
+                }
+
+                final Path tasksPropsPath = wfRes.resolve(WfConstants.WILDFLY_TASKS_PROPS);
+                if(Files.exists(tasksPropsPath)) {
+                    final Map<String, String> fpProps = Utils.readProperties(tasksPropsPath);
+                    fpTasksProps = CollectionUtils.put(fpTasksProps, fp.getFPID().getProducer(), fpProps);
+                    mergedTaskProps.putAll(fpProps);
+                }
+
+                final Path channelsPropsPath = wfRes.resolve(WfConstants.WILDFLY_CHANNEL_PROPS);
+                if(Files.exists(channelsPropsPath)) {
+                    final Map<String, String> channelProps = Utils.readProperties(channelsPropsPath);
+                    String mode = channelProps.get(WfConstants.WILDFLY_CHANNEL_RESOLUTION_PROP);
+                    if (mode != null) {
+                        channelResolutionModes = CollectionUtils.put(channelResolutionModes, fp.getFPID().getProducer(), WildFlyChannelResolutionMode.valueOf(mode));
+                    }
+                }
+
+                if(fp.containsPackage(WfConstants.DOCS_SCHEMA)) {
+                    final Path schemaGroupsTxt = fp.getPackage(WfConstants.DOCS_SCHEMA).getResource(
+                            WfConstants.PM, WfConstants.WILDFLY, WfConstants.SCHEMA_GROUPS_TXT);
+                    try(BufferedReader reader = Files.newBufferedReader(schemaGroupsTxt)) {
+                        String line = reader.readLine();
+                        while(line != null) {
+                            schemaGroups = CollectionUtils.add(schemaGroups, line);
+                            line = reader.readLine();
+                        }
+                    } catch (IOException e) {
+                        throw new ProvisioningException(Errors.readFile(schemaGroupsTxt), e);
+                    }
+                }
+            }
+            // Check that all overridden artifacts are actually known.
+            for (String key : overriddenArtifactVersions.keySet()) {
+                if (!mergedArtifactVersions.containsKey(key)) {
+                    throw new ProvisioningException("Overridden artifacts " + key + " is not found in the set of known server artifacts");
+                }
+            }
+            mergedArtifactVersions.putAll(overriddenArtifactVersions);
+            mergedTaskPropsResolver = new MapPropertyResolver(mergedTaskProps);
+
+            // We must create resolver and installer at this point, prior to process the packges.
+            // The CopyArtifact tasks could need the resolver and installer we are instantiating there.
+            artifactResolver = this::resolveMaven;
+            artifactGroupResolver = this::resolveMaven;
+            artifactInstaller = new SimpleArtifactInstaller(artifactResolver, generatedMavenRepo, artifactRecorder);
+
+            // Resolution of provisioning artifacts that we would need in the generated licenses.
+            List<MavenArtifact> lst = new ArrayList<>();
+            MavenArtifact configGen = Utils.toArtifactCoords(mergedArtifactVersions, CONFIG_GEN_GA,
+                    false, channelArtifactResolution, requireChannel(gaToProducer.get(CONFIG_GEN_GA)));
+            lst.add(configGen);
+            MavenArtifact plugin = Utils.toArtifactCoords(mergedArtifactVersions, GALLEON_PLUGINS_GA,
+                    false, channelArtifactResolution, requireChannel(gaToProducer.get(GALLEON_PLUGINS_GA)));
+            lst.add(plugin);
+            artifactGroupResolver.resolve(lst);
+            final ProvisioningLayoutFactory layoutFactory = runtime.getLayout().getFactory();
+            pkgProgressTracker = layoutFactory.getProgressTracker(ProvisioningLayoutFactory.TRACK_PACKAGES);
+            long pkgsTotal = 0;
+            for(FeaturePackRuntime fp : runtime.getFeaturePacks()) {
+                pkgsTotal += fp.getPackageNames().size();
+            }
+            pkgProgressTracker.starting(pkgsTotal);
+            // Must first retrieve the shaded that could be required by other packages
+            for(FeaturePackRuntime fp : runtime.getFeaturePacks()) {
+                processShaded(fp);
+            }
+            for(FeaturePackRuntime fp : runtime.getFeaturePacks()) {
+                processPackages(fp);
+            }
+            pkgProgressTracker.complete();
+            if (!jbossModules.isEmpty()) {
+
+                if (bulkResolveArtifacts) {
+                    log.verbose("Preloading artifacts");
+                    final ProgressTracker<MavenArtifact> artifactTracker = layoutFactory.getProgressTracker(TRACK_ARTIFACTS_RESOLVE);
+                    populateArtifactCache();
+                    artifactTracker.starting(artifactCache.size());
+                    resolveArtifactsInCache(artifactTracker);
+                    artifactTracker.complete();
+                    log.verbose("Finished preloading artifacts");
+                }
+
+                final ProgressTracker<PackageRuntime> modulesTracker = layoutFactory.getProgressTracker(TRACK_MODULES_BUILD);
+                modulesTracker.starting(jbossModules.size());
+
+                for (Map.Entry<Path, PackageRuntime> entry : jbossModules.entrySet()) {
+                    final PackageRuntime pkg = entry.getValue();
+                    modulesTracker.processing(pkg);
                     try {
+                        processModuleTemplate(pkg, entry.getKey());
+                    } catch (IOException e) {
+                        throw new ProvisioningException("Failed to process JBoss module XML template for feature-pack "
+                                + pkg.getFeaturePackRuntime().getFPID() + " package " + pkg.getName(), e);
+                    }
+                    modulesTracker.processed(pkg);
+                }
+                modulesTracker.complete();
+            }
+            if(!processingTasks.isEmpty()) {
+                for(int i = 0; i < processingTasks.size(); ++i) {
+                    processingTasks.get(i).execute(this, processingTasksPkgs.get(i));
+                }
+            }
+            final Path layersConf = runtime.getStagedDir().resolve(WfConstants.MODULES).resolve(WfConstants.LAYERS_CONF);
+            if (Files.exists(layersConf)) {
+                mergeLayerConfs(runtime);
+            }
+
+            generateConfigs(runtime);
+
+            // If the dir doesn't exist, no configuration has been generated, no need to execute CLI scripts.
+            if (Files.exists(runtime.getStagedDir())) {
+                for (FeaturePackRuntime fp : runtime.getFeaturePacks()) {
+                    final Path finalizeCli = fp.getResource(WfConstants.WILDFLY, WfConstants.SCRIPTS, "finalize.cli");
+                    if (Files.exists(finalizeCli)) {
+                        final URL[] cp = new URL[2];
                         try {
-                            String stabilityLevel = getStabilityLevel();
-                            byte[] content;
-                            if (stabilityLevel != null && !stabilityLevel.isEmpty()) {
-                                List<String> lines = Files.readAllLines(finalizeCli);
-                                StringBuilder builder = new StringBuilder();
-                                // Do we have an embed-server command?
-                                for (String l : lines) {
-                                    String trimLine = l.trim();
-                                    if (trimLine.startsWith("embed-server")) {
-                                        if (!trimLine.contains("--stability=")) {
-                                            l += " --stability=" + stabilityLevel;
-                                        }
-                                    }
-                                    builder.append(l).append(System.lineSeparator());
-                                }
-                                content = builder.toString().getBytes();
-                            } else {
-                                content = Files.readAllBytes(finalizeCli);
-                            }
-                            Path tmpDir = runtime.getTmpPath();
-                            if (!Files.exists(tmpDir)) {
-                                Files.createDirectory(tmpDir);
-                            }
-                            script = tmpDir.resolve(finalizeCli.getFileName().toString());
-                            Files.write(script, content);
-                        } catch (IOException ex) {
-                            throw new ProvisioningException(ex.getLocalizedMessage(), ex);
-                        }
-                        Thread.currentThread().setContextClassLoader(cliScriptCl);
-                        Path props = ForkedEmbeddedUtil.storeSystemProps();
-                        props.toFile().deleteOnExit();
-                        try {
-                            final Class<?> cliScriptRunnerCls = cliScriptCl.loadClass(CLI_SCRIPT_RUNNER_CLASS);
-                            final Method m = cliScriptRunnerCls.getMethod(CLI_SCRIPT_RUNNER_METHOD, Path.class, Path.class, Path.class, MessageWriter.class);
-                            m.invoke(null, runtime.getStagedDir(), script, props, log);
-                        } catch (Throwable e) {
-                            throw new ProvisioningException("Failed to initialize CLI script runner " + CLI_SCRIPT_RUNNER_CLASS, e);
-                        }
-                    } finally {
-                        Thread.currentThread().setContextClassLoader(originalCl);
-                        try {
-                            cliScriptCl.close();
+                            List<MavenArtifact> artifacts = new ArrayList<>();
+                            MavenArtifact configGenArtifact = Utils.toArtifactCoords(mergedArtifactVersions, CONFIG_GEN_GA,
+                                    false, channelArtifactResolution, requireChannel(gaToProducer.get(CONFIG_GEN_GA)));
+                            artifacts.add(configGenArtifact);
+                            MavenArtifact launcherArtifact = Utils.toArtifactCoords(mergedArtifactVersions, WILDFLY_LAUNCHER_GA,
+                                    false, channelArtifactResolution, requireChannel(gaToProducer.get(WILDFLY_LAUNCHER_GA)));
+                            artifacts.add(launcherArtifact);
+                            artifactGroupResolver.resolve(artifacts);
+                            cp[0] = configGenArtifact.getPath().toUri().toURL();
+                            cp[1] = launcherArtifact.getPath().toUri().toURL();
                         } catch (IOException e) {
+                            throw new ProvisioningException("Failed to init classpath to run CLI finalize script for " + runtime.getStagedDir(), e);
+                        }
+                        final ClassLoader originalCl = Thread.currentThread().getContextClassLoader();
+                        final URLClassLoader cliScriptCl = new URLClassLoader(cp, originalCl);
+                        Path script;
+                        try {
+                            try {
+                                String stabilityLevel = getStabilityLevel();
+                                byte[] content;
+                                if (stabilityLevel != null && !stabilityLevel.isEmpty()) {
+                                    List<String> lines = Files.readAllLines(finalizeCli);
+                                    StringBuilder builder = new StringBuilder();
+                                    // Do we have an embed-server command?
+                                    for (String l : lines) {
+                                        String trimLine = l.trim();
+                                        if (trimLine.startsWith("embed-server")) {
+                                            if (!trimLine.contains("--stability=")) {
+                                                l += " --stability=" + stabilityLevel;
+                                            }
+                                        }
+                                        builder.append(l).append(System.lineSeparator());
+                                    }
+                                    content = builder.toString().getBytes();
+                                } else {
+                                    content = Files.readAllBytes(finalizeCli);
+                                }
+                                Path tmpDir = runtime.getTmpPath();
+                                if (!Files.exists(tmpDir)) {
+                                    Files.createDirectory(tmpDir);
+                                }
+                                script = tmpDir.resolve(finalizeCli.getFileName().toString());
+                                Files.write(script, content);
+                            } catch (IOException ex) {
+                                throw new ProvisioningException(ex.getLocalizedMessage(), ex);
+                            }
+                            Thread.currentThread().setContextClassLoader(cliScriptCl);
+                            Path props = ForkedEmbeddedUtil.storeSystemProps();
+                            props.toFile().deleteOnExit();
+                            try {
+                                final Class<?> cliScriptRunnerCls = cliScriptCl.loadClass(CLI_SCRIPT_RUNNER_CLASS);
+                                final Method m = cliScriptRunnerCls.getMethod(CLI_SCRIPT_RUNNER_METHOD, Path.class, Path.class, Path.class, MessageWriter.class);
+                                m.invoke(null, runtime.getStagedDir(), script, props, log);
+                            } catch (Throwable e) {
+                                throw new ProvisioningException("Failed to initialize CLI script runner " + CLI_SCRIPT_RUNNER_CLASS, e);
+                            }
+                        } finally {
+                            Thread.currentThread().setContextClassLoader(originalCl);
+                            try {
+                                cliScriptCl.close();
+                            } catch (IOException e) {
+                            }
                         }
                     }
                 }
             }
-        }
 
-        if(!finalizingTasks.isEmpty()) {
-            for(int i = 0; i < finalizingTasks.size(); ++i) {
-                finalizingTasks.get(i).execute(this, finalizingTasksPkgs.get(i));
+            if(!finalizingTasks.isEmpty()) {
+                for(int i = 0; i < finalizingTasks.size(); ++i) {
+                    finalizingTasks.get(i).execute(this, finalizingTasksPkgs.get(i));
+                }
+            }
+
+            if(!exampleConfigs.isEmpty()) {
+                provisionExampleConfigs();
+            }
+
+            if (artifactRecorder.isPresent()) {
+                try {
+                    artifactRecorder.get().writeCacheManifest();
+                } catch (IOException e) {
+                    throw new ProvisioningException("Unable to record provisioned artifacts", e);
+                }
+            }
+
+        } finally {
+            if (cacheOwner) {
+                threadContext.remove();
+                log.verbose("Artifact cache released");
             }
         }
-
-        if(!exampleConfigs.isEmpty()) {
-            provisionExampleConfigs();
-        }
-
-        if (artifactRecorder.isPresent()) {
-            try {
-                artifactRecorder.get().writeCacheManifest();
-            } catch (IOException e) {
-                throw new ProvisioningException("Unable to record provisioned artifacts", e);
-            }
-        }
-
         if (startTime > 0) {
             log.print(Errors.tookTime("Overall WildFly Galleon Plugin", startTime));
         }
@@ -589,22 +627,22 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                     requireChannel(pkg.getFeaturePackRuntime().getFPID().getProducer()));
             final MavenArtifact mavenArtifact = moduleArtifact.getUnresolvedArtifact();
             if (mavenArtifact != null) {
-                final MavenArtifact key = new MavenArtifact();
-                key.setGroupId(mavenArtifact.getGroupId());
-                key.setArtifactId(mavenArtifact.getArtifactId());
-                key.setExtension(mavenArtifact.getExtension());
-                key.setClassifier(mavenArtifact.getClassifier());
-                key.setVersion(mavenArtifact.getVersion());
-                key.setVersionRange(mavenArtifact.getVersionRange());
-
-                artifactCache.put(key, mavenArtifact);
+                putArtifactInCache(mavenArtifact);
             }
         }
     }
 
     private void resolveArtifactsInCache(ProgressTracker<MavenArtifact> tracker) throws ProvisioningException {
         try {
-            maven.resolveAll(addListener(artifactCache.values(), tracker));
+            List<MavenArtifact> lst = new ArrayList<>();
+            for (MavenArtifact ma : artifactCache.values()) {
+                if (!ma.isResolved()) {
+                    lst.add(ma);
+                }
+            }
+            long t = System.currentTimeMillis();
+            maven.resolveAll(addListener(lst, tracker));
+            log.verbose("Cache artitacts resolution took " + (System.currentTimeMillis() - t));
         } catch (MavenUniverseException e) {
             throw new ProvisioningException("Failed to resolve artifact", e);
         }
@@ -781,22 +819,32 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         List<URL> urlsEmbedded = new ArrayList<>();
         List<URL> cliDependencies = new ArrayList<>();
         try {
-            MavenArtifact artifact = Utils.toArtifactCoords(mergedArtifactVersions, CONFIG_GEN_GA,
+            // Bulk resolution of artifacts
+            List<MavenArtifact> toResolve = new ArrayList<>();
+            MavenArtifact configGenArtifact = Utils.toArtifactCoords(mergedArtifactVersions, CONFIG_GEN_GA,
                     false, channelArtifactResolution, requireChannel(gaToProducer.get(CONFIG_GEN_GA)));
-            artifactResolver.resolve(artifact);
-            if (artifactRecorder.isPresent()) {
-                artifactRecorder.get().cache(artifact, artifact.getPath());
-            }
-            urls.add(artifact.getPath().toUri().toURL());
+            toResolve.add(configGenArtifact);
             ShadedModel model = shadedPackages.get("org.wildfly.core.wildfly-cli.shaded");
+            MavenArtifact cliShadedArtifact = null;
             if (model == null) {
                 // This can occur in tests that rely on WildFly version that doesn't contain shaded models.
                 log.print("WARNING: defaulting to wildfly-cli:client shaded jar.");
-                artifact = Utils.toArtifactCoords(mergedArtifactVersions, WILDFLY_CLI_GA+"::client",
+                cliShadedArtifact = Utils.toArtifactCoords(mergedArtifactVersions, WILDFLY_CLI_GA+"::client",
                     false, channelArtifactResolution, requireChannel(gaToProducer.get(WILDFLY_CLI_GA)));
-                artifactResolver.resolve(artifact);
+                toResolve.add(cliShadedArtifact);
+            }
+            MavenArtifact jbossModuleArtifact = Utils.toArtifactCoords(mergedArtifactVersions, JBOSS_MODULES_GA,
+                    false, channelArtifactResolution, requireChannel(gaToProducer.get(JBOSS_MODULES_GA)));
+            toResolve.add(jbossModuleArtifact);
+            artifactGroupResolver.resolve(toResolve);
+            if (artifactRecorder.isPresent()) {
+                artifactRecorder.get().cache(configGenArtifact, configGenArtifact.getPath());
+            }
+            for (MavenArtifact artifact : toResolve) {
                 urls.add(artifact.getPath().toUri().toURL());
-                urlsEmbedded.add(artifact.getPath().toUri().toURL());
+            }
+            if (model == null) {
+                urlsEmbedded.add(cliShadedArtifact.getPath().toUri().toURL());
             } else {
                 for (MavenArtifact a : model.getArtifacts()) {
                     cliDependencies.add(a.getPath().toUri().toURL());
@@ -807,10 +855,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             cp = new URL[urls.size()];
             cp = urls.toArray(cp);
 
-            artifact = Utils.toArtifactCoords(mergedArtifactVersions, JBOSS_MODULES_GA,
-                    false, channelArtifactResolution, requireChannel(gaToProducer.get(JBOSS_MODULES_GA)));
-            artifactResolver.resolve(artifact);
-            urlsEmbedded.add(artifact.getPath().toUri().toURL());
+            urlsEmbedded.add(jbossModuleArtifact.getPath().toUri().toURL());
             cpEmbedded = new URL[urlsEmbedded.size()];
             cpEmbedded = urlsEmbedded.toArray(cpEmbedded);
 
@@ -879,7 +924,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                             requireChannel(pkg.getFeaturePackRuntime().getFPID().getProducer()),
                             shadedDir.resolve(ShadedModel.FILE_NAME),
                             runtime.getTmpPath(),
-                            artifactResolver, log, mergedArtifactVersions, artifactInstaller, channelArtifactResolution, artifactRecorder));
+                            artifactGroupResolver,
+                            log, mergedArtifactVersions, artifactInstaller, channelArtifactResolution, artifactRecorder));
                 } catch (IOException ex) {
                     throw new ProvisioningException(ex);
                 }
@@ -907,10 +953,23 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                     log.verbose("Processing %s package %s tasks", fp.getFPID(), pkg.getName());
                     for (WildFlyPackageTask task : pkgTasks.getTasks()) {
                         if (task.getPhase() == WildFlyPackageTask.Phase.PROCESSING) {
-                            task.execute(this, pkg);
+                            if (bulkResolveArtifacts) {
+                                if (task instanceof CopyArtifact copyArtifact) {
+                                    final MavenArtifact artifactToCopy = toArtifact(copyArtifact, pkg);
+                                    putArtifactInCache(artifactToCopy);
+                                }
+                                processingTasks = CollectionUtils.add(processingTasks, task);
+                                processingTasksPkgs = CollectionUtils.add(processingTasksPkgs, pkg);
+                            } else {
+                                task.execute(this, pkg);
+                            }
                         } else {
                             finalizingTasks = CollectionUtils.add(finalizingTasks, task);
                             finalizingTasksPkgs = CollectionUtils.add(finalizingTasksPkgs, pkg);
+                            if (bulkResolveArtifacts && task instanceof CopyArtifact copyArtifact) {
+                                final MavenArtifact artifactToCopy = toArtifact(copyArtifact, pkg);
+                                putArtifactInCache(artifactToCopy);
+                            }
                         }
                     }
                 }
@@ -934,6 +993,33 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
     }
 
+    private void putArtifactInCache(MavenArtifact a) {
+        putArtifactInCache(computeKey(a), a);
+    }
+
+    private void putArtifactInCache(MavenArtifact k, MavenArtifact a) {
+        if (!artifactCache.containsKey(k)) {
+            artifactCache.put(k, a);
+        } else {
+            log.verbose("Artifact %s:%s:%s:%s:%s already exists in the cache.",
+                    k.getGroupId(), k.getArtifactId(), k.getClassifier(), k.getExtension(), k.getVersion());
+        }
+    }
+
+    private MavenArtifact computeKey(MavenArtifact a) {
+        MavenArtifact k = new MavenArtifact();
+        k.setGroupId(a.getGroupId());
+        k.setArtifactId(a.getArtifactId());
+        k.setClassifier(a.getClassifier());
+        k.setExtension(a.getExtension());
+        // The version or version range can be part of the key. This allow for the same artifact with multiple versions.
+        // Multiple versions for the same artifact can occur only when no channel is configured. With channel a single version exists for a stream.
+        // If no channel is configured, all artifacts are resolved using this version.
+        // If channel is configured, this version is ignored and the version found in the configured channel is used.
+        k.setVersion(a.getVersion());
+        k.setVersionRange(a.getVersionRange());
+        return k;
+    }
     public void xslTransform(PackageRuntime pkg, XslTransform xslt) throws ProvisioningException {
 
         final Path src = runtime.getStagedDir().resolve(xslt.getSrc());
@@ -1140,11 +1226,16 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
     }
 
-    public void copyArtifact(CopyArtifact copyArtifact, PackageRuntime pkg) throws ProvisioningException {
+    public MavenArtifact toArtifact(CopyArtifact copyArtifact, PackageRuntime pkg) throws ProvisioningException {
         final MavenArtifact artifact = Utils.toArtifactCoords(copyArtifact.isFeaturePackVersion() ? fpArtifactVersions.get(pkg.getFeaturePackRuntime().getFPID().getProducer())
-                        : mergedArtifactVersions,
+                : mergedArtifactVersions,
                 copyArtifact.getArtifact(), copyArtifact.isOptional(),
                 channelArtifactResolution, requireChannel(pkg.getFeaturePackRuntime().getFPID().getProducer()));
+        return artifact;
+    }
+
+    public void copyArtifact(CopyArtifact copyArtifact, PackageRuntime pkg) throws ProvisioningException {
+        final MavenArtifact artifact = toArtifact(copyArtifact, pkg);
         if(artifact == null) {
             return;
         }
@@ -1290,16 +1381,31 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         }
     }
 
-    void resolveMaven(MavenArtifact artifact) throws ProvisioningException {
-        if (bulkResolveArtifacts && artifactCache.containsKey(artifact)) {
-            final MavenArtifact resolvedArtifact = artifactCache.get(artifact);
-            artifact.setVersion(resolvedArtifact.getVersion());
-            artifact.setPath(resolvedArtifact.getPath());
+    // Resolve or lookup the cache and add to the cache.
+    private void resolveMaven(MavenArtifact artifact) throws ProvisioningException {
+        MavenArtifact key = computeKey(artifact);
+        MavenArtifact cachedArtifact = artifactCache.get(key);
+        if (cachedArtifact != null) {
+            artifact.setVersion(cachedArtifact.getVersion());
+            artifact.setPath(cachedArtifact.getPath());
         } else {
-            maven.resolve(artifact);
+            if (!artifact.isResolved()) {
+                maven.resolve(artifact);
+                putArtifactInCache(key, artifact);
+            }
         }
         // These properties are present in *-licenses.xml and must be replaced by the resolved ones.
         resolvedVersionsProperties.put("version."+artifact.getGroupId()+"."+artifact.getArtifactId(), artifact.getVersion());
+    }
+
+    // Resolve and add to the cache
+    private void resolveMaven(Collection<MavenArtifact> artifacts) throws ProvisioningException {
+        maven.resolveAll(artifacts);
+        for(MavenArtifact artifact : artifacts) {
+            putArtifactInCache(artifact);
+            // These properties are present in *-licenses.xml and must be replaced by the resolved ones.
+            resolvedVersionsProperties.put("version."+artifact.getGroupId()+"."+artifact.getArtifactId(), artifact.getVersion());
+        }
     }
 
     boolean isOverriddenArtifact(MavenArtifact artifact) throws ProvisioningException {

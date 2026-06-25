@@ -93,9 +93,10 @@ A `provisioning.xml` file example:
 
 |jboss-bulk-resolve-artifacts
 |Boolean
-|false
+|true
 |Maven artifacts that are needed for the WildFly server installation are resolved in a bulk operation instead of 
-being resolved individually. That can speed-up the provisioning time.
+being resolved individually. That speed-up the provisioning time. By default 5 threads are used to resolve the artifacts. Use `-Dmaven.artifact.threads=<number of threads>`
+to increase concurrency. Using 500+ threads has shown excellent results.
 
 |jboss-dump-config-scripts
 |String

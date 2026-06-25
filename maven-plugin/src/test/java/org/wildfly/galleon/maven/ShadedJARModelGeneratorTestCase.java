@@ -19,6 +19,7 @@ package org.wildfly.galleon.maven;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -80,7 +81,7 @@ public class ShadedJARModelGeneratorTestCase {
         ShadedModel shadedModel = new ShadedModel(false,
                 model,
                 target,
-                (MavenArtifact artifact) -> {
+                (Collection<MavenArtifact> artifacts) -> {
                 },
                 new MessageWriter() {
             @Override

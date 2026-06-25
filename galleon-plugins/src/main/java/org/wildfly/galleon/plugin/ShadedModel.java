@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2024 Red Hat, Inc. and/or its affiliates
+ * Copyright 2016-2026 Red Hat, Inc. and/or its affiliates
  * and other contributors as indicated by the @author tags.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,6 +29,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
 import java.util.jar.Attributes;
@@ -63,7 +64,6 @@ public class ShadedModel implements Utils.ArtifactResourceConsumer {
     private final Element rootElement;
     private final Document document;
     private final Path tmpPath;
-    private final WfInstallPlugin.ArtifactResolver artifactResolver;
     private final MessageWriter log;
     private final Map<String, String> mergedArtifactVersions;
     private final Optional<ArtifactRecorder> recorder;
@@ -71,17 +71,18 @@ public class ShadedModel implements Utils.ArtifactResourceConsumer {
     private final Installer installer;
     private final boolean channelArtifactResolution;
     private final boolean requireChannel;
+    private final WfInstallPlugin.ArtifactGroupResolver resolver;
     public ShadedModel(boolean requireChannel,
             Path shadedModel,
             Path tmpPath,
-            WfInstallPlugin.ArtifactResolver artifactResolver,
+            WfInstallPlugin.ArtifactGroupResolver resolver,
             MessageWriter log, Map<String, String> mergedArtifactVersions,
             Installer installer,
             boolean channelArtifactResolution,
             Optional<ArtifactRecorder> recorder) throws IOException, ProvisioningDescriptionException {
         this.requireChannel = requireChannel;
         this.tmpPath = tmpPath;
-        this.artifactResolver = artifactResolver;
+        this.resolver = resolver;
         this.log = log;
         this.mergedArtifactVersions = mergedArtifactVersions;
         this.installer = installer;
@@ -101,12 +102,17 @@ public class ShadedModel implements Utils.ArtifactResourceConsumer {
         Element shadedDependencies = rootElement.getFirstChildElement("shaded-dependencies",
                 rootElement.getNamespaceURI());
         Elements dependencies = shadedDependencies.getChildElements();
+        Map<String, MavenArtifact> map = new HashMap<>();
         for (int i = 0; i < dependencies.size(); i++) {
             Element e = dependencies.get(i);
             MavenArtifact a = Utils.toArtifactCoords(mergedArtifactVersions, e.getValue(), false, channelArtifactResolution, requireChannel);
-            artifactResolver.resolve(a);
+            map.put(e.getValue(), a);
+        }
+        resolver.resolve(map.values());
+        for (Entry<String, MavenArtifact> entry : map.entrySet()) {
+            MavenArtifact a = entry.getValue();
             if (log.isVerboseEnabled()) {
-                log.verbose("Shadel model dependency: " + e.getValue() + " resolved version " + a.getVersion());
+                log.verbose("Shaded model dependency: " + entry.getKey() + " resolved version " + a.getVersion());
             }
             Path transformed = installer.installCopiedArtifact(a);
             a.setPath(transformed);
