@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2022 Red Hat, Inc. and/or its affiliates
+ * Copyright 2016-2026 Red Hat, Inc. and/or its affiliates
  * and other contributors as indicated by the @author tags.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,100 +16,95 @@
  */
 package org.wildfly.galleon.plugin;
 
+import java.io.IOException;
+import java.nio.file.Path;
+
 import org.jboss.galleon.universe.maven.MavenArtifact;
 import org.jboss.galleon.universe.maven.MavenUniverseException;
-import org.jboss.galleon.util.HashUtils;
-import org.jboss.galleon.util.IoUtils;
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.HashMap;
-import java.util.Map;
+/**
+ * Records artifacts resolved and installed during Galleon provisioning.
+ *
+ * <p>Implementations collect artifact metadata as provisioning proceeds and
+ * persist a manifest when provisioning completes. The two recording methods
+ * ({@link #record} and {@link #cache}) are called by the install plugin and
+ * artifact installers each time an artifact is placed into the distribution.
+ * {@link #writeManifest()} is called once at the end of provisioning to
+ * flush all collected data to persistent storage.</p>
+ *
+ * @see ArtifactsTxtRecorder
+ * @see SbomArtifactRecorder
+ * @see ChainedArtifactRecorder
+ */
+public interface ArtifactRecorder {
 
-public class ArtifactRecorder {
-    protected static final String ARTIFACT_LIST_FILE = "artifacts.txt";
-    private static final String SEPARATOR = "::";
-    private final Path stagedDir;
-    private final Path cacheDir;
-    private final Path artifactList;
-    private final HashMap<String, Path> cachedArtifacts = new HashMap<>();
+    /**
+     * Records an artifact that has been installed at the given target location.
+     *
+     * <p>If the same artifact is recorded more than once, the most recent
+     * {@code target} path takes precedence for implementations that track a
+     * single location per artifact. Implementations that track multiple
+     * locations (e.g. {@link SbomArtifactRecorder}) may retain all of them.</p>
+     *
+     * @param artifact the Maven artifact that was resolved and installed
+     * @param target   the path where the artifact was placed in the distribution
+     * @throws IOException if an I/O error occurs while recording
+     */
+    void record(MavenArtifact artifact, Path target) throws IOException;
 
-    public ArtifactRecorder(Path stagedDir, Path cacheDir) throws IOException {
-        this.stagedDir = stagedDir;
+    /**
+     * Caches a copy of the artifact and records it.
+     *
+     * <p>Implementations may copy the artifact file from {@code jarSrc} into an
+     * internal cache directory before recording. If the artifact has already
+     * been recorded, the cached copy is not stored again.</p>
+     *
+     * @param artifact the Maven artifact to cache
+     * @param jarSrc   the source path of the artifact JAR file
+     * @throws MavenUniverseException if artifact metadata cannot be resolved
+     * @throws IOException            if an I/O error occurs during caching
+     */
+    void cache(MavenArtifact artifact, Path jarSrc) throws MavenUniverseException, IOException;
 
-        if (cacheDir.isAbsolute()) {
-            this.cacheDir = cacheDir;
-        } else {
-            this.cacheDir = stagedDir.resolve(cacheDir);
-        }
-
-        this.artifactList = this.cacheDir.resolve(ARTIFACT_LIST_FILE);
-
-        initCacheDir();
-    }
-
-    private void initCacheDir() throws IOException {
-        if (!Files.exists(cacheDir)) {
-            Files.createDirectories(cacheDir);
-        }
-
-        Files.deleteIfExists(artifactList);
-        Files.createFile(artifactList);
+    /**
+     * Records a resource JAR artifact. The default implementation delegates to
+     * {@link #record(MavenArtifact, Path)}.
+     *
+     * @param artifact       the Maven artifact with a {@code resources} classifier
+     * @param target         the path where the artifact was placed in the distribution
+     * @param resolvedJarPath the resolved path to the actual JAR file on disk
+     * @throws IOException if an I/O error occurs while recording
+     */
+    default void recordResourceJar(MavenArtifact artifact, Path target, Path resolvedJarPath) throws IOException {
+        record(artifact, target);
     }
 
     /**
-     * adds the artifact's coordinates to the artifacts list.
+     * Records a provisioning-tool artifact that is not part of the distribution.
      *
-     * If the artifact is recorded twice, the most recent {@code target} is used. If the artifact was recorded with a jar
-     * cached in {@code cacheDir} and is recorded again pointing to the external jar, the external jar will be used and
-     * cached copy will be removed.
+     * <p>Tool artifacts (such as config generators) are resolved during
+     * provisioning but are not installed into or referenced from the
+     * distribution. The default implementation delegates to
+     * {@link #record(MavenArtifact, Path)} with a {@code null} target.
+     * Implementations that distinguish distribution content from build
+     * tooling (e.g. {@link SbomArtifactRecorder}) may exclude or
+     * specially mark these artifacts.</p>
      *
-     * @param artifact
-     * @param target
-     * @throws IOException
+     * @param artifact the Maven artifact used as a provisioning tool
+     * @throws IOException if an I/O error occurs while recording
      */
-    public void record(MavenArtifact artifact, Path target) throws IOException {
-        final String coord = artifact.getCoordsAsString();
-        if (cachedArtifacts.containsKey(coord)) {
-            // if the artifact file was cached and the new target points to a different file, remove the old cached file
-            final Path cachedPath = cachedArtifacts.get(coord);
-            if (cachedPath.toAbsolutePath().startsWith(cacheDir) && !cachedPath.equals(target)) {
-                Files.delete(cachedPath);
-            }
-        }
-        cachedArtifacts.put(coord, target);
+    default void recordToolDependency(MavenArtifact artifact) throws IOException {
+        record(artifact, null);
     }
 
     /**
-     * save a copy of {@code jarSrc} in the {@code cacheDir} and record it using {@link ArtifactRecorder#record(MavenArtifact, Path)}
+     * Writes the accumulated artifact manifest to persistent storage.
      *
-     * @param artifact
-     * @param jarSrc
-     * @throws MavenUniverseException
-     * @throws IOException
+     * <p>Called once at the end of the provisioning process after all artifacts
+     * have been recorded. The format and location of the output depend on the
+     * implementation.</p>
+     *
+     * @throws IOException if an I/O error occurs while writing the manifest
      */
-    public void cache(MavenArtifact artifact, Path jarSrc) throws MavenUniverseException, IOException {
-        if (!cachedArtifacts.containsKey(artifact.getCoordsAsString())) {
-            IoUtils.copy(jarSrc, cacheDir.resolve(artifact.getArtifactFileName()));
-
-            record(artifact, cacheDir.resolve(artifact.getArtifactFileName()));
-        }
-    }
-
-    /**
-     * persist list of recorded artifacts in cacheDir/{@value ArtifactRecorder#ARTIFACT_LIST_FILE}
-     * @throws IOException
-     */
-    public void writeCacheManifest() throws IOException {
-        final StringBuilder sb = new StringBuilder();
-        for (Map.Entry<String, Path> entry : cachedArtifacts.entrySet()) {
-            final String hash = HashUtils.hashFile(entry.getValue());
-            final Path relativePath = stagedDir.relativize(entry.getValue());
-            final String universalPath = relativePath.toString().replace(File.separatorChar, '/');
-            sb.append(entry.getKey()).append(SEPARATOR).append(hash).append(SEPARATOR).append(universalPath).append("\n");
-        }
-        Files.writeString(artifactList, sb.toString());
-    }
+    void writeManifest() throws IOException;
 }
