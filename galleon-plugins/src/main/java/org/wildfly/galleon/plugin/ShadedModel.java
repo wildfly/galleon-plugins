@@ -29,7 +29,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
 import java.util.jar.Attributes;
@@ -72,6 +71,7 @@ public class ShadedModel implements Utils.ArtifactResourceConsumer {
     private final boolean channelArtifactResolution;
     private final boolean requireChannel;
     private final WfInstallPlugin.ArtifactGroupResolver resolver;
+    private List<MavenArtifact> resolvedArtifacts;
     public ShadedModel(boolean requireChannel,
             Path shadedModel,
             Path tmpPath,
@@ -97,31 +97,64 @@ public class ShadedModel implements Utils.ArtifactResourceConsumer {
         this.recorder = recorder;
     }
 
-    public List<MavenArtifact> getArtifacts() throws ProvisioningException, IOException {
-        List<MavenArtifact> artifacts = new ArrayList<>();
-        Element shadedDependencies = rootElement.getFirstChildElement("shaded-dependencies",
+    /**
+     * Parses the shaded dependency coordinates without resolving or installing
+     * them.
+     *
+     * <p>Versions are populated from the merged artifact version properties.
+     * When a channel is in use and no version is defined in the properties, the
+     * returned artifact has no version (the channel would supply it at
+     * resolution time). A model without a {@code shaded-dependencies} element
+     * yields an empty list.</p>
+     */
+    public List<MavenArtifact> parseDependencyCoords() throws ProvisioningException {
+        final List<MavenArtifact> coords = new ArrayList<>();
+        final Element shadedDependencies = rootElement.getFirstChildElement("shaded-dependencies",
                 rootElement.getNamespaceURI());
-        Elements dependencies = shadedDependencies.getChildElements();
-        Map<String, MavenArtifact> map = new HashMap<>();
+        if (shadedDependencies == null) {
+            return coords;
+        }
+        final Elements dependencies = shadedDependencies.getChildElements();
         for (int i = 0; i < dependencies.size(); i++) {
-            Element e = dependencies.get(i);
-            MavenArtifact a = Utils.toArtifactCoords(mergedArtifactVersions, e.getValue(), false, channelArtifactResolution, requireChannel);
-            map.put(e.getValue(), a);
+            coords.add(Utils.toArtifactCoords(mergedArtifactVersions, dependencies.get(i).getValue(),
+                    false, channelArtifactResolution, requireChannel));
         }
-        resolver.resolve(map.values());
-        for (Entry<String, MavenArtifact> entry : map.entrySet()) {
-            MavenArtifact a = entry.getValue();
-            if (log.isVerboseEnabled()) {
-                log.verbose("Shaded model dependency: " + entry.getKey() + " resolved version " + a.getVersion());
+        return coords;
+    }
+
+    /**
+     * Parses and resolves the shaded dependency versions without installing the
+     * artifacts. Used to obtain channel-accurate versions for SBOM recording
+     * without producing the shaded jar.
+     */
+    public List<MavenArtifact> resolveDependencyCoords() throws ProvisioningException {
+        final List<MavenArtifact> coords = parseDependencyCoords();
+        resolver.resolve(coords);
+        return coords;
+    }
+
+    public List<MavenArtifact> getArtifacts() throws ProvisioningException, IOException {
+        if (resolvedArtifacts == null) {
+            final List<MavenArtifact> coords = parseDependencyCoords();
+            resolver.resolve(coords);
+            final List<MavenArtifact> resolved = new ArrayList<>();
+            for (MavenArtifact a : coords) {
+                if (log.isVerboseEnabled()) {
+                    log.verbose("Shaded model dependency: " + a.getGroupId() + ":" + a.getArtifactId()
+                            + " resolved version " + a.getVersion());
+                }
+                Path transformed = installer.installCopiedArtifact(a);
+                a.setPath(transformed);
+                resolved.add(a);
+                if (recorder.isPresent()) {
+                    recorder.get().cache(a, a.getPath());
+                }
             }
-            Path transformed = installer.installCopiedArtifact(a);
-            a.setPath(transformed);
-            artifacts.add(a);
-            if (recorder.isPresent()) {
-                recorder.get().cache(a, a.getPath());
-            }
+            // Assign only after full success so a mid-loop failure does not
+            // memoize a partial result.
+            resolvedArtifacts = resolved;
         }
-        return artifacts;
+        return resolvedArtifacts;
     }
 
     public Map<String, String> getManifestEntries() {

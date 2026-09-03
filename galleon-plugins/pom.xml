@@ -69,6 +69,10 @@
       <artifactId>jaxen</artifactId>
     </dependency>
     <dependency>
+      <groupId>dev.cyberstamp.maven.assembly.sbom</groupId>
+      <artifactId>assembly-sbom-core</artifactId>
+    </dependency>
+    <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
       <scope>test</scope>
@@ -118,6 +122,17 @@
                   <exclude>xerces:xercesImpl</exclude>
                 </excludes>
               </artifactSet>
+              <relocations>
+                <!--
+                  cyclonedx-core-java bundles com.networknt:json-schema-validator 2.x into
+                  this shaded jar; relocate it so it does not clash with the older 1.5.x
+                  required by org.wildfly.channel:channel-core.
+                -->
+                <relocation>
+                  <pattern>com.networknt</pattern>
+                  <shadedPattern>org.wildfly.galleon.plugin.shaded.com.networknt</shadedPattern>
+                </relocation>
+              </relocations>
             </configuration>
           </execution>
         </executions>

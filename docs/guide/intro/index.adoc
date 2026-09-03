@@ -94,9 +94,74 @@ A `provisioning.xml` file example:
 |jboss-bulk-resolve-artifacts
 |Boolean
 |true
-|Maven artifacts that are needed for the WildFly server installation are resolved in a bulk operation instead of 
+|Maven artifacts that are needed for the WildFly server installation are resolved in a bulk operation instead of
 being resolved individually. That speed-up the provisioning time. By default 5 threads are used to resolve the artifacts. Use `-Dmaven.artifact.threads=<number of threads>`
 to increase concurrency. Using 500+ threads has shown excellent results.
+
+|jboss-cyclonedx
+|Boolean
+|true
+|Enable generation of a CycloneDX SBOM (Software Bill of Materials) for the provisioned distribution.
+The SBOM lists all resolved artifacts as CycloneDX components with Maven coordinates, Package URLs,
+and evidence recording each artifact's location within the distribution. Enabled by default; set to
+`false` to skip SBOM generation.
+
+|jboss-cyclonedx-format
+|String (`json` or `xml`)
+|json
+|The output format for the generated CycloneDX SBOM. Only used when `jboss-cyclonedx` or `jboss-cyclonedx-only` is set to `true`.
+
+|jboss-cyclonedx-licenses
+|String (`licenses.xml`, `pom`, or `off`)
+|off
+|Controls how component license information is collected when SBOM generation is enabled.
+`off` (the default) disables license collection.
+`licenses.xml` reads the `docs/licenses/*-licenses.xml` summaries shipped by the feature
+packs; it requires no remote artifact resolution and works in `jboss-cyclonedx-only` mode.
+`pom` instead resolves declared licenses from Maven POMs (walking parent POMs), which performs remote
+resolution. Additionally, `true` maps to `licenses.xml` and `false` maps to `off`.
+
+|jboss-cyclonedx-only
+|Boolean
+|false
+|Generate a CycloneDX SBOM without provisioning the server. Implies `jboss-cyclonedx=true`.
+When enabled, the plugin walks all included packages to discover artifact references from module
+templates, CopyArtifact tasks, and shaded model dependencies, and writes the SBOM. No file copying or
+configuration generation is performed, and no artifacts are installed. When channel-based resolution
+is in effect, artifact versions are resolved from the channel so the SBOM records the versions that
+would actually be provisioned; otherwise versions come from the feature-pack version properties. The
+`jboss-cyclonedx-format` and `jboss-cyclonedx-output` options still apply. Because the SBOM is the sole
+output in this mode, a generation failure always aborts, regardless of `jboss-cyclonedx-fail-on-error`.
+
+|jboss-cyclonedx-output
+|String
+|`sbom.cdx.json` (or `sbom.cdx.xml`) in the installation root
+|A path to the file where the generated CycloneDX SBOM will be written. Only used when `jboss-cyclonedx` or `jboss-cyclonedx-only` is set to `true`.
+
+|jboss-cyclonedx-pretty-print
+|Boolean
+|false
+|Pretty-print (indent) the generated SBOM for human readability. When `false`, the SBOM is written in a
+compact form. Only used when `jboss-cyclonedx` or `jboss-cyclonedx-only` is set to `true`.
+
+|jboss-cyclonedx-schema-version
+|String (e.g. `1.6`, `1.7`)
+|1.7
+|The CycloneDX schema version to use when serializing the SBOM. Only used when `jboss-cyclonedx` or `jboss-cyclonedx-only` is set to `true`.
+
+|jboss-cyclonedx-product-cpe
+|String (CPE 2.3)
+|NONE
+|Overrides the CPE of the SBOM's main component. Normally the CPE is read from the distribution's product manifest; set this only in the exceptional case where that CPE is wrong and must be corrected, or where the distribution carries none. Only used when `jboss-cyclonedx` or `jboss-cyclonedx-only` is set to `true`.
+
+|jboss-cyclonedx-fail-on-error
+|Boolean
+|false
+|Controls what happens when SBOM generation fails during a regular provisioning run. By default (`false`)
+the failure is logged as a warning and provisioning completes without a complete SBOM, so a problem
+generating the SBOM never prevents a server from being provisioned. Set to `true` to make such a failure
+abort provisioning instead. This option has no effect in `jboss-cyclonedx-only` mode, where the SBOM is
+the sole output and failures always abort.
 
 |jboss-dump-config-scripts
 |String
@@ -142,4 +207,207 @@ To not reset a WildFly specific system property, add the property name prefixed 
 |NONE
 |A path to a directory where to cache the resolved Maven artifacts that are not part of the server installation (feature-packs, Galleon plugins, ...).
 NOTE: This option is specific to the usage of the link:https://github.com/wildfly-extras/prospero[prospero] provisioning tool.
-|=== 
+|===
+
+#### CycloneDX SBOM Generation
+
+The WildFly Galleon plugin can generate a https://cyclonedx.org/[CycloneDX] Software Bill of Materials (SBOM)
+for the provisioned distribution. The SBOM lists all resolved artifacts as CycloneDX components with Maven
+coordinates, Package URLs (purl), declared licenses, and — during a full provision — evidence recording where
+each artifact resides in the distribution.
+
+##### Options at a glance
+
+[cols="1,3"]
+|===
+|Option |Purpose
+
+|`jboss-cyclonedx`
+|Enable SBOM generation during provisioning (enabled by default; set to `false` to disable).
+
+|`jboss-cyclonedx-only`
+|Generate the SBOM without provisioning the server (implies `jboss-cyclonedx=true`).
+
+|`jboss-cyclonedx-fail-on-error`
+|Whether an SBOM generation failure aborts provisioning (default `false`; always fatal in `-only` mode).
+
+|`jboss-cyclonedx-format`
+|Output format: `json` (default) or `xml`.
+
+|`jboss-cyclonedx-output`
+|Path to write the SBOM to.
+
+|`jboss-cyclonedx-licenses`
+|License source: `off` (default), `licenses.xml`, or `pom`.
+
+|`jboss-cyclonedx-pretty-print`
+|Indent the SBOM for readability.
+
+|`jboss-cyclonedx-schema-version`
+|CycloneDX schema version, defaults to 1.7.
+
+|`jboss-cyclonedx-product-cpe`
+|Override the main component CPE (exceptional cases only; see below).
+|===
+
+See the options table above for full descriptions, types, and defaults.
+
+##### Generation modes
+
+* **During provisioning:** SBOM generation is enabled by default; it runs alongside the server installation.
+The SBOM includes `occurrences` evidence recording each artifact's file location(s) within the distribution.
+Set `jboss-cyclonedx=false` to disable it.
+
+* **SBOM-only (no provisioning):** Set `jboss-cyclonedx-only=true` to generate the SBOM without building
+the server. This mode is significantly faster as it skips file copying and configuration generation and
+installs no artifacts. Because no files are installed, the SBOM does not include file-location evidence.
+When channel-based resolution is in effect, artifact versions are still resolved from the channel so the
+recorded versions match what a full provision would install.
+
+##### Failure handling
+
+By default, a failure while generating the SBOM during a regular provisioning run is logged as a warning
+and provisioning completes without a complete SBOM — an SBOM problem never blocks a server from being
+provisioned. Set `jboss-cyclonedx-fail-on-error=true` to make such a failure abort provisioning instead.
+In `jboss-cyclonedx-only` mode the SBOM is the only output, so a generation failure always aborts
+regardless of this option.
+
+##### Main component (the distribution)
+
+The SBOM's main component (`metadata.component`) represents the provisioned WildFly or JBoss EAP distribution
+itself, derived from the distribution's own product branding. WildFly/EAP feature packs contribute a
+product-conf artifact (artifactId ending `-product-conf`) whose manifest carries the release information;
+the plugin reads it in both provisioning and SBOM-only modes. The main component is populated as follows:
+
+* **name / version** from `JBoss-Product-Release-Name` / `JBoss-Product-Release-Version`
+(for example `JBoss EAP` / `8.1 Update 7.1`, or `WildFly` / `40.0.0.Final`).
+* **purl / bom-ref** a synthetic `pkg:generic` identity built from the name and version
+(for example `pkg:generic/jboss-eap@8.1-update-7.1`) — a distribution is not itself a Maven artifact.
+* **publisher** from `Implementation-Vendor`.
+* **cpe** from the manifest's `JBoss-Product-CPE` entry, when present. This can be overridden with
+the `jboss-cyclonedx-product-cpe` option for the exceptional case where the manifest CPE is wrong, or supplied
+where the distribution carries none.
+
+If no product-conf artifact is present — for example JBoss EAP 7, which ships the product identity as a plain
+module rather than a Maven artifact — the plugin falls back, best effort, to the provisioned product module
+manifest at `modules/system/layers/base/org/jboss/as/product/<slot>/dir/META-INF/MANIFEST.MF`, reading the
+same `JBoss-Product-Release-Name` / `-Version` entries. Because this reads an installed file, it applies only
+to a full provision; in SBOM-only mode (no files installed) EAP 7 yields no product branding. That manifest
+carries only name and version, so use `jboss-cyclonedx-product-cpe` to add a CPE.
+
+If neither source provides branding, the main component falls back to a generic `wildfly` identity.
+
+###### Where the product configuration comes from
+
+The branding is not a hand-configured value; it is read from the same product-conf artifact the running
+server uses to report its identity. The chain is:
+
+. A WildFly/EAP distribution selects a product *slot* in `bin/product.conf` (typically `slot=main`).
+. The corresponding `org.jboss.as.product/<slot>` JBoss Modules module supplies the product identity. Its
+`module.xml` does not embed the identity directly; instead it references a Maven artifact, for example:
++
+```
+<module name="org.jboss.as.product">
+    <resources>
+        <resource-root path="."/>
+        <artifact name="${org.jboss.eap:wildfly-ee-feature-pack-product-conf}"/>
+    </resources>
+</module>
+```
+. That referenced artifact — whose artifactId ends in `-product-conf` — carries the branding in its
+`META-INF/MANIFEST.MF` (`JBoss-Product-Release-Name`, `-Version`, `Implementation-Vendor`,
+and optionally `JBoss-Product-CPE`).
+
+Because the product-conf artifact is a normal module dependency, it is recorded during provisioning **and**
+in SBOM-only mode (where no files are installed but module templates are still walked). The plugin therefore
+derives the main component by scanning the recorded artifacts rather than the installed filesystem — which is
+why it works identically in both modes.
+
+**Selection logic.** Among the recorded artifacts, the plugin picks the one whose artifactId ends with
+`-product-conf` and that is a plain JAR with no classifier, then reads its manifest. This deliberately
+excludes the sibling *version-marker* artifact of the same name that some feature packs publish with a
+`version` classifier and `txt` type. In a distribution there is exactly one such JAR:
+
+* EAP: `org.jboss.eap:wildfly-ee-feature-pack-product-conf` → `JBoss EAP` / `8.1 Update 7.1`.
+* Community WildFly: `org.wildfly:wildfly-feature-pack-product-conf` (or the `-ee-` variant) → `WildFly` / the release version.
+
+If the manifest lacks `JBoss-Product-Release-Name` or `-Version`, or no matching artifact is present, the
+plugin falls back to the provisioned product module manifest described under _Main component_ above; failing
+that — or in SBOM-only mode, where that file is not installed — the generic `wildfly` fallback is used.
+
+##### License information
+
+Component licenses are collected according to `jboss-cyclonedx-licenses`:
+
+* **`licenses.xml` (default):** reads the `docs/licenses/*-licenses.xml` summaries that WildFly/EAP feature
+packs ship. This requires no remote artifact resolution and is available in SBOM-only mode (the summaries are
+read from feature-pack package content). It is the recommended source: coverage and accuracy match or exceed
+the POM path for WildFly/EAP distributions.
+* **`pom`:** resolves declared licenses from each artifact's Maven POM, walking parent POMs until a
+`<licenses>` block is found. This performs remote artifact resolution.
+* **`off`:** disables license collection.
+
+Declared license names/URLs from either source are mapped to SPDX identifiers by the shared SPDX mapper before
+being written to the SBOM. Additionally, `true` maps to `licenses.xml` and `false` maps to `off`.
+
+##### Component identity and evidence
+
+Each resolved artifact is recorded as a component with its Maven `group`/`name`/`version`, a `pkg:maven` purl
+(including `classifier`/`type` qualifiers where applicable), and a SHA-256 hash. In a full provision, an
+`evidence.occurrences` list records every path at which the artifact appears in the distribution; the same
+artifact installed in multiple locations yields multiple occurrences.
+
+##### Embedded SBOM merging
+
+If a resolved JAR contains its own CycloneDX SBOM (a `*.cdx.json` or `*.cdx.xml` file, as produced by some
+upstream libraries), that SBOM is merged into the output under the JAR's component, preserving the upstream
+component graph.
+
+##### Shaded (uber) JAR detection
+
+Artifacts assembled on the fly from multiple dependencies (shaded models) are recorded as a component with a
+`pkg:generic` identity and their constituent dependencies nested underneath. A dependency that appears only
+inside a shaded JAR is not emitted as a separate top-level component. Dependencies bundled inside a resolved
+JAR are likewise detected and attributed to that JAR.
+
+##### Bundled JavaScript library detection
+
+Artifacts with a `resources` classifier (such as the HAL Management Console `hal-console`) may contain
+bundled JavaScript libraries that are not visible as Maven dependencies. When SBOM generation is enabled,
+the plugin automatically detects these libraries by parsing JavaScript source map files (`.js.map`) inside
+the resource JAR.
+
+Detected npm packages appear as nested components under the parent Maven artifact in the SBOM, with
+`pkg:npm` Package URLs. Version information is extracted on a best-effort basis from the embedded source
+content (version assignments, banner comments). If a version cannot be determined, the component is still
+recorded without a version.
+
+This detection works in both provisioning and SBOM-only modes. In SBOM-only mode, the resource JAR is
+resolved from the Maven repository to enable source map scanning.
+
+##### Examples
+
+**Galleon provisioning.xml:**
+```
+<installation xmlns="urn:jboss:galleon:provisioning:3.0">
+    <feature-pack location="wildfly@maven(org.jboss.universe:community-universe):current"/>
+    <options>
+        <option name="jboss-cyclonedx-only" value="true"/>
+        <option name="jboss-cyclonedx-format" value="json"/>
+    </options>
+</installation>
+```
+
+**WildFly Maven plugin:**
+```
+<configuration>
+...
+ <galleon-options>
+  <jboss-cyclonedx>true</jboss-cyclonedx>
+  <jboss-cyclonedx-format>json</jboss-cyclonedx-format>
+  <jboss-cyclonedx-licenses>licenses.xml</jboss-cyclonedx-licenses>
+  <jboss-cyclonedx-pretty-print>true</jboss-cyclonedx-pretty-print>
+ </galleon-options>
+...
+</configuration>
+```
