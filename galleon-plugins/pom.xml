@@ -65,10 +65,6 @@
       </exclusions>
     </dependency>
     <dependency>
-      <groupId>jaxen</groupId>
-      <artifactId>jaxen</artifactId>
-    </dependency>
-    <dependency>
       <groupId>dev.cyberstamp.maven.assembly.sbom</groupId>
       <artifactId>assembly-sbom-core</artifactId>
     </dependency>
@@ -122,6 +118,53 @@
                   <exclude>xerces:xercesImpl</exclude>
                 </excludes>
               </artifactSet>
+              <filters>
+                <!--
+                  json-schema-validator bundles Unicode character data, JSON Schema
+                  meta-schemas and i18n message bundles that are only used when the
+                  validator loads YAML schemas or performs format assertions — none of
+                  which are triggered by cyclonedx's use of the library at provisioning
+                  time.  Excluding them saves ~460 KB uncompressed.
+                -->
+                <filter>
+                  <artifact>com.networknt:json-schema-validator</artifact>
+                  <excludes>
+                    <exclude>ucd/**</exclude>
+                    <exclude>draft/**</exclude>
+                    <exclude>draft-04/**</exclude>
+                    <exclude>draft-06/**</exclude>
+                    <exclude>draft-07/**</exclude>
+                    <exclude>jsv-messages*.properties</exclude>
+                    <exclude>leap_second_dates.csv</exclude>
+                    <exclude>license-mapping.json</exclude>
+                  </excludes>
+                </filter>
+                <!--
+                  cyclonedx-core-java bundles CycloneDX Protobuf schema descriptors
+                  (bom-*.proto) that are never loaded at runtime — no class references
+                  them and cyclonedx-core-java has no protobuf dependency.
+                  Excluding them saves ~500 KB uncompressed.
+                -->
+                <filter>
+                  <artifact>org.cyclonedx:cyclonedx-core-java</artifact>
+                  <excludes>
+                    <exclude>bom-*.proto</exclude>
+                  </excludes>
+                </filter>
+                <!--
+                  cyclonedx-core-java bundles full SPDX license texts (licenses/*.txt,
+                  812 files).  These are only read by LicenseResolver when the caller
+                  explicitly sets isTextIncluded=true; the galleon plugin never does
+                  this.  licenses/licenses.json (the SPDX catalogue used for ID
+                  mapping) is kept.  Excluding the .txt files saves ~6.8 MB uncompressed.
+                -->
+                <filter>
+                  <artifact>org.cyclonedx:cyclonedx-core-java</artifact>
+                  <excludes>
+                    <exclude>licenses/*.txt</exclude>
+                  </excludes>
+                </filter>
+              </filters>
               <relocations>
                 <!--
                   cyclonedx-core-java bundles com.networknt:json-schema-validator 2.x into
