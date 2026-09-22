@@ -373,7 +373,7 @@ public class WfFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
                                 IoUtils.copy(binPath, binStandalonePkgDir.resolve(fileName));
                             } else if(fileName.startsWith(WfConstants.DOMAIN)) {
                                 IoUtils.copy(binPath, binDomainPkgDir.resolve(fileName));
-                            } else if(fileName.startsWith("common")) {
+                            } else if(fileName.startsWith("common") || fileName.equals("jdk.serialFilter")) {
                                 IoUtils.copy(binPath, binCommonPkgDir.resolve(fileName));
                             } else if(fileName.startsWith("appclient")) {
                                 IoUtils.copy(binPath, binAppClientPkgDir.resolve(fileName));
