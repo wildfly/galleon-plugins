@@ -42,19 +42,33 @@ class SimpleArtifactInstaller extends AbstractArtifactInstaller {
         this.artifactRecorder = artifactRecorder;
     }
 
+    private static final String RESOURCES_CLASSIFIER = "resources";
+
     @Override
     String installArtifactFat(MavenArtifact artifact, Path targetDir) throws IOException,
             MavenUniverseException, ProvisioningException {
+        final Path targetPath = targetDir.resolve(artifact.getArtifactFileName());
         if (artifactRecorder.isPresent()) {
-            artifactRecorder.get().record(artifact, targetDir.resolve(artifact.getArtifactFileName()));
+            if (RESOURCES_CLASSIFIER.equals(artifact.getClassifier())) {
+                artifactRecorder.get().recordResourceJar(artifact, targetPath, artifact.getPath());
+            } else {
+                artifactRecorder.get().record(artifact, targetPath);
+            }
         }
-        Files.copy(artifact.getPath(), targetDir.resolve(artifact.getArtifactFileName()), StandardCopyOption.REPLACE_EXISTING);
+        Files.copy(artifact.getPath(), targetPath, StandardCopyOption.REPLACE_EXISTING);
         return artifact.getArtifactFileName();
     }
 
     @Override
     String installArtifactThin(MavenArtifact artifact) throws IOException,
             MavenUniverseException, ProvisioningException {
+        if (artifactRecorder.isPresent()) {
+            if (RESOURCES_CLASSIFIER.equals(artifact.getClassifier())) {
+                artifactRecorder.get().recordResourceJar(artifact, null, artifact.getPath());
+            } else {
+                artifactRecorder.get().record(artifact, null);
+            }
+        }
         installInGeneratedRepo(artifact, artifact.getVersion(), artifact.getPath());
         return artifact.getVersion();
     }
