@@ -366,7 +366,7 @@ public class WfFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
         }
     }
 
-    private static void ensureLineEndings(Path file) throws MojoExecutionException {
+    static void ensureLineEndings(Path file) throws MojoExecutionException {
         try {
             Files.walkFileTree(file, new SimpleFileVisitor<Path>() {
                 @Override

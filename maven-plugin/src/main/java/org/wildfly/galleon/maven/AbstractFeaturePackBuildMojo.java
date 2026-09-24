@@ -106,9 +106,11 @@ import org.wildfly.channel.ChannelManifest;
 import org.wildfly.channel.ChannelManifestMapper;
 import org.wildfly.channel.ManifestRequirement;
 import org.wildfly.channel.MavenCoordinate;
+import static org.wildfly.galleon.maven.WfFeaturePackBuildMojo.ensureLineEndings;
 import org.wildfly.galleon.maven.build.tasks.ResourcesTask;
 import org.wildfly.galleon.plugin.ArtifactCoords;
 import org.wildfly.galleon.plugin.WfConstants;
+import static org.wildfly.galleon.plugin.WfConstants.CONTENT;
 import org.wildfly.galleon.plugin.WildFlyChannelResolutionMode;
 import org.wildfly.galleon.plugin.doc.generator.DocGenerator;
 import org.wildfly.galleon.plugin.doc.generator.SimpleLog;
@@ -781,6 +783,10 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                     Util.mkdirs(packageDir);
                 }
                 IoUtils.copy(configPackage, packageDir);
+                Path contentDir = packageDir.resolve(CONTENT);
+                if (Files.exists(contentDir)) {
+                    ensureLineEndings(contentDir);
+                }
             }
         } catch (IOException e) {
             throw new MojoExecutionException("Failed to process config packages", e);
