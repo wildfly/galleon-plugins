@@ -185,6 +185,10 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private static final ProvisioningOption OPTION_CYCLONEDX_PRETTY_PRINT = ProvisioningOption.builder("jboss-cyclonedx-pretty-print")
             .setBooleanValueSet()
             .build();
+    private static final ProvisioningOption OPTION_CYCLONEDX_COMPRESS = ProvisioningOption.builder("jboss-cyclonedx-compress")
+            .setBooleanValueSet()
+            .setDefaultValue(Constants.TRUE)
+            .build();
     private static final ProvisioningOption OPTION_CYCLONEDX_SCHEMA_VERSION = ProvisioningOption.builder("jboss-cyclonedx-schema-version")
             .setDefaultValue("1.7")
             .build();
@@ -257,6 +261,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                              OPTION_CYCLONEDX, OPTION_CYCLONEDX_FORMAT,
                              OPTION_CYCLONEDX_OUTPUT, OPTION_CYCLONEDX_ONLY,
                              OPTION_CYCLONEDX_LICENSES, OPTION_CYCLONEDX_PRETTY_PRINT,
+                             OPTION_CYCLONEDX_COMPRESS,
                              OPTION_CYCLONEDX_SCHEMA_VERSION, OPTION_CYCLONEDX_PRODUCT_CPE,
                              OPTION_CYCLONEDX_FAIL_ON_ERROR);
     }
@@ -381,11 +386,12 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         final Path outputPath = resolveOutputPath(runtime, format);
         licenseMode = resolveLicenseMode(runtime);
         final boolean prettyPrint = getBooleanOption(OPTION_CYCLONEDX_PRETTY_PRINT);
+        final boolean compress = getBooleanOption(OPTION_CYCLONEDX_COMPRESS);
         final String schemaVersion = runtime.getOptionValue(OPTION_CYCLONEDX_SCHEMA_VERSION);
         failOnSbomError = getBooleanOption(OPTION_CYCLONEDX_FAIL_ON_ERROR);
-        log.verbose("CycloneDX SBOM generation enabled, format=%s, output=%s, licenses=%s, prettyPrint=%s, schemaVersion=%s, failOnError=%s",
-                format, outputPath, licenseMode, prettyPrint, schemaVersion != null ? schemaVersion : "default", failOnSbomError);
-        final SbomArtifactRecorder recorder = new SbomArtifactRecorder(runtime.getStagedDir(), outputPath, format, prettyPrint);
+        log.verbose("CycloneDX SBOM generation enabled, format=%s, output=%s, licenses=%s, prettyPrint=%s, compress=%s, schemaVersion=%s, failOnError=%s",
+                format, outputPath, licenseMode, prettyPrint, compress, schemaVersion != null ? schemaVersion : "default", failOnSbomError);
+        final SbomArtifactRecorder recorder = new SbomArtifactRecorder(runtime.getStagedDir(), outputPath, format, prettyPrint, compress);
         try {
             recorder.setSchemaVersion(schemaVersion);
         } catch (IllegalArgumentException e) {

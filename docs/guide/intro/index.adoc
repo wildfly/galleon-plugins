@@ -148,6 +148,11 @@ compact form. Only used when `jboss-cyclonedx` or `jboss-cyclonedx-only` is set 
 |1.7
 |The CycloneDX schema version to use when serializing the SBOM. Only used when `jboss-cyclonedx` or `jboss-cyclonedx-only` is set to `true`.
 
+|jboss-cyclonedx-compress
+|Boolean
+|true
+|Compress the generated CycloneDX SBOM into a `.zip` archive. The zip file will be named by appending `.zip` to the chosen output file name (e.g. `sbom.cdx.json.zip`), and the uncompressed SBOM file will not be kept. Enabled by default; set to `false` to keep the uncompressed SBOM. Only used when `jboss-cyclonedx` or `jboss-cyclonedx-only` is set to `true`.
+
 |jboss-cyclonedx-product-cpe
 |String (CPE 2.3)
 |NONE
@@ -244,6 +249,9 @@ each artifact resides in the distribution.
 
 |`jboss-cyclonedx-schema-version`
 |CycloneDX schema version; defaults to 1.7.
+
+|`jboss-cyclonedx-compress`
+|Compress the generated SBOM into a `.zip` archive (appends `.zip` to the output file name).
 
 |`jboss-cyclonedx-product-cpe`
 |Override the main component CPE (exceptional cases only; see below).
