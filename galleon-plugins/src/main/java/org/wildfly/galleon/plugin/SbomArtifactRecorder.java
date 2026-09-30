@@ -56,6 +56,7 @@ import org.cyclonedx.exception.GeneratorException;
 import org.cyclonedx.model.Bom;
 import org.jboss.galleon.universe.maven.MavenArtifact;
 import org.jboss.galleon.universe.maven.MavenUniverseException;
+import org.jboss.galleon.util.ZipUtils;
 
 /**
  * An {@link ArtifactRecorder} that produces a CycloneDX SBOM backed by the
@@ -93,6 +94,7 @@ public class SbomArtifactRecorder implements ArtifactRecorder {
     private final Path outputPath;
     private final String format;
     private final boolean prettyPrint;
+    private final boolean compress;
     private LicenseSource licenseSource;
     private Version schemaVersion;
     private String productCpe;
@@ -106,11 +108,12 @@ public class SbomArtifactRecorder implements ArtifactRecorder {
     /** Resolved JAR paths for embedded-SBOM detection. */
     private final Map<ArtifactCoords, Path> resolvedJarPaths = new LinkedHashMap<>();
 
-    public SbomArtifactRecorder(Path stagedDir, Path outputPath, String format, boolean prettyPrint) {
+    public SbomArtifactRecorder(Path stagedDir, Path outputPath, String format, boolean prettyPrint, boolean compress) {
         this.stagedDir = stagedDir;
         this.outputPath = outputPath;
         this.format = format;
         this.prettyPrint = prettyPrint;
+        this.compress = compress;
     }
 
     /**
@@ -202,6 +205,14 @@ public class SbomArtifactRecorder implements ArtifactRecorder {
                 Files.createDirectories(outputPath.getParent());
             }
             BomWriter.write(bom, outputPath, format, prettyPrint, schemaVersion);
+            if (compress) {
+                final Path zipPath = outputPath.resolveSibling(outputPath.getFileName().toString() + ".zip");
+                try {
+                    ZipUtils.zip(outputPath, zipPath);
+                } finally {
+                    Files.deleteIfExists(outputPath);
+                }
+            }
         } catch (GeneratorException e) {
             throw new IOException("Failed to serialize CycloneDX BOM", e);
         }
