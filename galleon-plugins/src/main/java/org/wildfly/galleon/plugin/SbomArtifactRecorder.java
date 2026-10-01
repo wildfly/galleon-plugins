@@ -19,6 +19,7 @@ package org.wildfly.galleon.plugin;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
@@ -37,6 +38,7 @@ import java.util.jar.Attributes;
 import java.util.jar.JarFile;
 import java.util.jar.Manifest;
 import java.util.stream.Stream;
+import java.util.zip.GZIPOutputStream;
 
 import dev.cyberstamp.maven.assembly.sbom.AssemblyComponent;
 import dev.cyberstamp.maven.assembly.sbom.AssemblyComponents;
@@ -56,7 +58,6 @@ import org.cyclonedx.exception.GeneratorException;
 import org.cyclonedx.model.Bom;
 import org.jboss.galleon.universe.maven.MavenArtifact;
 import org.jboss.galleon.universe.maven.MavenUniverseException;
-import org.jboss.galleon.util.ZipUtils;
 
 /**
  * An {@link ArtifactRecorder} that produces a CycloneDX SBOM backed by the
@@ -206,9 +207,12 @@ public class SbomArtifactRecorder implements ArtifactRecorder {
             }
             BomWriter.write(bom, outputPath, format, prettyPrint, schemaVersion);
             if (compress) {
-                final Path zipPath = outputPath.resolveSibling(outputPath.getFileName().toString() + ".zip");
+                final Path gzPath = outputPath.resolveSibling(outputPath.getFileName().toString() + ".gz");
                 try {
-                    ZipUtils.zip(outputPath, zipPath);
+                    try (InputStream in = Files.newInputStream(outputPath);
+                         OutputStream out = new GZIPOutputStream(Files.newOutputStream(gzPath))) {
+                        in.transferTo(out);
+                    }
                 } finally {
                     Files.deleteIfExists(outputPath);
                 }
