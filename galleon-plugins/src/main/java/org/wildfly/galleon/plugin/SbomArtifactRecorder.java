@@ -56,8 +56,11 @@ import dev.cyberstamp.maven.assembly.sbom.SchemaVersions;
 import org.cyclonedx.Version;
 import org.cyclonedx.exception.GeneratorException;
 import org.cyclonedx.model.Bom;
+import org.jboss.galleon.MessageWriter;
 import org.jboss.galleon.universe.maven.MavenArtifact;
 import org.jboss.galleon.universe.maven.MavenUniverseException;
+
+import static org.wildfly.galleon.plugin.WfInstallPlugin.SKIP_IN_SBOM;
 
 /**
  * An {@link ArtifactRecorder} that produces a CycloneDX SBOM backed by the
@@ -108,13 +111,14 @@ public class SbomArtifactRecorder implements ArtifactRecorder {
     private final Set<ArtifactCoords> shadedDependencyCoords = new HashSet<>();
     /** Resolved JAR paths for embedded-SBOM detection. */
     private final Map<ArtifactCoords, Path> resolvedJarPaths = new LinkedHashMap<>();
-
-    public SbomArtifactRecorder(Path stagedDir, Path outputPath, String format, boolean prettyPrint, boolean compress) {
+    private final MessageWriter log;
+    public SbomArtifactRecorder(Path stagedDir, Path outputPath, String format, boolean prettyPrint, boolean compress, MessageWriter log) {
         this.stagedDir = stagedDir;
         this.outputPath = outputPath;
         this.format = format;
         this.prettyPrint = prettyPrint;
         this.compress = compress;
+        this.log = log;
     }
 
     /**
@@ -153,6 +157,10 @@ public class SbomArtifactRecorder implements ArtifactRecorder {
 
     @Override
     public void record(MavenArtifact artifact, Path target) throws IOException {
+        if (!toRecord(artifact)) {
+            log.verbose("Artifact " + artifact + " is not recorded in the SBOM.");
+            return;
+        }
         final ArtifactCoords coords = toCoords(artifact);
         recorded.add(new RecordedArtifact(coords, relativize(target),
                 computeHash(resolvedPath(artifact)), true));
@@ -167,6 +175,10 @@ public class SbomArtifactRecorder implements ArtifactRecorder {
 
     @Override
     public void cache(MavenArtifact artifact, Path jarSrc) throws MavenUniverseException, IOException {
+        if (!toRecord(artifact)) {
+            log.verbose("Artifact " + artifact + " is not recorded in the SBOM, not provided by the feature-pack.");
+            return;
+        }
         final ArtifactCoords coords = toCoords(artifact);
         // cache() is a shaded-model resolution path; it does NOT confer
         // independence, so the artifact is emitted top-level only if also
@@ -552,5 +564,10 @@ public class SbomArtifactRecorder implements ArtifactRecorder {
     private static String resolveToolVersion() {
         final String version = WfInstallPlugin.class.getPackage().getImplementationVersion();
         return version != null ? version : "dev";
+    }
+
+    private static boolean toRecord(MavenArtifact artifact) {
+        String skip = artifact.getMetadata().get(SKIP_IN_SBOM);
+        return skip == null || skip.equals("false");
     }
 }
