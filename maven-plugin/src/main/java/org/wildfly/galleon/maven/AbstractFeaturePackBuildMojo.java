@@ -273,6 +273,10 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             property = "wildfly.feature.pack.skip-doc")
     protected boolean skipDoc;
 
+    @Parameter(alias = "include-incomplete-coords-artifacts-in-sbom", required = false,
+            property = "wildfly.sbom.include-incomplete-coords-artifacts-in-sbom", defaultValue = "false")
+    protected Boolean includeIncompleCoordsArtifactsInSbom;
+
     private MavenProjectArtifactVersions artifactVersions;
 
     private Map<String, FeaturePackDescription> fpDependencies = Collections.emptyMap();
@@ -456,6 +460,12 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             getWildFlyChannelProperties().store(out, "WildFly channel properties");
         } catch (IOException e) {
             throw new MojoExecutionException("Failed to store WildFly channel properties", e);
+        }
+        // WildFly sbom configuration
+        try (OutputStream out = Files.newOutputStream(resourcesWildFly.resolve(WfConstants.WILDFLY_SBOM_PROPERTIES))) {
+            getWildFlySBOMProperties().store(out, "WildFly SBOM properties");
+        } catch (IOException e) {
+            throw new MojoExecutionException("Failed to store WildFly SBOM properties", e);
         }
         // Copy resources from src.
         try {
@@ -1265,5 +1275,12 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             debug("Attaching feature-pack documentation %s as a project artifact", docZipArchive);
             projectHelper.attachArtifact(project, ZIP, DOC_CLASSIFIER, docZipArchive.toFile());
         }
+    }
+    private Properties getWildFlySBOMProperties() throws MojoExecutionException {
+        final Properties properties = new Properties();
+        if (includeIncompleCoordsArtifactsInSbom) {
+            properties.put(WfConstants.WILDFLY_SBOM_INCLUDE_INCOMPLETE_COORDS_ARTIFACTS, includeIncompleCoordsArtifactsInSbom.toString());
+        }
+        return properties;
     }
 }

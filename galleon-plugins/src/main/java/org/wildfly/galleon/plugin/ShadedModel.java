@@ -72,6 +72,8 @@ public class ShadedModel implements Utils.ArtifactResourceConsumer {
     private final boolean requireChannel;
     private final WfInstallPlugin.ArtifactGroupResolver resolver;
     private List<MavenArtifact> resolvedArtifacts;
+    private final boolean includeIncompleteCoords;
+
     public ShadedModel(boolean requireChannel,
             Path shadedModel,
             Path tmpPath,
@@ -80,6 +82,18 @@ public class ShadedModel implements Utils.ArtifactResourceConsumer {
             Installer installer,
             boolean channelArtifactResolution,
             Optional<ArtifactRecorder> recorder) throws IOException, ProvisioningDescriptionException {
+        this(requireChannel, shadedModel, tmpPath, resolver, log, mergedArtifactVersions, installer, channelArtifactResolution, recorder, false);
+    }
+
+    public ShadedModel(boolean requireChannel,
+            Path shadedModel,
+            Path tmpPath,
+            WfInstallPlugin.ArtifactGroupResolver resolver,
+            MessageWriter log, Map<String, String> mergedArtifactVersions,
+            Installer installer,
+            boolean channelArtifactResolution,
+            Optional<ArtifactRecorder> recorder,
+            boolean includeIncompleteCoords) throws IOException, ProvisioningDescriptionException {
         this.requireChannel = requireChannel;
         this.tmpPath = tmpPath;
         this.resolver = resolver;
@@ -95,6 +109,7 @@ public class ShadedModel implements Utils.ArtifactResourceConsumer {
         rootElement = document.getRootElement();
         this.channelArtifactResolution = channelArtifactResolution;
         this.recorder = recorder;
+        this.includeIncompleteCoords = includeIncompleteCoords;
     }
 
     /**
@@ -117,7 +132,7 @@ public class ShadedModel implements Utils.ArtifactResourceConsumer {
         final Elements dependencies = shadedDependencies.getChildElements();
         for (int i = 0; i < dependencies.size(); i++) {
             coords.add(Utils.toArtifactCoords(mergedArtifactVersions, dependencies.get(i).getValue(),
-                    false, channelArtifactResolution, requireChannel));
+                    false, channelArtifactResolution, requireChannel, includeIncompleteCoords));
         }
         return coords;
     }
