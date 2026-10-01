@@ -1,5 +1,6 @@
 package org.wildfly.galleon.plugin;
 
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -7,6 +8,7 @@ import java.util.List;
 import java.util.jar.Attributes;
 import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
+import java.util.zip.GZIPInputStream;
 
 import dev.cyberstamp.maven.assembly.sbom.SchemaVersions;
 import org.cyclonedx.model.Bom;
@@ -16,7 +18,6 @@ import org.cyclonedx.parsers.JsonParser;
 import org.cyclonedx.parsers.XmlParser;
 import org.jboss.galleon.universe.maven.MavenArtifact;
 import org.jboss.galleon.util.IoUtils;
-import org.jboss.galleon.util.ZipUtils;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -759,7 +760,7 @@ public class SbomArtifactRecorderTestCase {
     @Test
     public void generateCompressedJsonSbom() throws Exception {
         final Path outputFile = installBase.resolve("sbom.cdx.json");
-        final Path zipFile = installBase.resolve("sbom.cdx.json.zip");
+        final Path gzFile = installBase.resolve("sbom.cdx.json.gz");
         final SbomArtifactRecorder recorder = createRecorder(outputFile, "json", true);
 
         final MavenArtifact artifact = mavenArtifact("org.wildfly.core", "wildfly-launcher", "31.0.0.Final");
@@ -769,14 +770,15 @@ public class SbomArtifactRecorderTestCase {
         recorder.writeManifest();
 
         assertFalse("Uncompressed SBOM file should not exist", Files.exists(outputFile));
-        assertTrue("Compressed SBOM zip file should exist", Files.exists(zipFile));
+        assertTrue("Compressed SBOM gz file should exist", Files.exists(gzFile));
 
         final Path unzippedDir = temp.newFolder("unzipped").toPath();
         try {
-            ZipUtils.unzip(zipFile, unzippedDir);
-            final Path unzippedSbom = unzippedDir.resolve("sbom.cdx.json");
-            assertTrue("Unzipped sbom.cdx.json should exist", Files.exists(unzippedSbom));
-            final Bom bom = new JsonParser().parse(unzippedSbom.toFile());
+            final Path decompressedSbom = unzippedDir.resolve("sbom.cdx.json");
+            try (InputStream in = new GZIPInputStream(Files.newInputStream(gzFile)); OutputStream out = Files.newOutputStream(decompressedSbom)) {
+                in.transferTo(out);
+            }
+            final Bom bom = new JsonParser().parse(decompressedSbom.toFile());
             assertNotNull("BOM should have components", bom.getComponents());
             final Component component = findComponent(bom, "wildfly-launcher");
             assertNotNull(component);
@@ -789,7 +791,7 @@ public class SbomArtifactRecorderTestCase {
     @Test
     public void generateUncompressedJsonSbomWhenDisabled() throws Exception {
         final Path outputFile = installBase.resolve("sbom.cdx.json");
-        final Path zipFile = installBase.resolve("sbom.cdx.json.zip");
+        final Path gzFile = installBase.resolve("sbom.cdx.json.gz");
         final SbomArtifactRecorder recorder = createRecorder(outputFile, "json");
 
         final MavenArtifact artifact = mavenArtifact("org.wildfly.core", "wildfly-launcher", "31.0.0.Final");
@@ -799,7 +801,7 @@ public class SbomArtifactRecorderTestCase {
         recorder.writeManifest();
 
         assertTrue("Uncompressed SBOM file should exist", Files.exists(outputFile));
-        assertFalse("Compressed SBOM zip file should not exist", Files.exists(zipFile));
+        assertFalse("Compressed SBOM gz file should not exist", Files.exists(gzFile));
     }
 
     private Path createStagedProductManifest(String slot, String name, String version, String cpe) throws Exception {
