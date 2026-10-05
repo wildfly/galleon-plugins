@@ -50,6 +50,7 @@ import org.jboss.galleon.util.LayoutUtils;
 import org.jboss.galleon.util.StringUtils;
 import org.wildfly.galleon.plugin.config.CopyArtifact;
 
+import static org.wildfly.galleon.plugin.WfInstallPlugin.SKIP_IN_SBOM;
 /**
  *
  * @author Alexey Loubyansky
@@ -105,12 +106,17 @@ public class Utils {
 
     public static MavenArtifact toArtifactCoords(Map<String, String> versionProps, String str, boolean optional,
             boolean channelArtifactResolution, boolean requireChannel) throws ProvisioningException {
+        return toArtifactCoords(versionProps, str, optional, channelArtifactResolution, requireChannel, false);
+    }
+
+    public static MavenArtifact toArtifactCoords(Map<String, String> versionProps, String str, boolean optional,
+            boolean channelArtifactResolution, boolean requireChannel, boolean includeIncompleteCoords) throws ProvisioningException {
         final MavenArtifact artifact = new MavenArtifact();
         if (requireChannel) {
             artifact.addMetadata(WfInstallPlugin.REQUIRES_CHANNEL_FOR_ARTIFACT_RESOLUTION_PROPERTY, "true");
         }
         artifact.setExtension(MavenArtifact.EXT_JAR);
-        resolveArtifact(str, artifact, channelArtifactResolution);
+        resolveArtifact(str, artifact, channelArtifactResolution, includeIncompleteCoords);
         if(artifact.getGroupId() == null && artifact.getArtifactId() == null) {
             throw new IllegalArgumentException("Unexpected artifact coordinates format: " + str);
         }
@@ -132,7 +138,7 @@ public class Utils {
                 }
             }
             MavenArtifact resolvedArtifact = new MavenArtifact();
-            resolveArtifact(resolvedStr, resolvedArtifact, channelArtifactResolution);
+            resolveArtifact(resolvedStr, resolvedArtifact, channelArtifactResolution, includeIncompleteCoords);
             if (!resolvedArtifact.hasVersion() && !channelArtifactResolution) {
                 throw new ProvisioningException("Failed to resolve the version for artifact: " + resolvedStr);
             } else {
@@ -145,7 +151,8 @@ public class Utils {
     /**
      * Resolve an expression composed of ${a,b,c:defaultValue} Where a, b and c can be System properties or env.XXX env variables.
      */
-    private static String resolveExpression(String coords, String str, boolean channelArtifactResolution, boolean isVersion) throws ProvisioningException {
+    private static String resolveExpression(String coords, String str, boolean channelArtifactResolution,
+            boolean isVersion, MavenArtifact artifact, boolean includeIncompleteCoords) throws ProvisioningException {
         if (str == null) {
             return str;
         }
@@ -159,6 +166,10 @@ public class Utils {
                 defaultValue = expressions.substring(defValueSeparator+1, expressions.length());
                 defaultValue = defaultValue.trim();
                 expressions = expressions.substring(0, defValueSeparator);
+            }
+            // Artifact with not fully defined coordinates
+            if (defaultValue == null && !includeIncompleteCoords) {
+                artifact.addMetadata(SKIP_IN_SBOM, "true");
             }
             String[] split = expressions.split(",", -1);
             String value;
@@ -203,6 +214,10 @@ public class Utils {
     }
 
     static void resolveArtifact(String coords, MavenArtifact artifact, boolean channelArtifactResolution) throws ProvisioningException {
+        resolveArtifact(coords, artifact, channelArtifactResolution, false);
+    }
+
+    static void resolveArtifact(String coords, MavenArtifact artifact, boolean channelArtifactResolution, boolean includeIncompleteCoords) throws ProvisioningException {
         if (coords == null) {
             return;
         }
@@ -230,7 +245,7 @@ public class Utils {
                             throw new ProvisioningException("Invalid syntax for expression " + coords);
                         }
                         String exp = remaining.substring(0, end + 1);
-                        String resolvedExp = resolveExpression(coords, exp, channelArtifactResolution, state == COORDS_STATE.VERSION);
+                        String resolvedExp = resolveExpression(coords, exp, channelArtifactResolution, state == COORDS_STATE.VERSION, artifact, includeIncompleteCoords);
                         if (resolvedExp != null) {
                             if( currentBuilder == null) {
                                 currentBuilder = new StringBuilder();
@@ -258,7 +273,7 @@ public class Utils {
                     }
                     currentBuilder.append(c);
                 }
-            }
+        }
         }
         setState(coords, state, currentBuilder == null ? null : currentBuilder.toString(), artifact);
     }
@@ -423,7 +438,7 @@ public class Utils {
             MavenArtifact  mavenArtifact = new MavenArtifact();
             // We expect the extension.
             mavenArtifact.setExtension(null);
-            resolveArtifact(artifact, mavenArtifact, false);
+            resolveArtifact(artifact, mavenArtifact, false, false);
             StringBuilder builder = new StringBuilder();
 
             if (mavenArtifact.getGroupId() == null || mavenArtifact.getArtifactId() == null || !mavenArtifact.hasVersion() ||

@@ -22,6 +22,7 @@ import org.jboss.galleon.ProvisioningException;
 import org.jboss.galleon.universe.maven.MavenArtifact;
 import org.junit.Assert;
 import org.junit.Test;
+import static org.wildfly.galleon.plugin.WfInstallPlugin.SKIP_IN_SBOM;
 
 /**
  *
@@ -522,6 +523,10 @@ public class UtilsTestCase {
                 Assert.assertEquals(val3, artifact.getVersion());
                 Assert.assertEquals(val4, artifact.getClassifier());
                 Assert.assertEquals(val5, artifact.getExtension());
+                Assert.assertEquals("true", artifact.getMetadata().get(SKIP_IN_SBOM));
+                MavenArtifact artifact2 = new MavenArtifact();
+                Utils.resolveArtifact(val, artifact2, false, true);
+                Assert.assertFalse(artifact2.getMetadata().containsKey(SKIP_IN_SBOM));
             } finally {
                 System.clearProperty(prop1);
                 System.clearProperty(prop2);

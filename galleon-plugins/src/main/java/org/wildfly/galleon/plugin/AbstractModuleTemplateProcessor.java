@@ -47,6 +47,7 @@ abstract class AbstractModuleTemplateProcessor {
         private final Attribute attribute;
         private final ModuleTemplate template;
         private final boolean requireChannel;
+        private final boolean includeIncompleteCoords;
         ModuleArtifact(ModuleTemplate template,
                        Element element,
                        Map<String, String> versionProps,
@@ -54,6 +55,17 @@ abstract class AbstractModuleTemplateProcessor {
                        AbstractArtifactInstaller installer,
                        boolean channelArtifactResolution,
                        boolean requireChannel) {
+            this(template, element, versionProps, log, installer, channelArtifactResolution, requireChannel, false);
+        }
+
+        ModuleArtifact(ModuleTemplate template,
+                       Element element,
+                       Map<String, String> versionProps,
+                       MessageWriter log,
+                       AbstractArtifactInstaller installer,
+                       boolean channelArtifactResolution,
+                       boolean requireChannel,
+                       boolean includeIncompleteCoords) {
             this.template = template;
             this.versionProps = versionProps;
             this.log = log;
@@ -72,6 +84,7 @@ abstract class AbstractModuleTemplateProcessor {
                 coordsStr = this.versionProps.get(coordsStr);
             }
             this.requireChannel = requireChannel;
+            this.includeIncompleteCoords = includeIncompleteCoords;
         }
 
         MavenArtifact getUnresolvedArtifact() throws IOException {
@@ -79,7 +92,7 @@ abstract class AbstractModuleTemplateProcessor {
                 return null;
             }
             try {
-                return Utils.toArtifactCoords(this.versionProps, coordsStr, false, channelArtifactResolution, requireChannel);
+                return Utils.toArtifactCoords(this.versionProps, coordsStr, false, channelArtifactResolution, requireChannel, includeIncompleteCoords);
             } catch (ProvisioningException e) {
                 throw new IOException("Failed to resolve full coordinates for " + coordsStr, e);
             }
@@ -127,10 +140,10 @@ abstract class AbstractModuleTemplateProcessor {
     private final Path targetDir;
     private final boolean channelArtifactResolution;
     private final boolean requireChannel;
-
+    private final boolean includeIncompleteCoords;
     AbstractModuleTemplateProcessor(WfInstallPlugin plugin, AbstractArtifactInstaller installer, Path targetPath,
             ModuleTemplate template, Map<String, String> versionProps, boolean channelArtifactResolution,
-                       boolean requireChannel) {
+                       boolean requireChannel, boolean includeIncompleteCoords) {
         this.template = template;
         this.versionProps = versionProps;
         this.plugin = plugin;
@@ -138,6 +151,7 @@ abstract class AbstractModuleTemplateProcessor {
         this.targetDir = targetPath.getParent();
         this.channelArtifactResolution = channelArtifactResolution;
         this.requireChannel = requireChannel;
+        this.includeIncompleteCoords = includeIncompleteCoords;
     }
 
     AbstractArtifactInstaller getInstaller() {
@@ -177,7 +191,8 @@ abstract class AbstractModuleTemplateProcessor {
                 } else {
                     artifactName = exprBody;
                 }
-                final MavenArtifact artifact = Utils.toArtifactCoords(versionProps, artifactName, false, channelArtifactResolution, requireChannel);
+                final MavenArtifact artifact = Utils.toArtifactCoords(versionProps, artifactName,
+                        false, channelArtifactResolution, requireChannel, includeIncompleteCoords);
                 if (artifact != null) {
                     versionAttribute.setValue(artifact.getVersion());
                 }
@@ -192,7 +207,8 @@ abstract class AbstractModuleTemplateProcessor {
         }
         final int artifactCount = artifacts.size();
         for (int i = 0; i < artifactCount; i++) {
-            final ModuleArtifact moduleArtifact = new ModuleArtifact(template, artifacts.get(i), versionProps, getLog(), installer, channelArtifactResolution, requireChannel);
+            final ModuleArtifact moduleArtifact = new ModuleArtifact(template, artifacts.get(i), versionProps, getLog(),
+                    installer, channelArtifactResolution, requireChannel, includeIncompleteCoords);
             if (moduleArtifact.hasMavenArtifact()) {
                 Path artifactPath = moduleArtifact.getMavenArtifact().getPath();
                 processArtifact(moduleArtifact);

@@ -16,6 +16,7 @@ import org.cyclonedx.model.Component;
 import org.cyclonedx.model.component.evidence.Occurrence;
 import org.cyclonedx.parsers.JsonParser;
 import org.cyclonedx.parsers.XmlParser;
+import org.jboss.galleon.DefaultMessageWriter;
 import org.jboss.galleon.universe.maven.MavenArtifact;
 import org.jboss.galleon.util.IoUtils;
 import org.junit.Before;
@@ -28,6 +29,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+
+import static org.wildfly.galleon.plugin.WfInstallPlugin.SKIP_IN_SBOM;
 
 public class SbomArtifactRecorderTestCase {
 
@@ -804,6 +807,29 @@ public class SbomArtifactRecorderTestCase {
         assertFalse("Compressed SBOM gz file should not exist", Files.exists(gzFile));
     }
 
+    @Test
+    public void doNotRecordArtifactInSbom() throws Exception {
+        final Path outputFile = installBase.resolve("sbom.cdx.json");
+        final SbomArtifactRecorder recorder = createRecorder(outputFile, "json", false);
+
+        final MavenArtifact artifact = mavenArtifact("org.wildfly.core", "wildfly-launcher", "31.0.0.Final");
+        final MavenArtifact artifact2 = mavenArtifact("org.foo", "bar", "1.0.0.Final");
+        artifact2.addMetadata(SKIP_IN_SBOM, "true");
+        final Path target = createArtifactFile("modules/launcher/wildfly-launcher-31.0.0.Final.jar");
+        final Path target2 = createArtifactFile("modules/foo/bar-1.0.0.Final.jar");
+
+        recorder.record(artifact, target);
+        recorder.record(artifact2, target2);
+        recorder.writeManifest();
+
+        final Bom bom = new JsonParser().parse(outputFile.toFile());
+        final Component component = findComponent(bom, "wildfly-launcher");
+        assertNotNull(component);
+        assertEquals("31.0.0.Final", component.getVersion());
+        final Component component2 = findComponent(bom, "bar");
+        assertNull(component2);
+    }
+
     private Path createStagedProductManifest(String slot, String name, String version, String cpe) throws Exception {
         final Path mf = installBase.resolve(Path.of("modules", "system", "layers", "base",
                 "org", "jboss", "as", "product", slot, "dir", "META-INF", "MANIFEST.MF"));
@@ -831,11 +857,11 @@ public class SbomArtifactRecorderTestCase {
     }
 
     private SbomArtifactRecorder createRecorder(Path outputFile, String format) {
-        return new SbomArtifactRecorder(installBase, outputFile, format, false, false);
+        return new SbomArtifactRecorder(installBase, outputFile, format, false, false, new DefaultMessageWriter());
     }
 
     private SbomArtifactRecorder createRecorder(Path outputFile, String format, boolean compress) {
-        return new SbomArtifactRecorder(installBase, outputFile, format, false, compress);
+        return new SbomArtifactRecorder(installBase, outputFile, format, false, compress, new DefaultMessageWriter());
     }
 
     private Path createArtifactFile(String path) throws Exception {
