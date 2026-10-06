@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+~ Copyright The WildFly Authors
+~ SPDX-License-Identifier: Apache-2.0
+-->
+
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.wildfly.galleon-plugins</groupId>
+    <artifactId>wildfly-galleon-plugins-test-feature-packs</artifactId>
+    <version>8.1.8.Final-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>wildfly-galleon-plugins-base-feature-pack-parent</artifactId>
+
+  <name>WildFly Galleon Plugins Test Feature Pack base parent</name>
+  <packaging>pom</packaging>
+  <description>WildFly Galleon Plugins Test Feature Pack base parent</description>
+
+
+  <properties>
+    <!-- Don't deploy the testsuite modules -->
+    <maven.deploy.skip>true</maven.deploy.skip>
+  </properties>
+  <modules>
+    <module>custom-feature-pack</module>
+    <module>extra-feature-pack</module>
+    <module>feature-pack</module>
+    <module>product-conf</module>
+  </modules>
+</project>

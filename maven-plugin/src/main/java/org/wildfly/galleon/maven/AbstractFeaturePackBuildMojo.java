@@ -108,6 +108,7 @@ import org.wildfly.channel.ManifestRequirement;
 import org.wildfly.channel.MavenCoordinate;
 import org.wildfly.galleon.maven.build.tasks.ResourcesTask;
 import org.wildfly.galleon.plugin.ArtifactCoords;
+import org.wildfly.galleon.plugin.CpeResolutionMode;
 import org.wildfly.galleon.plugin.WfConstants;
 import org.wildfly.galleon.plugin.WildFlyChannelResolutionMode;
 import org.wildfly.galleon.plugin.doc.generator.DocGenerator;
@@ -276,6 +277,15 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     @Parameter(alias = "include-incomplete-coords-artifacts-in-sbom", required = false,
             property = "wildfly.sbom.include-incomplete-coords-artifacts-in-sbom", defaultValue = "false")
     protected Boolean includeIncompleCoordsArtifactsInSbom;
+
+    /**
+     * If the WildFly product-conf artifact contains a CPE, the provisioned maven artifacts
+     * of other feature-packs present in the provisioning configuration are not added to the generated SBOM.
+     * In order to advertise that a feature-pack is in the scope of the WildFly CPE, set this parameter to `SERVER_PRODUCT_CONF`.
+     * If no CPE is defined, then the content of feature-packs are added to the generated SBOM whatever the value of this parameter.
+     */
+    @Parameter(alias = "sbom-cpe-resolution-mode", property = "wildfly.sbom.sbom-cpe-resolution-mode", required = false, defaultValue = "LOCAL")
+    protected CpeResolutionMode cpeResolutionMode;
 
     private MavenProjectArtifactVersions artifactVersions;
 
@@ -1278,6 +1288,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     }
     private Properties getWildFlySBOMProperties() throws MojoExecutionException {
         final Properties properties = new Properties();
+        properties.put(WfConstants.WILDFLY_SBOM_CPE_RESOLUTION_MODE, cpeResolutionMode.name());
         if (includeIncompleCoordsArtifactsInSbom) {
             properties.put(WfConstants.WILDFLY_SBOM_INCLUDE_INCOMPLETE_COORDS_ARTIFACTS, includeIncompleCoordsArtifactsInSbom.toString());
         }

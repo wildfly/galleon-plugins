@@ -88,6 +88,7 @@ import org.jboss.galleon.universe.maven.repo.MavenRepoManager;
 import org.jboss.galleon.util.IoUtils;
 import org.jboss.galleon.util.CollectionUtils;
 import org.jboss.galleon.util.ZipUtils;
+import org.wildfly.galleon.plugin.SbomArtifactRecorder.ProductRelease;
 import org.wildfly.galleon.plugin.config.AssembleShadedArtifact;
 import org.wildfly.galleon.plugin.config.CopyArtifact;
 import org.wildfly.galleon.plugin.config.CopyPath;
@@ -107,6 +108,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     // If tooling used for provisioning has wildfly channels setup, the artifacts must be resolved from the channel
     public static final String REQUIRES_CHANNEL_FOR_ARTIFACT_RESOLUTION_PROPERTY = "org.wildfly.plugins.galleon.all.artifact.requires.channel.resolution";
     public static final String SKIP_IN_SBOM = "org.wildfly.plugins.galleon.sbom.skip";
+    public static final String ARTIFACT_FP_PRODUCER_SPEC = "org.wildfly.plugins.galleon.fp.producer.spec";
     private static final String TRACK_MODULES_BUILD = "JBMODULES";
     private static final String TRACK_COPY_CONFIGS = "JBCOPYCONFIGS";
     private static final String TRACK_ARTIFACTS_RESOLVE = "JB_ARTIFACTS_RESOLVE";
@@ -122,6 +124,34 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
     public interface ArtifactGroupResolver {
         void resolve(Collection<MavenArtifact> artifacts) throws ProvisioningException;
+    }
+
+    class PluginComponentsFilter implements ComponentsFilter {
+
+        @Override
+        public boolean includeMavenArtifact(MavenArtifact artifact, ProductRelease release) {
+            if (isNullCpe(release)) {
+                return true;
+            }
+            return isIncluded(artifact.getMetadata().get(ARTIFACT_FP_PRODUCER_SPEC));
+        }
+
+        @Override
+        public boolean includeShaded(String shadedName, ProductRelease release) {
+            if (isNullCpe(release)) {
+                return true;
+            }
+            return isIncluded(shadedToProducers.get(shadedName));
+        }
+
+        private boolean isNullCpe(ProductRelease release) {
+           return release == null || release.cpe() == null;
+        }
+
+        private boolean isIncluded(String spec) {
+            CpeResolutionMode mode = cpeResolutionModes.get(spec);
+            return mode != null && !mode.equals(CpeResolutionMode.LOCAL);
+        }
     }
 
     private static final String CONFIG_GEN_METHOD = "generate";
@@ -251,6 +281,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private final Map<String, String> resolvedVersionsProperties = new HashMap<>();
     private Map<ProducerSpec, WildFlyChannelResolutionMode> channelResolutionModes = new LinkedHashMap<>();
     private Map<ProducerSpec, Boolean> sbomIncludeIncompleteArtifacts = new LinkedHashMap<>();
+    private Map<String, CpeResolutionMode> cpeResolutionModes = new LinkedHashMap<>();
+    private final Map<String, String> shadedToProducers = new HashMap<>();
     private Map<String, ProducerSpec> gaToProducer = new HashMap<>();
     private final Map<String, ShadedModel> shadedPackages = new HashMap<>();
 
@@ -394,7 +426,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         failOnSbomError = getBooleanOption(OPTION_CYCLONEDX_FAIL_ON_ERROR);
         log.verbose("CycloneDX SBOM generation enabled, format=%s, output=%s, licenses=%s, prettyPrint=%s, compress=%s, schemaVersion=%s, failOnError=%s",
                 format, outputPath, licenseMode, prettyPrint, compress, schemaVersion != null ? schemaVersion : "default", failOnSbomError);
-        final SbomArtifactRecorder recorder = new SbomArtifactRecorder(runtime.getStagedDir(), outputPath, format, prettyPrint, compress, log);
+        final SbomArtifactRecorder recorder = new SbomArtifactRecorder(runtime.getStagedDir(),
+                outputPath, format, prettyPrint, compress, new PluginComponentsFilter(), log);
         try {
             recorder.setSchemaVersion(schemaVersion);
         } catch (IllegalArgumentException e) {
@@ -606,6 +639,11 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                     sbomIncludeIncompleteArtifacts = CollectionUtils.put(sbomIncludeIncompleteArtifacts,
                             fp.getFPID().getProducer(), true);
                 }
+                String mode = sbomProps.get(WfConstants.WILDFLY_SBOM_CPE_RESOLUTION_MODE);
+                if (mode != null) {
+                    cpeResolutionModes = CollectionUtils.put(cpeResolutionModes,
+                            fp.getFPID().getProducer().toString(), CpeResolutionMode.valueOf(mode));
+                }
             }
 
             if(fp.containsPackage(WfConstants.DOCS_SCHEMA)) {
@@ -646,11 +684,11 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         // Resolution of provisioning artifacts that we would need in the generated licenses.
         MavenArtifact configGen = Utils.toArtifactCoords(mergedArtifactVersions, CONFIG_GEN_GA,
                 false, channelArtifactResolution, requireChannel(gaToProducer.get(CONFIG_GEN_GA)),
-                includeIncompleteCoords(gaToProducer.get(CONFIG_GEN_GA)));
+                includeIncompleteCoords(gaToProducer.get(CONFIG_GEN_GA)), gaToProducer.get(CONFIG_GEN_GA));
         artifactResolver.resolve(configGen);
         MavenArtifact plugin = Utils.toArtifactCoords(mergedArtifactVersions, GALLEON_PLUGINS_GA,
                 false, channelArtifactResolution, requireChannel(gaToProducer.get(GALLEON_PLUGINS_GA)),
-                includeIncompleteCoords(gaToProducer.get(GALLEON_PLUGINS_GA)));
+                includeIncompleteCoords(gaToProducer.get(GALLEON_PLUGINS_GA)), gaToProducer.get(GALLEON_PLUGINS_GA));
         artifactResolver.resolve(plugin);
 
         final ProvisioningLayoutFactory layoutFactory = runtime.getLayout().getFactory();
@@ -713,12 +751,12 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                     try {
                         MavenArtifact artifact = Utils.toArtifactCoords(mergedArtifactVersions, CONFIG_GEN_GA,
                                 false, channelArtifactResolution, requireChannel(gaToProducer.get(CONFIG_GEN_GA)),
-                                includeIncompleteCoords(gaToProducer.get(CONFIG_GEN_GA)));
+                                includeIncompleteCoords(gaToProducer.get(CONFIG_GEN_GA)), gaToProducer.get(CONFIG_GEN_GA));
                         artifactResolver.resolve(artifact);
                         cp[0] = artifact.getPath().toUri().toURL();
                         artifact = Utils.toArtifactCoords(mergedArtifactVersions, WILDFLY_LAUNCHER_GA,
                                 false, channelArtifactResolution, requireChannel(gaToProducer.get(WILDFLY_LAUNCHER_GA)),
-                                includeIncompleteCoords(gaToProducer.get(WILDFLY_LAUNCHER_GA)));
+                                includeIncompleteCoords(gaToProducer.get(WILDFLY_LAUNCHER_GA)), gaToProducer.get(WILDFLY_LAUNCHER_GA));
                         artifactResolver.resolve(artifact);
                         cp[1] = artifact.getPath().toUri().toURL();
                     } catch (IOException e) {
@@ -1031,7 +1069,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
         try {
             MavenArtifact artifact = Utils.toArtifactCoords(mergedArtifactVersions, CONFIG_GEN_GA,
                     false, channelArtifactResolution, requireChannel(gaToProducer.get(CONFIG_GEN_GA)),
-                    includeIncompleteCoords(gaToProducer.get(CONFIG_GEN_GA)));
+                    includeIncompleteCoords(gaToProducer.get(CONFIG_GEN_GA)), gaToProducer.get(CONFIG_GEN_GA));
             artifactResolver.resolve(artifact);
             if (artifactRecorder.isPresent()) {
                 artifactRecorder.get().cache(artifact, artifact.getPath());
@@ -1043,7 +1081,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 log.print("WARNING: defaulting to wildfly-cli:client shaded jar.");
                 artifact = Utils.toArtifactCoords(mergedArtifactVersions, WILDFLY_CLI_GA+"::client",
                     false, channelArtifactResolution, requireChannel(gaToProducer.get(WILDFLY_CLI_GA)),
-                    includeIncompleteCoords(gaToProducer.get(WILDFLY_CLI_GA)));
+                    includeIncompleteCoords(gaToProducer.get(WILDFLY_CLI_GA)), gaToProducer.get(WILDFLY_CLI_GA));
                 artifactResolver.resolve(artifact);
                 urls.add(artifact.getPath().toUri().toURL());
                 urlsEmbedded.add(artifact.getPath().toUri().toURL());
@@ -1059,7 +1097,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
             artifact = Utils.toArtifactCoords(mergedArtifactVersions, JBOSS_MODULES_GA,
                     false, channelArtifactResolution, requireChannel(gaToProducer.get(JBOSS_MODULES_GA)),
-                    includeIncompleteCoords(gaToProducer.get(JBOSS_MODULES_GA)));
+                    includeIncompleteCoords(gaToProducer.get(JBOSS_MODULES_GA)), gaToProducer.get(JBOSS_MODULES_GA));
             artifactResolver.resolve(artifact);
             urlsEmbedded.add(artifact.getPath().toUri().toURL());
             cpEmbedded = new URL[urlsEmbedded.size()];
@@ -1131,7 +1169,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                             shadedDir.resolve(ShadedModel.FILE_NAME),
                             runtime.getTmpPath(),
                             artifactGroupResolver, log, mergedArtifactVersions, artifactInstaller, channelArtifactResolution, artifactRecorder,
-                            includeIncompleteCoords(pkg.getFeaturePackRuntime().getFPID().getProducer())));
+                            includeIncompleteCoords(pkg.getFeaturePackRuntime().getFPID().getProducer()),
+                            pkg.getFeaturePackRuntime().getFPID().getProducer()));
                 } catch (IOException ex) {
                     throw new ProvisioningException(ex);
                 }
@@ -1426,7 +1465,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                         : mergedArtifactVersions,
                 copyArtifact.getArtifact(), copyArtifact.isOptional(),
                 channelArtifactResolution, requireChannel(pkg.getFeaturePackRuntime().getFPID().getProducer()),
-                includeIncompleteCoords(pkg.getFeaturePackRuntime().getFPID().getProducer()));
+                includeIncompleteCoords(pkg.getFeaturePackRuntime().getFPID().getProducer()),
+                pkg.getFeaturePackRuntime().getFPID().getProducer());
         if(artifact == null) {
             return;
         }
@@ -1681,7 +1721,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             return;
         }
         final MavenArtifact artifact = resolveEffectiveVersion(Utils.toArtifactCoords(mergedArtifactVersions, ga,
-                false, channelArtifactResolution, requireChannel(gaToProducer.get(ga)), includeIncompleteCoords(gaToProducer.get(ga))));
+                false, channelArtifactResolution, requireChannel(gaToProducer.get(ga)), includeIncompleteCoords(gaToProducer.get(ga)),
+                gaToProducer.get(ga)));
         sbomGenerator.recordToolDependency(artifact);
     }
 
@@ -1746,7 +1787,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                         requireChannel(pkg.getFeaturePackRuntime().getFPID().getProducer()),
                         shadedModelFile, runtime.getTmpPath(), artifactGroupResolver, log,
                         mergedArtifactVersions, artifactInstaller, channelArtifactResolution, artifactRecorder,
-                        includeIncompleteCoords(pkg.getFeaturePackRuntime().getFPID().getProducer()));
+                        includeIncompleteCoords(pkg.getFeaturePackRuntime().getFPID().getProducer()),
+                        pkg.getFeaturePackRuntime().getFPID().getProducer());
                 final String version = fp.getFPID().getBuild();
                 // SBOM-only mode does not produce artifacts, so parse coordinates without
                 // resolving. When a channel is active the version must be resolved from the
@@ -1910,7 +1952,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             if (task instanceof CopyArtifact) {
                 collectCopyArtifact((CopyArtifact) task, pkg, recorder);
             } else if (task instanceof AssembleShadedArtifact && sbomGenerator != null) {
-                collectAssembleShadedArtifact((AssembleShadedArtifact) task, shadedModels);
+                collectAssembleShadedArtifact((AssembleShadedArtifact) task, shadedModels, pkg.getFeaturePackFPID().getProducer());
             }
         }
     }
@@ -1924,18 +1966,20 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 versionProps, copyTask.getArtifact(),
                 copyTask.isOptional(), channelArtifactResolution,
                 requireChannel(pkg.getFeaturePackRuntime().getFPID().getProducer()),
-                includeIncompleteCoords(pkg.getFeaturePackRuntime().getFPID().getProducer())));
+                includeIncompleteCoords(pkg.getFeaturePackRuntime().getFPID().getProducer()),
+                pkg.getFeaturePackRuntime().getFPID().getProducer()));
         if (artifact != null) {
             recorder.record(artifact, null);
         }
     }
 
     private void collectAssembleShadedArtifact(AssembleShadedArtifact task,
-            Map<String, ShadedModelInfo> shadedModels) {
+            Map<String, ShadedModelInfo> shadedModels, ProducerSpec spec) {
         final ShadedModelInfo info = shadedModels.get(task.getShadedModelPackage());
         if (info == null) {
             return;
         }
+        shadedToProducers.put(SbomArtifactRecorder.deriveShadedName(task.getToLocation()), spec.toString());
         sbomGenerator.recordShadedComponent(task.getToLocation(), info.version, null, info.dependencies);
     }
 }
