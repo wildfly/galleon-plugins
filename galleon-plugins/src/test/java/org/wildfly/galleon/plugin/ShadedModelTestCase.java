@@ -119,6 +119,7 @@ public class ShadedModelTestCase {
                     throw new AssertionError("SBOM-only paths must not install artifacts");
                 },
                 channelArtifactResolution,
-                Optional.empty());
+                Optional.empty(),
+                null);
     }
 }

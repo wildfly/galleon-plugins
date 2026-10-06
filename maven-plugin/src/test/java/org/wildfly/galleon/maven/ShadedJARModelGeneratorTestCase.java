@@ -108,7 +108,7 @@ public class ShadedJARModelGeneratorTestCase {
                     return null;
                 },
                 false,
-                Optional.empty());
+                Optional.empty(), null);
         Assert.assertEquals("TestClass", shadedModel.getMainClass());
         Assert.assertEquals(manifestEntries, shadedModel.getManifestEntries());
         List<MavenArtifact> lst = shadedModel.getArtifacts();
