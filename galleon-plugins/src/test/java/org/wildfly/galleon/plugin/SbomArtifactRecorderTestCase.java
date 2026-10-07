@@ -34,6 +34,19 @@ import static org.wildfly.galleon.plugin.WfInstallPlugin.SKIP_IN_SBOM;
 
 public class SbomArtifactRecorderTestCase {
 
+    static class IncludeAllComponentsFilter implements ComponentsFilter {
+
+        @Override
+        public boolean includeMavenArtifact(MavenArtifact artifact, SbomArtifactRecorder.ProductRelease release) {
+            return true;
+        }
+
+        @Override
+        public boolean includeShaded(String shadedName, SbomArtifactRecorder.ProductRelease release) {
+            return true;
+        }
+    }
+
     @Rule
     public TemporaryFolder temp = new TemporaryFolder();
     private Path installBase;
@@ -830,6 +843,85 @@ public class SbomArtifactRecorderTestCase {
         assertNull(component2);
     }
 
+    @Test
+    public void componetFilterArtifactExclusion() throws Exception {
+        final String cpe = "cpe:2.3:a:wildfly:wildfly:40.0.0:*:*:*:*:*:*:*";
+        final Path confJar = createProductConfJar(
+                "modules/system/layers/base/org/jboss/as/product/main/wildfly-feature-pack-product-conf-40.0.0.Final.jar",
+                "WildFly", "40.0.0.Final", "WildFly", "40.0.0.Final-01", cpe);
+        final MavenArtifact confArtifact =
+                mavenArtifact("org.wildfly", "wildfly-feature-pack-product-conf", "40.0.0.Final");
+        confArtifact.setExtension("jar");
+        confArtifact.setPath(confJar);
+        final MavenArtifact artifact = mavenArtifact("org.wildfly.core", "wildfly-launcher", "31.0.0.Final");
+        final MavenArtifact artifact2 = mavenArtifact("org.foo", "bar", "1.0.0.Final");
+        artifact2.addMetadata("exclude", "true");
+        final Path target = createArtifactFile("modules/launcher/wildfly-launcher-31.0.0.Final.jar");
+        final Path target2 = createArtifactFile("modules/foo/bar-1.0.0.Final.jar");
+        final Path outputFile = installBase.resolve("sbom.cdx.json");
+
+        final SbomArtifactRecorder recorder = createRecorder(outputFile, "json", false, new ComponentsFilter(){
+            @Override
+            public boolean includeMavenArtifact(MavenArtifact artifact, SbomArtifactRecorder.ProductRelease release) {
+                return !artifact.getMetadata().containsKey("exclude");
+            }
+
+            @Override
+            public boolean includeShaded(String shadedName, SbomArtifactRecorder.ProductRelease release) {
+                return true;
+            }
+        });
+        recorder.record(confArtifact, confJar);
+        recorder.record(artifact, target);
+        recorder.record(artifact2, target2);
+        recorder.writeManifest();
+
+        final Bom bom = new JsonParser().parse(outputFile.toFile());
+        final Component main = bom.getMetadata().getComponent();
+        assertNotNull(main);
+        assertEquals(cpe, main.getCpe());
+        final Component component = findComponent(bom, "wildfly-launcher");
+        assertNotNull(component);
+        final Component component2 = findComponent(bom, "bar");
+        assertNull(component2);
+    }
+
+    @Test
+    public void shadedComponentWithNestedDependenciesExclusion() throws Exception {
+        final Path outputFile = installBase.resolve("sbom.cdx.json");
+        String location = "bin/client/jboss-cli-client.jar";
+        String location2 = "bin/foo.jar";
+        final SbomArtifactRecorder recorder = createRecorder(outputFile, "json", false, new ComponentsFilter(){
+            @Override
+            public boolean includeMavenArtifact(MavenArtifact artifact, SbomArtifactRecorder.ProductRelease release) {
+                return true;
+            }
+
+            @Override
+            public boolean includeShaded(String shadedName, SbomArtifactRecorder.ProductRelease release) {
+                return !shadedName.equals(SbomArtifactRecorder.deriveShadedName(location));
+            }
+        });
+
+        final List<MavenArtifact> deps = List.of(
+                mavenArtifact("org.jboss", "dep-a", "1.0"),
+                mavenArtifact("org.jboss", "dep-b", "2.0"));
+        final Path target = createArtifactFile(location);
+        recorder.recordShadedComponent(location, "31.0.0.Final", target, deps);
+
+        final List<MavenArtifact> deps2 = List.of(
+                mavenArtifact("org.jboss", "dep-a", "1.0"),
+                mavenArtifact("org.jboss", "dep-b", "2.0"));
+        final Path target2 = createArtifactFile(location2);
+        recorder.recordShadedComponent(location2, "31.0.0.Final", target2, deps2);
+        recorder.writeManifest();
+
+        final Bom bom = new JsonParser().parse(outputFile.toFile());
+        assertEquals(1, bom.getComponents().size());
+        final Component shaded = findComponent(bom, "jboss-cli-client");
+        assertNull(shaded);
+    }
+
     private Path createStagedProductManifest(String slot, String name, String version, String cpe) throws Exception {
         final Path mf = installBase.resolve(Path.of("modules", "system", "layers", "base",
                 "org", "jboss", "as", "product", slot, "dir", "META-INF", "MANIFEST.MF"));
@@ -857,11 +949,15 @@ public class SbomArtifactRecorderTestCase {
     }
 
     private SbomArtifactRecorder createRecorder(Path outputFile, String format) {
-        return new SbomArtifactRecorder(installBase, outputFile, format, false, false, new DefaultMessageWriter());
+        return new SbomArtifactRecorder(installBase, outputFile, format, false, false, new IncludeAllComponentsFilter(), new DefaultMessageWriter());
     }
 
     private SbomArtifactRecorder createRecorder(Path outputFile, String format, boolean compress) {
-        return new SbomArtifactRecorder(installBase, outputFile, format, false, compress, new DefaultMessageWriter());
+        return new SbomArtifactRecorder(installBase, outputFile, format, false, compress, new IncludeAllComponentsFilter(), new DefaultMessageWriter());
+    }
+
+    private SbomArtifactRecorder createRecorder(Path outputFile, String format, boolean compress, ComponentsFilter filter) {
+        return new SbomArtifactRecorder(installBase, outputFile, format, false, compress, filter, new DefaultMessageWriter());
     }
 
     private Path createArtifactFile(String path) throws Exception {

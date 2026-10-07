@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+~ Copyright The WildFly Authors
+~ SPDX-License-Identifier: Apache-2.0
+-->
+
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.wildfly.galleon-plugins</groupId>
+    <artifactId>wildfly-galleon-plugins-base-feature-pack-parent</artifactId>
+    <version>8.2.2.Final-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>wildfly-galleon-plugins-base-feature-pack-product-conf</artifactId>
+
+  <name>Test Feature-Pack Product Configuration</name>
+  <description>Provides an artifact whose MANIFEST.MF includes entries that provide installation name and version information.</description>
+
+  <build>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+        <filtering>true</filtering>
+      </resource>
+    </resources>
+
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>default-jar</id>
+            <phase>none</phase>
+          </execution>
+          <execution>
+            <id>jar</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+            <configuration>
+              <!-- This archive only has the manifest we generate. Turn off WARNs about that -->
+              <skipIfEmpty>false</skipIfEmpty>
+              <archive>
+                <manifestEntries>
+                  <JBoss-Product-Release-Name>Galleon Plugins Test</JBoss-Product-Release-Name>
+                  <JBoss-Product-Release-Version>1.0</JBoss-Product-Release-Version>
+                  <JBoss-Product-CPE>cpe:2.3:a:galleon-plugins:galleon-plugins:40.0.0:*:*:*:*:*:*:*</JBoss-Product-CPE>
+                  <Implementation-Vendor>WildFly</Implementation-Vendor>
+                </manifestEntries>
+              </archive>
+            </configuration>
+          </execution>       
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>
