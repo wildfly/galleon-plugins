@@ -21,20 +21,20 @@ public class ArtifactRecorderTestCase {
     public TemporaryFolder temp = new TemporaryFolder();
     private Path installBase;
     private Path cacheDir;
-    private ArtifactRecorder recorder;
+    private ArtifactsTxtRecorder recorder;
 
     @Before
     public void setUp() throws Exception {
         installBase = temp.newFolder("server-root").toPath();
         cacheDir = installBase.resolve("cache");
-        recorder = new ArtifactRecorder(installBase, cacheDir);
+        recorder = new ArtifactsTxtRecorder(installBase, cacheDir);
     }
 
     @Test
     public void recordExternalArtifact() throws Exception {
         recorder.record(mavenArtifact("org.test", "test-one"), createArtifactFile("test.jar"));
 
-        recorder.writeCacheManifest();
+        recorder.writeManifest();
 
         assertRecordedArtifactContainOnly("org.test:test-one:jar:1.0.0::*::test.jar");
     }
@@ -45,7 +45,7 @@ public class ArtifactRecorderTestCase {
 
         recorder.record(mavenArtifact("org.test", "test-one"), createArtifactFile("test/test.jar"));
 
-        recorder.writeCacheManifest();
+        recorder.writeManifest();
 
         assertRecordedArtifactContainOnly("org.test:test-one:jar:1.0.0::*::test/test.jar");
     }
@@ -54,7 +54,7 @@ public class ArtifactRecorderTestCase {
     public void cacheArtifactResultsInCopySavedInCache() throws Exception {
         recorder.cache(mavenArtifact("org.test", "test-one"), createArtifactFile("test.jar"));
 
-        recorder.writeCacheManifest();
+        recorder.writeManifest();
 
         assertRecordedArtifactContainOnly("org.test:test-one:jar:1.0.0::*::cache/test-one-1.0.0.jar");
 
@@ -70,7 +70,7 @@ public class ArtifactRecorderTestCase {
 
         recorder.cache(mavenArtifact("org.test", "test-one"), artifactFile);
 
-        recorder.writeCacheManifest();
+        recorder.writeManifest();
 
         assertRecordedArtifactContainOnly("org.test:test-one:jar:1.0.0::*::cache/test-one-1.0.0.jar");
 
@@ -85,7 +85,7 @@ public class ArtifactRecorderTestCase {
 
         recorder.record(mavenArtifact("org.test", "test-one"), createArtifactFile("test/test.jar"));
 
-        recorder.writeCacheManifest();
+        recorder.writeManifest();
 
         assertRecordedArtifactContainOnly("org.test:test-one:jar:1.0.0::*::test/test.jar");
 
@@ -100,7 +100,7 @@ public class ArtifactRecorderTestCase {
 
         recorder.record(mavenArtifact("org.test", "test-two"), createArtifactFile("test-two.jar"));
 
-        recorder.writeCacheManifest();
+        recorder.writeManifest();
 
         assertRecordedArtifactContainOnly(
                 "org.test:test-one:jar:1.0.0::*::test-one.jar",
@@ -115,7 +115,7 @@ public class ArtifactRecorderTestCase {
 
         recorder.cache(mavenArtifact("org.test", "test-one"), artifactFile);
 
-        recorder.writeCacheManifest();
+        recorder.writeManifest();
 
         assertRecordedArtifactContainOnly(
                 "org.test:test-one:jar:1.0.0::*::test-one.jar"
@@ -125,7 +125,7 @@ public class ArtifactRecorderTestCase {
     }
 
     private void assertRecordedArtifactContainOnly(String... lines) throws IOException {
-        final List<String> artifactList = Files.readAllLines(cacheDir.resolve(ArtifactRecorder.ARTIFACT_LIST_FILE));
+        final List<String> artifactList = Files.readAllLines(cacheDir.resolve(ArtifactsTxtRecorder.ARTIFACT_LIST_FILE));
 
         final String errorMessage = String.format("Expected recorded lines to contain %n[%s]%n but got %n[%s]",
                 String.join(",", lines), String.join(",", artifactList));

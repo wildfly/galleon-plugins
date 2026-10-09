@@ -30,6 +30,7 @@ import nu.xom.ParsingException;
 import nu.xom.Serializer;
 import org.jboss.galleon.ProvisioningDescriptionException;
 import org.jboss.galleon.runtime.PackageRuntime;
+import org.jboss.galleon.universe.FeaturePackLocation.ProducerSpec;
 
 /**
  * A module template, built from a module.xml template file.
@@ -41,7 +42,7 @@ class ModuleTemplate {
     private final Element rootElement;
     private final Document document;
     private final Path targetPath;
-
+    private final PackageRuntime pkg;
     ModuleTemplate(PackageRuntime pkg, Path moduleTemplate, Path targetPath) throws IOException, ProvisioningDescriptionException {
         final Builder builder = new Builder(false);
         try (BufferedReader reader = Files.newBufferedReader(moduleTemplate, StandardCharsets.UTF_8)) {
@@ -51,6 +52,11 @@ class ModuleTemplate {
         }
         rootElement = document.getRootElement();
         this.targetPath = targetPath;
+        this.pkg = pkg;
+    }
+
+    ProducerSpec getProducerSpec() {
+        return pkg.getFeaturePackFPID().getProducer();
     }
 
     String getName() {

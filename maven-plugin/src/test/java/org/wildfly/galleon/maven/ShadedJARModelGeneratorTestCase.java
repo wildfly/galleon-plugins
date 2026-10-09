@@ -80,7 +80,7 @@ public class ShadedJARModelGeneratorTestCase {
         ShadedModel shadedModel = new ShadedModel(false,
                 model,
                 target,
-                (MavenArtifact artifact) -> {
+                (java.util.Collection<MavenArtifact> artifacts) -> {
                 },
                 new MessageWriter() {
             @Override
@@ -107,7 +107,7 @@ public class ShadedJARModelGeneratorTestCase {
                     return null;
                 },
                 false,
-                Optional.empty());
+                Optional.empty(), null);
         Assert.assertEquals("TestClass", shadedModel.getMainClass());
         Assert.assertEquals(manifestEntries, shadedModel.getManifestEntries());
         List<MavenArtifact> lst = shadedModel.getArtifacts();

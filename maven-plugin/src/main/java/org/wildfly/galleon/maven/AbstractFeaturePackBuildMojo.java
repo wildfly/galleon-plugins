@@ -108,6 +108,7 @@ import org.wildfly.channel.ManifestRequirement;
 import org.wildfly.channel.MavenCoordinate;
 import org.wildfly.galleon.maven.build.tasks.ResourcesTask;
 import org.wildfly.galleon.plugin.ArtifactCoords;
+import org.wildfly.galleon.plugin.CpeResolutionMode;
 import org.wildfly.galleon.plugin.WfConstants;
 import org.wildfly.galleon.plugin.WildFlyChannelResolutionMode;
 import org.wildfly.galleon.plugin.doc.generator.DocGenerator;
@@ -272,6 +273,19 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
     @Parameter(alias = "skip-doc", required = false, defaultValue = "false",
             property = "wildfly.feature.pack.skip-doc")
     protected boolean skipDoc;
+
+    @Parameter(alias = "include-incomplete-coords-artifacts-in-sbom", required = false,
+            property = "wildfly.sbom.include-incomplete-coords-artifacts-in-sbom", defaultValue = "false")
+    protected Boolean includeIncompleCoordsArtifactsInSbom;
+
+    /**
+     * If the WildFly product-conf artifact contains a CPE, the provisioned maven artifacts
+     * of other feature-packs present in the provisioning configuration are not added to the generated SBOM.
+     * In order to advertise that a feature-pack is in the scope of the WildFly CPE, set this parameter to `SERVER_PRODUCT_CONF`.
+     * If no CPE is defined, then the content of feature-packs are added to the generated SBOM whatever the value of this parameter.
+     */
+    @Parameter(alias = "sbom-cpe-resolution-mode", property = "wildfly.sbom.sbom-cpe-resolution-mode", required = false, defaultValue = "LOCAL")
+    protected CpeResolutionMode cpeResolutionMode;
 
     private MavenProjectArtifactVersions artifactVersions;
 
@@ -456,6 +470,12 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             getWildFlyChannelProperties().store(out, "WildFly channel properties");
         } catch (IOException e) {
             throw new MojoExecutionException("Failed to store WildFly channel properties", e);
+        }
+        // WildFly sbom configuration
+        try (OutputStream out = Files.newOutputStream(resourcesWildFly.resolve(WfConstants.WILDFLY_SBOM_PROPERTIES))) {
+            getWildFlySBOMProperties().store(out, "WildFly SBOM properties");
+        } catch (IOException e) {
+            throw new MojoExecutionException("Failed to store WildFly SBOM properties", e);
         }
         // Copy resources from src.
         try {
@@ -1265,5 +1285,13 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             debug("Attaching feature-pack documentation %s as a project artifact", docZipArchive);
             projectHelper.attachArtifact(project, ZIP, DOC_CLASSIFIER, docZipArchive.toFile());
         }
+    }
+    private Properties getWildFlySBOMProperties() throws MojoExecutionException {
+        final Properties properties = new Properties();
+        properties.put(WfConstants.WILDFLY_SBOM_CPE_RESOLUTION_MODE, cpeResolutionMode.name());
+        if (includeIncompleCoordsArtifactsInSbom) {
+            properties.put(WfConstants.WILDFLY_SBOM_INCLUDE_INCOMPLETE_COORDS_ARTIFACTS, includeIncompleCoordsArtifactsInSbom.toString());
+        }
+        return properties;
     }
 }

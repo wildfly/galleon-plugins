@@ -35,7 +35,13 @@ class FatModuleTemplateProcessor extends AbstractModuleTemplateProcessor {
     public FatModuleTemplateProcessor(WfInstallPlugin plugin, AbstractArtifactInstaller installer,
             Path targetPath, ModuleTemplate template,
             Map<String, String> versionProps, boolean channelArtifactResolution, boolean requireChannel) {
-        super(plugin, installer, targetPath, template, versionProps, channelArtifactResolution, requireChannel);
+        super(plugin, installer, targetPath, template, versionProps, channelArtifactResolution, requireChannel, false);
+    }
+
+    public FatModuleTemplateProcessor(WfInstallPlugin plugin, AbstractArtifactInstaller installer,
+            Path targetPath, ModuleTemplate template,
+            Map<String, String> versionProps, boolean channelArtifactResolution, boolean requireChannel, boolean includeIncompleteCoords) {
+        super(plugin, installer, targetPath, template, versionProps, channelArtifactResolution, requireChannel, includeIncompleteCoords);
     }
 
     @Override

@@ -1,0 +1,17 @@
+<!--
+~ Copyright The WildFly Authors
+~ SPDX-License-Identifier: Apache-2.0
+-->
+
+<build xmlns="urn:wildfly:feature-pack-build:3.1" producer="org.wildfly.galleon-plugins:wildfly-galleon-plugins-base-feature-pack-extra-feature-pack">
+  <dependencies>
+    <dependency group-id="org.wildfly.galleon-plugins" artifact-id="wildfly-galleon-plugins-base-feature-pack-feature-pack">
+      <name>org.wildfly.galleon-plugins:wildfly-galleon-plugins-base-feature-pack-feature-pack</name>
+      <default-configs inherit="false">
+      </default-configs>
+    </dependency>
+  </dependencies>
+  <default-packages>
+    <package name="modules.all"/>
+  </default-packages>
+</build>
