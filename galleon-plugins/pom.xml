@@ -175,6 +175,17 @@
                   <pattern>com.networknt</pattern>
                   <shadedPattern>org.wildfly.galleon.plugin.shaded.com.networknt</shadedPattern>
                 </relocation>
+                <!--
+                  the provisioning Tooling can use dev.cyberstamp.maven.assembly and cyclonedx
+                -->
+                <relocation>
+                  <pattern>dev.cyberstamp.maven.assembly</pattern>
+                  <shadedPattern>org.wildfly.galleon.plugin.shaded.dev.cyberstamp.maven.assembly</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.cyclonedx</pattern>
+                  <shadedPattern>org.wildfly.galleon.plugin.shaded.org.cyclonedx</shadedPattern>
+                </relocation>
               </relocations>
             </configuration>
           </execution>
