@@ -53,6 +53,7 @@ public interface WfConstants {
     String MODULES_ALL = "modules.all";
     String PM = "pm";
     String PROFILE = "profile";
+    String WILDFLY_SBOM_CPE_RESOLUTION_MODE = "cpe-resolution-mode";
     String WILDFLY_SBOM_INCLUDE_INCOMPLETE_COORDS_ARTIFACTS = "includeIncompleteCoordsArtifacts";
     String WILDFLY_SBOM_PROPERTIES = "wildfly-sboms.properties";
     String SCHEMA = "schema";

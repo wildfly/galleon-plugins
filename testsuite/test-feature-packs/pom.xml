@@ -35,6 +35,7 @@
   <modules>
     <module>common</module>
     <module>community-feature-pack</module>
+    <module>cpe-test-feature-packs</module>
     <module>default-feature-pack</module>
     <module>experimental-feature-pack</module>
     <module>preview-feature-pack</module>

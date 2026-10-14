@@ -46,6 +46,7 @@ import dev.cyberstamp.maven.assembly.sbom.AssemblyMetadata;
 import dev.cyberstamp.maven.assembly.sbom.ArtifactCoords;
 import dev.cyberstamp.maven.assembly.sbom.BomMerger;
 import dev.cyberstamp.maven.assembly.sbom.BomReader;
+import dev.cyberstamp.maven.assembly.sbom.BomRenderer;
 import dev.cyberstamp.maven.assembly.sbom.BomWriter;
 import dev.cyberstamp.maven.assembly.sbom.GenericPackageRef;
 import dev.cyberstamp.maven.assembly.sbom.LicenseSource;
@@ -53,6 +54,7 @@ import dev.cyberstamp.maven.assembly.sbom.PackageComponent;
 import dev.cyberstamp.maven.assembly.sbom.ProductInfo;
 import dev.cyberstamp.maven.assembly.sbom.SbomPipeline;
 import dev.cyberstamp.maven.assembly.sbom.SchemaVersions;
+import java.util.HashMap;
 import org.cyclonedx.Version;
 import org.cyclonedx.exception.GeneratorException;
 import org.cyclonedx.model.Bom;
@@ -112,12 +114,17 @@ public class SbomArtifactRecorder implements ArtifactRecorder {
     /** Resolved JAR paths for embedded-SBOM detection. */
     private final Map<ArtifactCoords, Path> resolvedJarPaths = new LinkedHashMap<>();
     private final MessageWriter log;
-    public SbomArtifactRecorder(Path stagedDir, Path outputPath, String format, boolean prettyPrint, boolean compress, MessageWriter log) {
+    private final ComponentsFilter filter;
+    private final Map<ArtifactCoords, MavenArtifact> mavenArtifacts = new HashMap<>();
+    public SbomArtifactRecorder(Path stagedDir, Path outputPath, String format, boolean prettyPrint, boolean compress,
+            ComponentsFilter filter,
+            MessageWriter log) {
         this.stagedDir = stagedDir;
         this.outputPath = outputPath;
         this.format = format;
         this.prettyPrint = prettyPrint;
         this.compress = compress;
+        this.filter = filter;
         this.log = log;
     }
 
@@ -249,16 +256,20 @@ public class SbomArtifactRecorder implements ArtifactRecorder {
             if (isShadedOnly(ra.coords())) {
                 continue;
             }
-            model.addComponent(PackageComponent.of(ra.coords(), ra.archivePath(), ra.hash(), false));
+            if (filter.includeMavenArtifact(mavenArtifacts.get(ra.coords()), release)) {
+                model.addComponent(PackageComponent.of(ra.coords(), ra.archivePath(), ra.hash(), false));
+            }
         }
         for (ShadedComponent sc : shaded) {
-            final List<AssemblyComponent> nested = new ArrayList<>(sc.deps().size());
-            for (ArtifactCoords dep : sc.deps()) {
-                nested.add(PackageComponent.of(dep, null, null, false));
+            if (filter.includeShaded(sc.name(), release)) {
+                final List<AssemblyComponent> nested = new ArrayList<>(sc.deps().size());
+                for (ArtifactCoords dep : sc.deps()) {
+                    nested.add(PackageComponent.of(dep, null, null, false));
+                }
+                model.addComponent(new PackageComponent(
+                        new GenericPackageRef(sc.name(), sc.version()),
+                        sc.archivePath(), null, List.of(), nested, false));
             }
-            model.addComponent(new PackageComponent(
-                    new GenericPackageRef(sc.name(), sc.version()),
-                    sc.archivePath(), null, List.of(), nested, false));
         }
         model.setMetadata(buildMetadata(release));
         return model;
@@ -326,7 +337,7 @@ public class SbomArtifactRecorder implements ArtifactRecorder {
     }
 
     /** Product release branding read from the provisioned distribution. */
-    private record ProductRelease(String name, String version, String vendor, String cpe) {
+    record ProductRelease(String name, String version, String vendor, String cpe) {
     }
 
     /**
@@ -495,6 +506,9 @@ public class SbomArtifactRecorder implements ArtifactRecorder {
         if (resolved != null && Files.exists(resolved)) {
             resolvedJarPaths.put(coords, resolved);
         }
+        // Filtering applies to MavenArtifact
+        // We must keep a reference on it.
+        mavenArtifacts.put(coords, artifact);
     }
 
     private Path resolvedPath(MavenArtifact artifact) {
@@ -521,7 +535,7 @@ public class SbomArtifactRecorder implements ArtifactRecorder {
         return absStagedDir.relativize(absTarget).toString().replace(File.separatorChar, '/');
     }
 
-    private String deriveShadedName(String toLocation) {
+    static String deriveShadedName(String toLocation) {
         String fileName = toLocation;
         final int lastSlash = toLocation.lastIndexOf('/');
         if (lastSlash >= 0) {

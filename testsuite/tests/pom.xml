@@ -66,6 +66,24 @@
       <scope>test</scope>
     </dependency>
     <dependency>
+      <groupId>org.wildfly.galleon-plugins</groupId>
+      <artifactId>wildfly-galleon-plugins-base-feature-pack-feature-pack</artifactId>
+      <type>zip</type>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.wildfly.galleon-plugins</groupId>
+      <artifactId>wildfly-galleon-plugins-base-feature-pack-extra-feature-pack</artifactId>
+      <type>zip</type>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.wildfly.galleon-plugins</groupId>
+      <artifactId>wildfly-galleon-plugins-base-feature-pack-custom-feature-pack</artifactId>
+      <type>zip</type>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
       <scope>test</scope>
@@ -400,6 +418,31 @@
               <install-dir>${project.build.directory}/servers/experimental-constrained-default</install-dir>
             </configuration>
           </execution>
+          <execution>
+            <id>provision-base-with-extra</id>
+            <goals>
+              <goal>provision</goal>
+            </goals>
+            <phase>compile</phase>
+            <configuration>
+              <plugin-options>
+                <jboss-cyclonedx-compress>false</jboss-cyclonedx-compress>
+                <jboss-maven-dist>true</jboss-maven-dist>
+              </plugin-options>
+              <feature-packs>
+                <feature-pack>
+                  <location>org.wildfly.galleon-plugins:wildfly-galleon-plugins-base-feature-pack-feature-pack:${project.version}</location>
+                </feature-pack>
+                <feature-pack>
+                  <location>org.wildfly.galleon-plugins:wildfly-galleon-plugins-base-feature-pack-extra-feature-pack:${project.version}</location>
+                </feature-pack>
+                <feature-pack>
+                  <location>org.wildfly.galleon-plugins:wildfly-galleon-plugins-base-feature-pack-custom-feature-pack:${project.version}</location>
+                </feature-pack>
+              </feature-packs>
+              <install-dir>${project.build.directory}/cpe-test</install-dir>
+            </configuration>
+          </execution>
         </executions>
       </plugin>
       <plugin>
@@ -419,6 +462,9 @@
           <redirectTestOutputToFile>false</redirectTestOutputToFile>
           <systemPropertyVariables>
             <servers.install.root>${project.build.directory}/servers</servers.install.root>
+            <server.sbom.install>${project.build.directory}/cpe-test</server.sbom.install>
+            <server.sbom.artifact.excluded>aesh</server.sbom.artifact.excluded>
+            <server.sbom.artifact.included>wildfly-common</server.sbom.artifact.included>
             <simplistic.maven.repo.home>${maven.repo.local}</simplistic.maven.repo.home>
           </systemPropertyVariables>
         </configuration>

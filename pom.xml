@@ -483,6 +483,24 @@
       </dependency>
       <dependency>
         <groupId>org.wildfly.galleon-plugins</groupId>
+        <artifactId>wildfly-galleon-plugins-base-feature-pack-feature-pack</artifactId>
+        <type>zip</type>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.wildfly.galleon-plugins</groupId>
+        <artifactId>wildfly-galleon-plugins-base-feature-pack-extra-feature-pack</artifactId>
+        <type>zip</type>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.wildfly.galleon-plugins</groupId>
+        <artifactId>wildfly-galleon-plugins-base-feature-pack-custom-feature-pack</artifactId>
+        <type>zip</type>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.wildfly.galleon-plugins</groupId>
         <artifactId>test-subsystem-experimental</artifactId>
         <version>${project.version}</version>
       </dependency>

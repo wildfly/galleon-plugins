@@ -44,6 +44,7 @@ import org.jboss.galleon.universe.maven.MavenArtifact;
 import org.jboss.galleon.util.IoUtils;
 import org.jboss.galleon.util.ZipUtils;
 import java.util.jar.Manifest;
+import org.jboss.galleon.universe.FeaturePackLocation.ProducerSpec;
 
 /**
  * A shaded model.
@@ -73,7 +74,7 @@ public class ShadedModel implements Utils.ArtifactResourceConsumer {
     private final WfInstallPlugin.ArtifactGroupResolver resolver;
     private List<MavenArtifact> resolvedArtifacts;
     private final boolean includeIncompleteCoords;
-
+    private final ProducerSpec producerSpec;
     public ShadedModel(boolean requireChannel,
             Path shadedModel,
             Path tmpPath,
@@ -81,8 +82,9 @@ public class ShadedModel implements Utils.ArtifactResourceConsumer {
             MessageWriter log, Map<String, String> mergedArtifactVersions,
             Installer installer,
             boolean channelArtifactResolution,
-            Optional<ArtifactRecorder> recorder) throws IOException, ProvisioningDescriptionException {
-        this(requireChannel, shadedModel, tmpPath, resolver, log, mergedArtifactVersions, installer, channelArtifactResolution, recorder, false);
+            Optional<ArtifactRecorder> recorder,
+            ProducerSpec producerSpec) throws IOException, ProvisioningDescriptionException {
+        this(requireChannel, shadedModel, tmpPath, resolver, log, mergedArtifactVersions, installer, channelArtifactResolution, recorder, false, producerSpec);
     }
 
     public ShadedModel(boolean requireChannel,
@@ -93,7 +95,8 @@ public class ShadedModel implements Utils.ArtifactResourceConsumer {
             Installer installer,
             boolean channelArtifactResolution,
             Optional<ArtifactRecorder> recorder,
-            boolean includeIncompleteCoords) throws IOException, ProvisioningDescriptionException {
+            boolean includeIncompleteCoords,
+            ProducerSpec producerSpec) throws IOException, ProvisioningDescriptionException {
         this.requireChannel = requireChannel;
         this.tmpPath = tmpPath;
         this.resolver = resolver;
@@ -110,6 +113,7 @@ public class ShadedModel implements Utils.ArtifactResourceConsumer {
         this.channelArtifactResolution = channelArtifactResolution;
         this.recorder = recorder;
         this.includeIncompleteCoords = includeIncompleteCoords;
+        this.producerSpec = producerSpec;
     }
 
     /**
@@ -132,7 +136,7 @@ public class ShadedModel implements Utils.ArtifactResourceConsumer {
         final Elements dependencies = shadedDependencies.getChildElements();
         for (int i = 0; i < dependencies.size(); i++) {
             coords.add(Utils.toArtifactCoords(mergedArtifactVersions, dependencies.get(i).getValue(),
-                    false, channelArtifactResolution, requireChannel, includeIncompleteCoords));
+                    false, channelArtifactResolution, requireChannel, includeIncompleteCoords, producerSpec));
         }
         return coords;
     }
