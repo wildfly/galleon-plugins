@@ -1,8 +1,9 @@
 <!--
-  ~ Copyright The WildFly Authors
-  ~ SPDX-License-Identifier: Apache-2.0
-  -->
 
+    Copyright The WildFly Authors
+    SPDX-License-Identifier: Apache-2.0
+
+-->
 <!--
    Defines Plexus components to allow this plugin to function as
    a Maven extension that defines new packaging types 'galleon-feature-pack' and 'galleon-user-feature-pack'.
