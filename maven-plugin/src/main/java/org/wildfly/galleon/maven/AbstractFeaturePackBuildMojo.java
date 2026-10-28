@@ -1,18 +1,6 @@
 /*
- * Copyright 2016-2019 Red Hat, Inc. and/or its affiliates
- * and other contributors as indicated by the @author tags.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.wildfly.galleon.maven;
 
@@ -106,9 +94,12 @@ import org.wildfly.channel.ChannelManifest;
 import org.wildfly.channel.ChannelManifestMapper;
 import org.wildfly.channel.ManifestRequirement;
 import org.wildfly.channel.MavenCoordinate;
+import static org.wildfly.galleon.maven.WfFeaturePackBuildMojo.ensureLineEndings;
 import org.wildfly.galleon.maven.build.tasks.ResourcesTask;
 import org.wildfly.galleon.plugin.ArtifactCoords;
+import org.wildfly.galleon.plugin.CpeResolutionMode;
 import org.wildfly.galleon.plugin.WfConstants;
+import static org.wildfly.galleon.plugin.WfConstants.CONTENT;
 import org.wildfly.galleon.plugin.WildFlyChannelResolutionMode;
 import org.wildfly.galleon.plugin.doc.generator.DocGenerator;
 import org.wildfly.galleon.plugin.doc.generator.SimpleLog;
@@ -268,6 +259,23 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
 
     @Parameter(alias = "copyright", property = "wildfly.feature.pack.copyright")
     protected String copyright;
+
+    @Parameter(alias = "skip-doc", required = false, defaultValue = "false",
+            property = "wildfly.feature.pack.skip-doc")
+    protected boolean skipDoc;
+
+    @Parameter(alias = "include-incomplete-coords-artifacts-in-sbom", required = false,
+            property = "wildfly.sbom.include-incomplete-coords-artifacts-in-sbom", defaultValue = "false")
+    protected Boolean includeIncompleCoordsArtifactsInSbom;
+
+    /**
+     * If the WildFly product-conf artifact contains a CPE, the provisioned maven artifacts
+     * of other feature-packs present in the provisioning configuration are not added to the generated SBOM.
+     * In order to advertise that a feature-pack is in the scope of the WildFly CPE, set this parameter to `SERVER_PRODUCT_CONF`.
+     * If no CPE is defined, then the content of feature-packs are added to the generated SBOM whatever the value of this parameter.
+     */
+    @Parameter(alias = "sbom-cpe-resolution-mode", property = "wildfly.sbom.sbom-cpe-resolution-mode", required = false, defaultValue = "LOCAL")
+    protected CpeResolutionMode cpeResolutionMode;
 
     private MavenProjectArtifactVersions artifactVersions;
 
@@ -453,6 +461,12 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
         } catch (IOException e) {
             throw new MojoExecutionException("Failed to store WildFly channel properties", e);
         }
+        // WildFly sbom configuration
+        try (OutputStream out = Files.newOutputStream(resourcesWildFly.resolve(WfConstants.WILDFLY_SBOM_PROPERTIES))) {
+            getWildFlySBOMProperties().store(out, "WildFly SBOM properties");
+        } catch (IOException e) {
+            throw new MojoExecutionException("Failed to store WildFly SBOM properties", e);
+        }
         // Copy resources from src.
         try {
             Path srcArtifacts = resourcesDir.resolve(Constants.RESOURCES);
@@ -576,7 +590,9 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                     }
                 }
             }
-            generateDocumentation();
+            if (!skipDoc) {
+                generateDocumentation();
+            }
         } catch (IOException e) {
             throw new MojoExecutionException("Failed to create a feature-pack archives from the layout", e);
         }
@@ -775,6 +791,10 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                     Util.mkdirs(packageDir);
                 }
                 IoUtils.copy(configPackage, packageDir);
+                Path contentDir = packageDir.resolve(CONTENT);
+                if (Files.exists(contentDir)) {
+                    ensureLineEndings(contentDir);
+                }
             }
         } catch (IOException e) {
             throw new MojoExecutionException("Failed to process config packages", e);
@@ -919,7 +939,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                         }
                     }
                     if(!found) {
-                        throw new MojoExecutionException("The feature-pack dependency " + depCoords + " is not part of the family " + allowedFamily + ". Its family is" + family);
+                        throw new MojoExecutionException("The feature-pack dependency " + depCoords + " is not part of the family " + allowedFamily + ". Its family is " + family);
                     }
                     Set<Family.Criteria> set = inheritedCriteria.get(dep.getName());
                     if (set == null) {
@@ -927,7 +947,7 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
                         inheritedCriteria.put(dep.getName(), set);
                     }
                     set.addAll(dep.getCriteria());
-                    System.out.println("We have a a dependency on " + depConfig + " that allows for family members in the " + allowedFamily + " family");
+                    System.out.println("The dependency on " + depConfig + " allows for members in the " + allowedFamily + " family");
                 }
             }
             // here we need to determine which format to use to persist the dependency location:
@@ -1259,5 +1279,13 @@ public abstract class AbstractFeaturePackBuildMojo extends AbstractMojo {
             debug("Attaching feature-pack documentation %s as a project artifact", docZipArchive);
             projectHelper.attachArtifact(project, ZIP, DOC_CLASSIFIER, docZipArchive.toFile());
         }
+    }
+    private Properties getWildFlySBOMProperties() throws MojoExecutionException {
+        final Properties properties = new Properties();
+        properties.put(WfConstants.WILDFLY_SBOM_CPE_RESOLUTION_MODE, cpeResolutionMode.name());
+        if (includeIncompleCoordsArtifactsInSbom) {
+            properties.put(WfConstants.WILDFLY_SBOM_INCLUDE_INCOMPLETE_COORDS_ARTIFACTS, includeIncompleCoordsArtifactsInSbom.toString());
+        }
+        return properties;
     }
 }

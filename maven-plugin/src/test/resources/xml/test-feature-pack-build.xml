@@ -1,8 +1,9 @@
 <!--
-~ Copyright The WildFly Authors
-~ SPDX-License-Identifier: Apache-2.0
--->
 
+    Copyright The WildFly Authors
+    SPDX-License-Identifier: Apache-2.0
+
+-->
 <build xmlns="urn:wildfly:feature-pack-build:3.4" producer="foo@maven(org.jboss.universe:community-universe):latest">
   <dependencies>
     <dependency group-id="groupId-1" artifact-id="artifactId-1" translate-to-fpl="true">

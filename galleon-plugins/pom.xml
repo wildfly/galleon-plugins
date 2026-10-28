@@ -1,20 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
 
-    Copyright 2016-2019 Red Hat, Inc. and/or its affiliates
-    and other contributors as indicated by the @author tags.
-
-    Licensed under the Apache License, Version 2.0 (the "License");
-    you may not use this file except in compliance with the License.
-    You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-    Unless required by applicable law or agreed to in writing, software
-    distributed under the License is distributed on an "AS IS" BASIS,
-    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-    See the License for the specific language governing permissions and
-    limitations under the License.
+    Copyright The WildFly Authors
+    SPDX-License-Identifier: Apache-2.0
 
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
@@ -23,7 +11,7 @@
   <parent>
     <groupId>org.wildfly.galleon-plugins</groupId>
     <artifactId>wildfly-provisioning-parent</artifactId>
-    <version>8.1.1.Final-SNAPSHOT</version>
+    <version>8.2.4.Final-SNAPSHOT</version>
   </parent>
 
   <artifactId>wildfly-galleon-plugins</artifactId>
@@ -65,8 +53,8 @@
       </exclusions>
     </dependency>
     <dependency>
-      <groupId>jaxen</groupId>
-      <artifactId>jaxen</artifactId>
+      <groupId>dev.cyberstamp.maven.assembly.sbom</groupId>
+      <artifactId>assembly-sbom-core</artifactId>
     </dependency>
     <dependency>
       <groupId>junit</groupId>
@@ -118,6 +106,75 @@
                   <exclude>xerces:xercesImpl</exclude>
                 </excludes>
               </artifactSet>
+              <filters>
+                <!--
+                  json-schema-validator bundles Unicode character data, JSON Schema
+                  meta-schemas and i18n message bundles that are only used when the
+                  validator loads YAML schemas or performs format assertions — none of
+                  which are triggered by cyclonedx's use of the library at provisioning
+                  time.  Excluding them saves ~460 KB uncompressed.
+                -->
+                <filter>
+                  <artifact>com.networknt:json-schema-validator</artifact>
+                  <excludes>
+                    <exclude>ucd/**</exclude>
+                    <exclude>draft/**</exclude>
+                    <exclude>draft-04/**</exclude>
+                    <exclude>draft-06/**</exclude>
+                    <exclude>draft-07/**</exclude>
+                    <exclude>jsv-messages*.properties</exclude>
+                    <exclude>leap_second_dates.csv</exclude>
+                    <exclude>license-mapping.json</exclude>
+                  </excludes>
+                </filter>
+                <!--
+                  cyclonedx-core-java bundles CycloneDX Protobuf schema descriptors
+                  (bom-*.proto) that are never loaded at runtime — no class references
+                  them and cyclonedx-core-java has no protobuf dependency.
+                  Excluding them saves ~500 KB uncompressed.
+                -->
+                <filter>
+                  <artifact>org.cyclonedx:cyclonedx-core-java</artifact>
+                  <excludes>
+                    <exclude>bom-*.proto</exclude>
+                  </excludes>
+                </filter>
+                <!--
+                  cyclonedx-core-java bundles full SPDX license texts (licenses/*.txt,
+                  812 files).  These are only read by LicenseResolver when the caller
+                  explicitly sets isTextIncluded=true; the galleon plugin never does
+                  this.  licenses/licenses.json (the SPDX catalogue used for ID
+                  mapping) is kept.  Excluding the .txt files saves ~6.8 MB uncompressed.
+                -->
+                <filter>
+                  <artifact>org.cyclonedx:cyclonedx-core-java</artifact>
+                  <excludes>
+                    <exclude>licenses/*.txt</exclude>
+                  </excludes>
+                </filter>
+              </filters>
+              <relocations>
+                <!--
+                  cyclonedx-core-java bundles com.networknt:json-schema-validator 2.x into
+                  this shaded jar; relocate it so it does not clash with the older 1.5.x
+                  required by org.wildfly.channel:channel-core.
+                -->
+                <relocation>
+                  <pattern>com.networknt</pattern>
+                  <shadedPattern>org.wildfly.galleon.plugin.shaded.com.networknt</shadedPattern>
+                </relocation>
+                <!--
+                  the provisioning Tooling can use dev.cyberstamp.maven.assembly and cyclonedx
+                -->
+                <relocation>
+                  <pattern>dev.cyberstamp.maven.assembly</pattern>
+                  <shadedPattern>org.wildfly.galleon.plugin.shaded.dev.cyberstamp.maven.assembly</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.cyclonedx</pattern>
+                  <shadedPattern>org.wildfly.galleon.plugin.shaded.org.cyclonedx</shadedPattern>
+                </relocation>
+              </relocations>
             </configuration>
           </execution>
         </executions>

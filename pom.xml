@@ -1,20 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
 
-    Copyright 2016-2019 Red Hat, Inc. and/or its affiliates
-    and other contributors as indicated by the @author tags.
-
-    Licensed under the Apache License, Version 2.0 (the "License");
-    you may not use this file except in compliance with the License.
-    You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-    Unless required by applicable law or agreed to in writing, software
-    distributed under the License is distributed on an "AS IS" BASIS,
-    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-    See the License for the specific language governing permissions and
-    limitations under the License.
+    Copyright The WildFly Authors
+    SPDX-License-Identifier: Apache-2.0
 
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
@@ -28,7 +16,7 @@
 
   <groupId>org.wildfly.galleon-plugins</groupId>
   <artifactId>wildfly-provisioning-parent</artifactId>
-  <version>8.1.1.Final-SNAPSHOT</version>
+  <version>8.2.4.Final-SNAPSHOT</version>
   <packaging>pom</packaging>
 
   <name>WildFly Galleon Plugins Parent</name>
@@ -70,10 +58,11 @@
     <version.adoc-maven-plugin-descriptor>1.0.0.Alpha3</version.adoc-maven-plugin-descriptor>
     <version.io.quarkus.qute>3.23.2</version.io.quarkus.qute>
     <version.plugin.plugin>3.6.4</version.plugin.plugin>
+    <version.com.fasterxml.jackson.core>2.21.7</version.com.fasterxml.jackson.core>
     <version.org.apache.commons.lang3>3.12.0</version.org.apache.commons.lang3>
     <version.org.apache.maven>3.8.4</version.org.apache.maven>
     <version.org.apache.maven.plugin-tools>${version.plugin.plugin}</version.org.apache.maven.plugin-tools>
-    <version.org.apache.maven.plugins.maven-shade-plugin>3.1.0</version.org.apache.maven.plugins.maven-shade-plugin>
+    <version.org.apache.maven.plugins.maven-shade-plugin>3.6.2</version.org.apache.maven.plugins.maven-shade-plugin>
     <version.org.apache.maven.shared>3.2.0</version.org.apache.maven.shared>
     <version.org.apache.maven.shared.transfer>0.9.1</version.org.apache.maven.shared.transfer>
     <version.maven-aether-provider>3.3.9</version.maven-aether-provider>
@@ -82,7 +71,7 @@
     <version.org.eclipse.aether>1.1.0</version.org.eclipse.aether>
     <version.org.javassist>3.30.2-GA</version.org.javassist>
 
-    <version.org.jboss.galleon>7.0.0.Final</version.org.jboss.galleon>
+    <version.org.jboss.galleon>7.0.11.Final</version.org.jboss.galleon>
     <version.org.jboss.dmr>1.5.0.Final</version.org.jboss.dmr>
     <version.org.jboss.logging>3.6.0.Final</version.org.jboss.logging>
     <version.org.wildfly.channel>1.2.1.Final</version.org.wildfly.channel>
@@ -91,7 +80,8 @@
     <version.org.wildfly.maven.plugins>2.0.0.Final</version.org.wildfly.maven.plugins>
 
     <version.xom>1.3.7</version.xom>
-    <version.jaxen>1.1.6</version.jaxen>
+    <version.org.cyclonedx>13.3.0</version.org.cyclonedx>
+    <version.dev.cyberstamp.assembly-sbom>0.1.10</version.dev.cyberstamp.assembly-sbom>
 
     <!-- Checkstyle configuration -->
     <linkXRef>false</linkXRef>
@@ -99,11 +89,12 @@
     <version.org.jboss.staxmapper>1.5.0.Final</version.org.jboss.staxmapper>
 
     <!-- license-maven-plugin configuration -->
+    <version.com.mycila.license-maven-plugin>3.0</version.com.mycila.license-maven-plugin>
     <license.failIfMissing>true</license.failIfMissing>
     <license.failIfUnknown>true</license.failIfUnknown>
 
     <!-- test suite -->
-    <version.org.wildfly.common>1.6.0.Final</version.org.wildfly.common>    
+    <version.org.wildfly.common>2.0.1</version.org.wildfly.common>    
     <maven.repo.local>${settings.localRepository}</maven.repo.local>
 
     <galleon-plugins.repo.scm.connection>git@github.com:wildfly/galleon-plugins.git</galleon-plugins.repo.scm.connection>
@@ -306,12 +297,6 @@
         <version>${version.org.apache.maven.plugin-tools}</version>
       </dependency>
 
-      <dependency>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-shade-plugin</artifactId>
-        <version>${version.org.apache.maven.plugins.maven-shade-plugin}</version>
-      </dependency>
-
       <!-- generated help mojo has a dependency to plexus-utils -->
       <dependency>
         <groupId>org.codehaus.plexus</groupId>
@@ -349,9 +334,31 @@
         <version>${version.xom}</version>
       </dependency>
       <dependency>
-        <groupId>jaxen</groupId>
-        <artifactId>jaxen</artifactId>
-        <version>${version.jaxen}</version>
+        <groupId>org.cyclonedx</groupId>
+        <artifactId>cyclonedx-core-java</artifactId>
+        <version>${version.org.cyclonedx}</version>
+        <exclusions>
+          <!-- no yaml generation -->
+          <exclusion>
+            <groupId>com.fasterxml.jackson.dataformat</groupId>
+            <artifactId>jackson-dataformat-yaml</artifactId>
+          </exclusion>
+          <!--
+            com.ethlo.time:itu is an optional runtime dependency of
+            json-schema-validator used only for date-time format validation.
+            DateTimeFormat checks for its presence via Class.isPresent() and
+            falls back to java.time when absent — safe to exclude.
+          -->
+          <exclusion>
+            <groupId>com.ethlo.time</groupId>
+            <artifactId>itu</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+      <dependency>
+        <groupId>dev.cyberstamp.maven.assembly.sbom</groupId>
+        <artifactId>assembly-sbom-core</artifactId>
+        <version>${version.dev.cyberstamp.assembly-sbom}</version>
       </dependency>
       <dependency>
         <groupId>org.eclipse.aether</groupId>
@@ -382,12 +389,6 @@
         <groupId>org.eclipse.aether</groupId>
         <artifactId>aether-transport-http</artifactId>
         <version>${version.org.eclipse.aether}</version>
-      </dependency>
-
-      <dependency>
-        <groupId>com.googlecode.java-diff-utils</groupId>
-        <artifactId>diffutils</artifactId>
-        <version>${version.com.googlecode.java-diff-utils}</version>
       </dependency>
       <dependency>
         <groupId>org.wildfly.channel</groupId>
@@ -442,7 +443,7 @@
       <dependency>
         <groupId>com.fasterxml.jackson.core</groupId>
         <artifactId>jackson-databind</artifactId>
-        <version>2.18.2</version>
+        <version>${version.com.fasterxml.jackson.core}</version>
       </dependency>
       <!-- test suite -->
       <dependency>
@@ -468,6 +469,24 @@
         <artifactId>default-feature-pack</artifactId>
         <version>${project.version}</version>
         <type>zip</type>
+      </dependency>
+      <dependency>
+        <groupId>org.wildfly.galleon-plugins</groupId>
+        <artifactId>wildfly-galleon-plugins-base-feature-pack-feature-pack</artifactId>
+        <type>zip</type>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.wildfly.galleon-plugins</groupId>
+        <artifactId>wildfly-galleon-plugins-base-feature-pack-extra-feature-pack</artifactId>
+        <type>zip</type>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.wildfly.galleon-plugins</groupId>
+        <artifactId>wildfly-galleon-plugins-base-feature-pack-custom-feature-pack</artifactId>
+        <type>zip</type>
+        <version>${project.version}</version>
       </dependency>
       <dependency>
         <groupId>org.wildfly.galleon-plugins</groupId>
@@ -540,9 +559,19 @@
     <pluginManagement>
       <plugins>
         <plugin>
+          <groupId>com.mycila</groupId>
+          <artifactId>license-maven-plugin</artifactId>
+          <version>${version.com.mycila.license-maven-plugin}</version>
+        </plugin>
+        <plugin>
           <groupId>org.jboss.galleon</groupId>
           <artifactId>galleon-maven-plugin</artifactId>
           <version>${version.org.jboss.galleon}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-shade-plugin</artifactId>
+          <version>${version.org.apache.maven.plugins.maven-shade-plugin}</version>
         </plugin>
         <!-- Checkstyle -->
         <plugin>
@@ -615,6 +644,54 @@
       </plugins>
     </pluginManagement>
     <plugins>
+      <plugin>
+        <groupId>com.mycila</groupId>
+        <artifactId>license-maven-plugin</artifactId>
+        <configuration>
+          <inlineHeader>Copyright The WildFly Authors
+SPDX-License-Identifier: Apache-2.0</inlineHeader>
+          <excludes>
+            <exclude>**/*.adoc</exclude>
+            <exclude>**/README</exclude>
+            <exclude>**/README.*</exclude>
+            <exclude>**/LICENSE</exclude>
+            <exclude>**/*.html</exclude>
+            <exclude>**/*.htm</exclude>
+            <exclude>**/nbproject/*</exclude>
+            <exclude>**/.idea/*</exclude>
+            <exclude>**/.idea/**/*</exclude>
+            <exclude>mvnw</exclude>
+            <exclude>mvnw.cmd</exclude>
+            <exclude>**/help/*.txt</exclude>
+            <exclude>**/pom.xml.releaseBackup</exclude>
+            <exclude>**/pom.xml.tag</exclude>
+            <exclude>CODEOWNERS</exclude>
+            <exclude>**/*.properties</exclude>
+            <exclude>dco.txt</exclude>
+            <exclude>**/*.package</exclude>
+            <exclude>**/META-INF/services/*</exclude>
+          </excludes>
+          <mapping>
+            <java>SLASHSTAR_STYLE</java>
+            <yaml>SCRIPT_STYLE</yaml>
+            <yml>SCRIPT_STYLE</yml>
+          </mapping>
+        </configuration>
+        <dependencies>
+          <dependency>
+            <groupId>com.mycila</groupId>
+            <artifactId>license-maven-plugin-git</artifactId>
+            <version>${version.com.mycila.license-maven-plugin}</version>
+          </dependency>
+        </dependencies>
+        <executions>
+          <execution>
+            <goals>
+              <goal>check</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-checkstyle-plugin</artifactId>

@@ -1,20 +1,7 @@
 /*
- * Copyright 2016-2018 Red Hat, Inc. and/or its affiliates
- * and other contributors as indicated by the @author tags.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
-
 package org.wildfly.galleon.plugin.server;
 
 import java.io.BufferedReader;
@@ -74,8 +61,13 @@ public class ForkedEmbeddedUtil {
         return javaHome == null ? javaHome = System.getProperty("java.home") : javaHome;
     }
 
+    private static final boolean IS_WINDOWS = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
+
     private static String getJavaCmd() {
-        return javaCmd == null ? javaCmd = Paths.get(getJavaHome()).resolve("bin").resolve("java").toString() : javaCmd;
+        if (javaCmd == null) {
+            javaCmd = Paths.get(getJavaHome()).resolve("bin").resolve(IS_WINDOWS ? "java.exe" : "java").toString();
+        }
+        return javaCmd;
     }
 
     public static void fork(ForkCallback callback, boolean debug, String... args) throws ProvisioningException {

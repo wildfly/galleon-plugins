@@ -1,18 +1,6 @@
 /*
- * Copyright 2016-2019 Red Hat, Inc. and/or its affiliates
- * and other contributors as indicated by the @author tags.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.wildfly.galleon.maven;
 
@@ -356,107 +344,6 @@ public class WfFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
                             ensureLineEndings(docContentDir);
                         }
                     }
-                } else if(pkgName.equals("bin")) {
-                    final Path binStandalonePkgDir = packagesDir.resolve("bin.standalone").resolve(Constants.CONTENT).resolve(pkgName);
-                    final Path binDomainPkgDir = packagesDir.resolve("bin.domain").resolve(Constants.CONTENT).resolve(pkgName);
-                    final Path binCommonPkgDir = packagesDir.resolve("bin.common").resolve(Constants.CONTENT).resolve(pkgName);
-                    final Path binAppClientPkgDir = packagesDir.resolve("bin.appclient").resolve(Constants.CONTENT).resolve(pkgName);
-                    final Path binWsToolsPkgDir = packagesDir.resolve("bin.wstools").resolve(Constants.CONTENT).resolve(pkgName);
-                    final Path binVaultToolsPkgDir = packagesDir.resolve("bin.vaulttools").resolve(Constants.CONTENT).resolve(pkgName);
-                    final Path binJdrToolsPkgDir = packagesDir.resolve("bin.jdrtools").resolve(Constants.CONTENT).resolve(pkgName);
-                    final Path toolsBinPkgDir = packagesDir.resolve("tools").resolve(Constants.CONTENT).resolve(pkgName);
-                    final Path coreToolsBinPkgDir = packagesDir.resolve("core-tools").resolve(Constants.CONTENT).resolve(pkgName);
-                    try (DirectoryStream<Path> binStream = Files.newDirectoryStream(p)) {
-                        for (Path binPath : binStream) {
-                            final String fileName = binPath.getFileName().toString();
-                            if(fileName.startsWith(WfConstants.STANDALONE)) {
-                                IoUtils.copy(binPath, binStandalonePkgDir.resolve(fileName));
-                            } else if(fileName.startsWith(WfConstants.DOMAIN)) {
-                                IoUtils.copy(binPath, binDomainPkgDir.resolve(fileName));
-                            } else if(fileName.startsWith("common")) {
-                                IoUtils.copy(binPath, binCommonPkgDir.resolve(fileName));
-                            } else if(fileName.startsWith("appclient")) {
-                                IoUtils.copy(binPath, binAppClientPkgDir.resolve(fileName));
-                            } else if(fileName.startsWith("ws")) {
-                                IoUtils.copy(binPath, binWsToolsPkgDir.resolve(fileName));
-                            } else if(fileName.startsWith("vault")) {
-                                IoUtils.copy(binPath, binVaultToolsPkgDir.resolve(fileName));
-                            } else if(fileName.startsWith("jdr")) {
-                                IoUtils.copy(binPath, binJdrToolsPkgDir.resolve(fileName));
-                            } else if (fileName.startsWith("client") || fileName.startsWith("jconsole")) {
-                                IoUtils.copy(binPath, toolsBinPkgDir.resolve(fileName));
-                            } else {
-                                IoUtils.copy(binPath, coreToolsBinPkgDir.resolve(fileName));
-                            }
-                        }
-                    }
-                    PackageSpec.Builder toolsBuilder = null;
-                    if (Files.exists(toolsBinPkgDir)) {
-                        pkgBuilder.addPackageDep("tools");
-                        toolsBuilder = getExtendedPackage("tools", true, targetResourcesDir);
-                    }
-                    PackageSpec.Builder coreToolsBuilder = null;
-                    if (Files.exists(coreToolsBinPkgDir)) {
-                        ensureLineEndings(coreToolsBinPkgDir);
-                        coreToolsBuilder = getExtendedPackage("core-tools", true, targetResourcesDir);
-                        // We want the tools package to depend on core-tools.
-                        if (toolsBuilder == null) {
-                            pkgBuilder.addPackageDep("tools");
-                            toolsBuilder = getExtendedPackage("tools", true, targetResourcesDir);
-                        }
-                        toolsBuilder.addPackageDep(PackageDependencySpec.optional("core-tools"));
-                    }
-
-                    if (Files.exists(binCommonPkgDir)) {
-                        ensureLineEndings(binCommonPkgDir);
-                        getExtendedPackage("bin.common", true, targetResourcesDir);
-                        if (coreToolsBuilder != null) {
-                            coreToolsBuilder.addPackageDep(PackageDependencySpec.required("bin.common"));
-                        }
-                        if (toolsBuilder != null) {
-                            toolsBuilder.addPackageDep(PackageDependencySpec.required("bin.common"));
-                        }
-                    }
-
-                    if(Files.exists(binStandalonePkgDir)) {
-                        ensureLineEndings(binStandalonePkgDir);
-                        getExtendedPackage("bin.standalone", true, targetResourcesDir).addPackageDep("bin.common");
-                    }
-                    if(Files.exists(binDomainPkgDir)) {
-                        ensureLineEndings(binDomainPkgDir);
-                        getExtendedPackage("bin.domain", true, targetResourcesDir).addPackageDep(pkgName);
-                    }
-                    if(Files.exists(binAppClientPkgDir)) {
-                        ensureLineEndings(binAppClientPkgDir);
-                        getExtendedPackage("bin.appclient", true, targetResourcesDir).addPackageDep("bin.common");
-                        if(toolsBuilder != null) {
-                            toolsBuilder.addPackageDep(PackageDependencySpec.optional("bin.appclient"));
-                        }
-                    }
-                    if(Files.exists(binWsToolsPkgDir)) {
-                        ensureLineEndings(binWsToolsPkgDir);
-                        getExtendedPackage("bin.wstools", true, targetResourcesDir).addPackageDep("bin.common");
-                        if(toolsBuilder != null) {
-                            toolsBuilder.addPackageDep(PackageDependencySpec.optional("bin.wstools"));
-                        }
-                    }
-                    if(Files.exists(binVaultToolsPkgDir)) {
-                        ensureLineEndings(binVaultToolsPkgDir);
-                        getExtendedPackage("bin.vaulttools", true, targetResourcesDir).addPackageDep("bin.common");
-                        if (coreToolsBuilder != null) {
-                            coreToolsBuilder.addPackageDep(PackageDependencySpec.optional("bin.vaulttools"));
-                        }
-                        if (toolsBuilder != null) {
-                            toolsBuilder.addPackageDep(PackageDependencySpec.optional("bin.vaulttools"));
-                        }
-                    }
-                    if(Files.exists(binJdrToolsPkgDir)) {
-                        ensureLineEndings(binJdrToolsPkgDir);
-                        getExtendedPackage("bin.jdrtools", true, targetResourcesDir).addPackageDep("bin.common");
-                        if(toolsBuilder != null) {
-                            toolsBuilder.addPackageDep(PackageDependencySpec.optional("bin.jdrtools"));
-                        }
-                    }
                 } else {
                     IoUtils.copy(p, pkgContentDir);
                 }
@@ -467,7 +354,7 @@ public class WfFeaturePackBuildMojo extends AbstractFeaturePackBuildMojo {
         }
     }
 
-    private static void ensureLineEndings(Path file) throws MojoExecutionException {
+    static void ensureLineEndings(Path file) throws MojoExecutionException {
         try {
             Files.walkFileTree(file, new SimpleFileVisitor<Path>() {
                 @Override

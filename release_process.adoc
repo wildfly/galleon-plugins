@@ -13,7 +13,7 @@ First, make sure you don't have pending changes in your main branch.
 ** `mvn versions:commit`
 * Commit the changes with message: `Release X.X.X.Final`
 * Deploy in nexus staging repository
-** `mvn -Pjboss-release -Pjboss-staging-deploy deploy -DskipTests -Drelease`
+** `mvn -Pjboss-release -Pjboss-staging-deploy clean deploy -DskipTests -Drelease`
 * Create a Tag with the new release.
 * Check that all is correct in https://repository.jboss.org/nexus/#browse/browse:wildfly-staging
 * Deploy to nexus release repository

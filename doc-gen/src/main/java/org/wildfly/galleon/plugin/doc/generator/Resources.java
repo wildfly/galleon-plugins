@@ -74,7 +74,7 @@ record Capability(String name, boolean dynamic, List<String> providerPoints) {
     }
 }
 
-record Resource(String description, String storage, Deprecation deprecation, List<Capability> capabilities, List<Child> children, List<Attribute> attributes, List<Operation> operations, Set<Feature> features) {
+record Resource(String description, String stability, String storage, Deprecation deprecation, List<Capability> capabilities, List<Child> children, List<Attribute> attributes, List<Operation> operations, Set<Feature> features) {
     public static Resource fromModelNode(PathAddress pathAddress, ModelNode node, ModelNode featureNode, Map<String, Capability> capabilities) {
         List<Child> children = emptyList();
         if (node.hasDefined("children")) {
@@ -108,8 +108,9 @@ record Resource(String description, String storage, Deprecation deprecation, Lis
         if (node.hasDefined("description")) {
             description = node.get("description").asString();
         }
+        String stability = node.get("stability").asStringOrNull();
         Set<Feature> features = Feature.fromModelNode(featureNode, children);
-        return new Resource(description, storage, Deprecation.fromModel(node), Capability.fromModelList(node.get("capabilities"), capabilities, pathAddress), children, attributes, operations, features == null ? emptySet() : features);
+        return new Resource(description, stability, storage, Deprecation.fromModel(node), Capability.fromModelList(node.get("capabilities"), capabilities, pathAddress), children, attributes, operations, features == null ? emptySet() : features);
     }
 }
 
@@ -124,7 +125,7 @@ record Feature(String name, String xmlContent) implements Comparable<Feature> {
     }
 }
 
-record Child(String name, String description, Deprecation deprecation,
+record Child(String name, String description, String stability, Deprecation deprecation,
              List<Child> children) implements Comparable<Child> {
     public static Child fromProperty(final Property property) {
         String name = property.getName();
@@ -135,13 +136,17 @@ record Child(String name, String description, Deprecation deprecation,
         if (modelDesc.isDefined()) {
             for (Property child : modelDesc.asPropertyList()) {
                 if (!child.getName().equals("*")) {
-                    registrations.add(new Child(child.getName(), child.getValue().get("description").asString(""), Deprecation.fromModel(child.getValue()), emptyList()));
+                    registrations.add(new Child(child.getName(), child.getValue().get("description").asString(""), child.getValue().get("stability").asStringOrNull(), Deprecation.fromModel(child.getValue()), emptyList()));
                 }
             }
         }
         sort(registrations);
 
-        return new Child(name, description, Deprecation.fromModel(property.getValue()), registrations);
+        String stability = property.getValue().get("stability").asStringOrNull();
+        if (stability == null && modelDesc.isDefined() && modelDesc.hasDefined("*")) {
+            stability = modelDesc.get("*").get("stability").asStringOrNull();
+        }
+        return new Child(name, description, stability, Deprecation.fromModel(property.getValue()), registrations);
     }
 
     @Override

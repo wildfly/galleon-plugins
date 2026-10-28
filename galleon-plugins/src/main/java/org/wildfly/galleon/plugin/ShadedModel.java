@@ -1,18 +1,6 @@
 /*
- * Copyright 2016-2024 Red Hat, Inc. and/or its affiliates
- * and other contributors as indicated by the @author tags.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.wildfly.galleon.plugin;
 
@@ -44,6 +32,7 @@ import org.jboss.galleon.universe.maven.MavenArtifact;
 import org.jboss.galleon.util.IoUtils;
 import org.jboss.galleon.util.ZipUtils;
 import java.util.jar.Manifest;
+import org.jboss.galleon.universe.FeaturePackLocation.ProducerSpec;
 
 /**
  * A shaded model.
@@ -63,7 +52,6 @@ public class ShadedModel implements Utils.ArtifactResourceConsumer {
     private final Element rootElement;
     private final Document document;
     private final Path tmpPath;
-    private final WfInstallPlugin.ArtifactResolver artifactResolver;
     private final MessageWriter log;
     private final Map<String, String> mergedArtifactVersions;
     private final Optional<ArtifactRecorder> recorder;
@@ -71,17 +59,35 @@ public class ShadedModel implements Utils.ArtifactResourceConsumer {
     private final Installer installer;
     private final boolean channelArtifactResolution;
     private final boolean requireChannel;
+    private final WfInstallPlugin.ArtifactGroupResolver resolver;
+    private List<MavenArtifact> resolvedArtifacts;
+    private final boolean includeIncompleteCoords;
+    private final ProducerSpec producerSpec;
     public ShadedModel(boolean requireChannel,
             Path shadedModel,
             Path tmpPath,
-            WfInstallPlugin.ArtifactResolver artifactResolver,
+            WfInstallPlugin.ArtifactGroupResolver resolver,
             MessageWriter log, Map<String, String> mergedArtifactVersions,
             Installer installer,
             boolean channelArtifactResolution,
-            Optional<ArtifactRecorder> recorder) throws IOException, ProvisioningDescriptionException {
+            Optional<ArtifactRecorder> recorder,
+            ProducerSpec producerSpec) throws IOException, ProvisioningDescriptionException {
+        this(requireChannel, shadedModel, tmpPath, resolver, log, mergedArtifactVersions, installer, channelArtifactResolution, recorder, false, producerSpec);
+    }
+
+    public ShadedModel(boolean requireChannel,
+            Path shadedModel,
+            Path tmpPath,
+            WfInstallPlugin.ArtifactGroupResolver resolver,
+            MessageWriter log, Map<String, String> mergedArtifactVersions,
+            Installer installer,
+            boolean channelArtifactResolution,
+            Optional<ArtifactRecorder> recorder,
+            boolean includeIncompleteCoords,
+            ProducerSpec producerSpec) throws IOException, ProvisioningDescriptionException {
         this.requireChannel = requireChannel;
         this.tmpPath = tmpPath;
-        this.artifactResolver = artifactResolver;
+        this.resolver = resolver;
         this.log = log;
         this.mergedArtifactVersions = mergedArtifactVersions;
         this.installer = installer;
@@ -94,28 +100,68 @@ public class ShadedModel implements Utils.ArtifactResourceConsumer {
         rootElement = document.getRootElement();
         this.channelArtifactResolution = channelArtifactResolution;
         this.recorder = recorder;
+        this.includeIncompleteCoords = includeIncompleteCoords;
+        this.producerSpec = producerSpec;
+    }
+
+    /**
+     * Parses the shaded dependency coordinates without resolving or installing
+     * them.
+     *
+     * <p>Versions are populated from the merged artifact version properties.
+     * When a channel is in use and no version is defined in the properties, the
+     * returned artifact has no version (the channel would supply it at
+     * resolution time). A model without a {@code shaded-dependencies} element
+     * yields an empty list.</p>
+     */
+    public List<MavenArtifact> parseDependencyCoords() throws ProvisioningException {
+        final List<MavenArtifact> coords = new ArrayList<>();
+        final Element shadedDependencies = rootElement.getFirstChildElement("shaded-dependencies",
+                rootElement.getNamespaceURI());
+        if (shadedDependencies == null) {
+            return coords;
+        }
+        final Elements dependencies = shadedDependencies.getChildElements();
+        for (int i = 0; i < dependencies.size(); i++) {
+            coords.add(Utils.toArtifactCoords(mergedArtifactVersions, dependencies.get(i).getValue(),
+                    false, channelArtifactResolution, requireChannel, includeIncompleteCoords, producerSpec));
+        }
+        return coords;
+    }
+
+    /**
+     * Parses and resolves the shaded dependency versions without installing the
+     * artifacts. Used to obtain channel-accurate versions for SBOM recording
+     * without producing the shaded jar.
+     */
+    public List<MavenArtifact> resolveDependencyCoords() throws ProvisioningException {
+        final List<MavenArtifact> coords = parseDependencyCoords();
+        resolver.resolve(coords);
+        return coords;
     }
 
     public List<MavenArtifact> getArtifacts() throws ProvisioningException, IOException {
-        List<MavenArtifact> artifacts = new ArrayList<>();
-        Element shadedDependencies = rootElement.getFirstChildElement("shaded-dependencies",
-                rootElement.getNamespaceURI());
-        Elements dependencies = shadedDependencies.getChildElements();
-        for (int i = 0; i < dependencies.size(); i++) {
-            Element e = dependencies.get(i);
-            MavenArtifact a = Utils.toArtifactCoords(mergedArtifactVersions, e.getValue(), false, channelArtifactResolution, requireChannel);
-            artifactResolver.resolve(a);
-            if (log.isVerboseEnabled()) {
-                log.verbose("Shadel model dependency: " + e.getValue() + " resolved version " + a.getVersion());
+        if (resolvedArtifacts == null) {
+            final List<MavenArtifact> coords = parseDependencyCoords();
+            resolver.resolve(coords);
+            final List<MavenArtifact> resolved = new ArrayList<>();
+            for (MavenArtifact a : coords) {
+                if (log.isVerboseEnabled()) {
+                    log.verbose("Shaded model dependency: " + a.getGroupId() + ":" + a.getArtifactId()
+                            + " resolved version " + a.getVersion());
+                }
+                Path transformed = installer.installCopiedArtifact(a);
+                a.setPath(transformed);
+                resolved.add(a);
+                if (recorder.isPresent()) {
+                    recorder.get().cache(a, a.getPath());
+                }
             }
-            Path transformed = installer.installCopiedArtifact(a);
-            a.setPath(transformed);
-            artifacts.add(a);
-            if (recorder.isPresent()) {
-                recorder.get().cache(a, a.getPath());
-            }
+            // Assign only after full success so a mid-loop failure does not
+            // memoize a partial result.
+            resolvedArtifacts = resolved;
         }
-        return artifacts;
+        return resolvedArtifacts;
     }
 
     public Map<String, String> getManifestEntries() {

@@ -1,18 +1,6 @@
 /*
- * Copyright 2016-2021 Red Hat, Inc. and/or its affiliates
- * and other contributors as indicated by the @author tags.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.wildfly.galleon.plugin;
 
@@ -47,6 +35,7 @@ abstract class AbstractModuleTemplateProcessor {
         private final Attribute attribute;
         private final ModuleTemplate template;
         private final boolean requireChannel;
+        private final boolean includeIncompleteCoords;
         ModuleArtifact(ModuleTemplate template,
                        Element element,
                        Map<String, String> versionProps,
@@ -54,6 +43,17 @@ abstract class AbstractModuleTemplateProcessor {
                        AbstractArtifactInstaller installer,
                        boolean channelArtifactResolution,
                        boolean requireChannel) {
+            this(template, element, versionProps, log, installer, channelArtifactResolution, requireChannel, false);
+        }
+
+        ModuleArtifact(ModuleTemplate template,
+                       Element element,
+                       Map<String, String> versionProps,
+                       MessageWriter log,
+                       AbstractArtifactInstaller installer,
+                       boolean channelArtifactResolution,
+                       boolean requireChannel,
+                       boolean includeIncompleteCoords) {
             this.template = template;
             this.versionProps = versionProps;
             this.log = log;
@@ -72,6 +72,7 @@ abstract class AbstractModuleTemplateProcessor {
                 coordsStr = this.versionProps.get(coordsStr);
             }
             this.requireChannel = requireChannel;
+            this.includeIncompleteCoords = includeIncompleteCoords;
         }
 
         MavenArtifact getUnresolvedArtifact() throws IOException {
@@ -79,7 +80,9 @@ abstract class AbstractModuleTemplateProcessor {
                 return null;
             }
             try {
-                return Utils.toArtifactCoords(this.versionProps, coordsStr, false, channelArtifactResolution, requireChannel);
+                return Utils.toArtifactCoords(this.versionProps,
+                        coordsStr, false, channelArtifactResolution, requireChannel,
+                        includeIncompleteCoords, template.getProducerSpec());
             } catch (ProvisioningException e) {
                 throw new IOException("Failed to resolve full coordinates for " + coordsStr, e);
             }
@@ -127,10 +130,10 @@ abstract class AbstractModuleTemplateProcessor {
     private final Path targetDir;
     private final boolean channelArtifactResolution;
     private final boolean requireChannel;
-
+    private final boolean includeIncompleteCoords;
     AbstractModuleTemplateProcessor(WfInstallPlugin plugin, AbstractArtifactInstaller installer, Path targetPath,
             ModuleTemplate template, Map<String, String> versionProps, boolean channelArtifactResolution,
-                       boolean requireChannel) {
+                       boolean requireChannel, boolean includeIncompleteCoords) {
         this.template = template;
         this.versionProps = versionProps;
         this.plugin = plugin;
@@ -138,6 +141,7 @@ abstract class AbstractModuleTemplateProcessor {
         this.targetDir = targetPath.getParent();
         this.channelArtifactResolution = channelArtifactResolution;
         this.requireChannel = requireChannel;
+        this.includeIncompleteCoords = includeIncompleteCoords;
     }
 
     AbstractArtifactInstaller getInstaller() {
@@ -177,7 +181,8 @@ abstract class AbstractModuleTemplateProcessor {
                 } else {
                     artifactName = exprBody;
                 }
-                final MavenArtifact artifact = Utils.toArtifactCoords(versionProps, artifactName, false, channelArtifactResolution, requireChannel);
+                final MavenArtifact artifact = Utils.toArtifactCoords(versionProps, artifactName,
+                        false, channelArtifactResolution, requireChannel, includeIncompleteCoords, template.getProducerSpec());
                 if (artifact != null) {
                     versionAttribute.setValue(artifact.getVersion());
                 }
@@ -192,7 +197,8 @@ abstract class AbstractModuleTemplateProcessor {
         }
         final int artifactCount = artifacts.size();
         for (int i = 0; i < artifactCount; i++) {
-            final ModuleArtifact moduleArtifact = new ModuleArtifact(template, artifacts.get(i), versionProps, getLog(), installer, channelArtifactResolution, requireChannel);
+            final ModuleArtifact moduleArtifact = new ModuleArtifact(template, artifacts.get(i), versionProps, getLog(),
+                    installer, channelArtifactResolution, requireChannel, includeIncompleteCoords);
             if (moduleArtifact.hasMavenArtifact()) {
                 Path artifactPath = moduleArtifact.getMavenArtifact().getPath();
                 processArtifact(moduleArtifact);

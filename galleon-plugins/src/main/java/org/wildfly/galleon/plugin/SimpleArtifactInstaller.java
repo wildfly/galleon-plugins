@@ -1,18 +1,6 @@
 /*
- * Copyright 2016-2021 Red Hat, Inc. and/or its affiliates
- * and other contributors as indicated by the @author tags.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.wildfly.galleon.plugin;
 
@@ -42,19 +30,33 @@ class SimpleArtifactInstaller extends AbstractArtifactInstaller {
         this.artifactRecorder = artifactRecorder;
     }
 
+    private static final String RESOURCES_CLASSIFIER = "resources";
+
     @Override
     String installArtifactFat(MavenArtifact artifact, Path targetDir) throws IOException,
             MavenUniverseException, ProvisioningException {
+        final Path targetPath = targetDir.resolve(artifact.getArtifactFileName());
         if (artifactRecorder.isPresent()) {
-            artifactRecorder.get().record(artifact, targetDir.resolve(artifact.getArtifactFileName()));
+            if (RESOURCES_CLASSIFIER.equals(artifact.getClassifier())) {
+                artifactRecorder.get().recordResourceJar(artifact, targetPath, artifact.getPath());
+            } else {
+                artifactRecorder.get().record(artifact, targetPath);
+            }
         }
-        Files.copy(artifact.getPath(), targetDir.resolve(artifact.getArtifactFileName()), StandardCopyOption.REPLACE_EXISTING);
+        Files.copy(artifact.getPath(), targetPath, StandardCopyOption.REPLACE_EXISTING);
         return artifact.getArtifactFileName();
     }
 
     @Override
     String installArtifactThin(MavenArtifact artifact) throws IOException,
             MavenUniverseException, ProvisioningException {
+        if (artifactRecorder.isPresent()) {
+            if (RESOURCES_CLASSIFIER.equals(artifact.getClassifier())) {
+                artifactRecorder.get().recordResourceJar(artifact, null, artifact.getPath());
+            } else {
+                artifactRecorder.get().record(artifact, null);
+            }
+        }
         installInGeneratedRepo(artifact, artifact.getVersion(), artifact.getPath());
         return artifact.getVersion();
     }
