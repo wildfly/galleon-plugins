@@ -26,7 +26,7 @@ public class FeaturePackBuildModelParser {
     private static final QName ROOT_3_4 = new QName(FeaturePackBuildModelParser34.NAMESPACE, FeaturePackBuildModelParser34.Element.BUILD.getLocalName());
     private static final QName ROOT_3_5 = new QName(FeaturePackBuildModelParser35.NAMESPACE, FeaturePackBuildModelParser35.Element.BUILD.getLocalName());
 
-    private static final XMLInputFactory INPUT_FACTORY = XMLInputFactory.newInstance();
+    private static final XMLInputFactory INPUT_FACTORY = SecureXMLInputFactories.newFactory();
 
     private final XMLMapper mapper;
 

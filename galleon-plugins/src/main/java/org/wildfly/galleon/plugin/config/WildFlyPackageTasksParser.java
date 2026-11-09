@@ -29,7 +29,7 @@ public class WildFlyPackageTasksParser {
     private static final QName ROOT_3_1 = new QName(NAMESPACE_3_1, WildFlyPackageTasksParser31.Element.TASKS.getLocalName());
     private static final QName ROOT_3_2 = new QName(NAMESPACE_3_2, WildFlyPackageTasksParser32.Element.TASKS.getLocalName());
 
-    private static final XMLInputFactory INPUT_FACTORY = XMLInputFactory.newInstance();
+    private static final XMLInputFactory INPUT_FACTORY = XMLInputFactory.newDefaultFactory();
 
     private final XMLMapper mapper;
 

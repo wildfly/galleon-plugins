@@ -11,7 +11,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
@@ -58,7 +57,7 @@ class LicensesXmlSource implements LicenseSource {
      */
     static LicensesXmlSource from(List<Path> files) {
         final Map<String, List<RawLicense>> map = new HashMap<>();
-        final DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+        final DocumentBuilderFactory dbf = SecureDocumentBuilderFactory.newInstance();
         dbf.setNamespaceAware(false);
         for (Path file : files) {
             parse(file, dbf, map);

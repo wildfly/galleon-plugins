@@ -48,11 +48,11 @@ public class ModuleXmlVersionResolver {
     private static XMLInputFactory XML_INPUT_FACTORY;
 
     private static XMLOutputFactory getXmlOutputFactory() {
-        return XML_OUTPUT_FACTORY == null ? XML_OUTPUT_FACTORY = XMLOutputFactory.newInstance() : XML_OUTPUT_FACTORY;
+        return XML_OUTPUT_FACTORY == null ? XML_OUTPUT_FACTORY = XMLOutputFactory.newDefaultFactory() : XML_OUTPUT_FACTORY;
     }
 
     private static XMLInputFactory getXmlInputFactory() {
-        return XML_INPUT_FACTORY == null ? XML_INPUT_FACTORY = XMLInputFactory.newInstance() : XML_INPUT_FACTORY;
+        return XML_INPUT_FACTORY == null ? XML_INPUT_FACTORY = SecureXMLInputFactories.newFactory() : XML_INPUT_FACTORY;
     }
 
     public static void convertModule(final Path file, Path target, Map<String, Artifact> artifacts, List<Artifact> hardcodedArtifacts, Log log) throws IOException, XMLStreamException, MojoExecutionException {
@@ -65,7 +65,7 @@ public class ModuleXmlVersionResolver {
     }
 
     private static void convert(final XMLEventReader r, final XMLEventWriter w, Map<String, Artifact> artifacts, List<Artifact> hardcodedArtifacts, Log log) throws IOException, XMLStreamException, MojoExecutionException {
-        XMLEventFactory eventFactory = XMLEventFactory.newInstance();
+        XMLEventFactory eventFactory = XMLEventFactory.newDefaultFactory();
         while (r.hasNext()) {
             XMLEvent event = r.nextEvent();
             switch (event.getEventType()) {
