@@ -1355,7 +1355,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
     public DocumentBuilderFactory getXmlDocumentBuilderFactory() {
         if(docBuilderFactory == null) {
-            docBuilderFactory = SecureDocumentBuilderFactory.newInstance();
+            docBuilderFactory = SecureDocumentBuilderFactories.newInstance();
         }
         return docBuilderFactory;
     }

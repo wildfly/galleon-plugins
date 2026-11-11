@@ -13,6 +13,7 @@ import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 
 import org.jboss.staxmapper.XMLMapper;
+import org.wildfly.galleon.plugin.SecureXMLInputFactories;
 
 /**
  * @author Stuart Douglas

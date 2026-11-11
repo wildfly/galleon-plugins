@@ -8,9 +8,9 @@ import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 
-public final class SecureDocumentBuilderFactory {
+public final class SecureDocumentBuilderFactories {
 
-    private SecureDocumentBuilderFactory() {
+    private SecureDocumentBuilderFactories() {
     }
 
     public static DocumentBuilderFactory newInstance() {

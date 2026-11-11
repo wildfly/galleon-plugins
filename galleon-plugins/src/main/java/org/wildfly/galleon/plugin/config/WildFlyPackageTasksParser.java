@@ -13,6 +13,7 @@ import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 
 import org.jboss.staxmapper.XMLMapper;
+import org.wildfly.galleon.plugin.SecureXMLInputFactories;
 import org.wildfly.galleon.plugin.WildFlyPackageTasks;
 
 /**
@@ -31,7 +32,7 @@ public class WildFlyPackageTasksParser {
 
     private static final XMLInputFactory INPUT_FACTORY;
     static {
-        INPUT_FACTORY = SecureXMLInputFactory.newFactory();
+        INPUT_FACTORY = SecureXMLInputFactories.newFactory();
         INPUT_FACTORY.setProperty(XMLInputFactory.IS_VALIDATING, Boolean.FALSE);
     }
 

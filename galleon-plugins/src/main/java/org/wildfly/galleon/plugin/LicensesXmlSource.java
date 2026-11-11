@@ -57,7 +57,7 @@ class LicensesXmlSource implements LicenseSource {
      */
     static LicensesXmlSource from(List<Path> files) {
         final Map<String, List<RawLicense>> map = new HashMap<>();
-        final DocumentBuilderFactory dbf = SecureDocumentBuilderFactory.newInstance();
+        final DocumentBuilderFactory dbf = SecureDocumentBuilderFactories.newInstance();
         dbf.setNamespaceAware(false);
         for (Path file : files) {
             parse(file, dbf, map);

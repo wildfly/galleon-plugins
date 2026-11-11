@@ -46,7 +46,7 @@ class PomLicenseResolver implements LicenseSource {
 
     PomLicenseResolver(MavenRepoManager maven) {
         this.maven = maven;
-        this.docBuilderFactory = SecureDocumentBuilderFactory.newInstance();
+        this.docBuilderFactory = SecureDocumentBuilderFactories.newInstance();
         this.docBuilderFactory.setNamespaceAware(false);
     }
 
