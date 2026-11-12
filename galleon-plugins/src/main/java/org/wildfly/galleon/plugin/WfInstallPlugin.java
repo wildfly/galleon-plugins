@@ -1417,7 +1417,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                 Utils.extractArtifact(jarSrc, jarTarget, copyArtifact);
                 if (artifactRecorder.isPresent()) {
                     try {
-                        artifactRecorder.get().record(artifact, jarTarget);
+                        artifactRecorder.get().recordExtractedJar(artifact, jarTarget);
                     } catch (IOException e) {
                         throw new ProvisioningException("Unable to record extracted artifact", e);
                     }

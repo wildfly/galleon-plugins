@@ -70,6 +70,18 @@ public class ErrorHandlingArtifactRecorder implements ArtifactRecorder {
     }
 
     @Override
+    public void recordExtractedJar(MavenArtifact artifact, Path target) throws MavenUniverseException, IOException {
+        if (failed) {
+            return;
+        }
+        try {
+            delegate.recordExtractedJar(artifact, target);
+        } catch (IOException | RuntimeException e) {
+            onFailure(e);
+        }
+    }
+
+    @Override
     public void cache(MavenArtifact artifact, Path jarSrc) throws MavenUniverseException, IOException {
         if (failed) {
             return;

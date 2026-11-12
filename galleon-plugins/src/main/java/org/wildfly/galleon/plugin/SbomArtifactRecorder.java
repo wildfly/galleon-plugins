@@ -157,6 +157,11 @@ public class SbomArtifactRecorder implements ArtifactRecorder {
     }
 
     @Override
+    public void recordExtractedJar(MavenArtifact artifact, Path target) throws MavenUniverseException, IOException {
+        record(artifact, target);
+    }
+
+    @Override
     public void recordToolDependency(MavenArtifact artifact) {
         // provisioning tools are not part of the distribution — omit from the SBOM
     }
