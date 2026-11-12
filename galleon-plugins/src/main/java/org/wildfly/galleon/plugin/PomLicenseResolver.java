@@ -12,7 +12,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
@@ -47,7 +46,7 @@ class PomLicenseResolver implements LicenseSource {
 
     PomLicenseResolver(MavenRepoManager maven) {
         this.maven = maven;
-        this.docBuilderFactory = DocumentBuilderFactory.newInstance();
+        this.docBuilderFactory = SecureDocumentBuilderFactories.newInstance();
         this.docBuilderFactory.setNamespaceAware(false);
     }
 

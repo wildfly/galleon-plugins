@@ -22,8 +22,11 @@ public class TasksTestCase {
 
     @Test
     public void testTasks() throws Exception {
-        SchemaFactory schemaFactory = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI);
-        Validator validator = null;
+        SchemaFactory schemaFactory = SchemaFactory.newDefaultInstance();
+        schemaFactory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+        schemaFactory.setProperty(XMLConstants.ACCESS_EXTERNAL_DTD, "");
+        schemaFactory.setProperty(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
+        Validator validator;
         try (Reader r = Files.newBufferedReader(Paths.get("src/main/resources/schema/wildfly-feature-pack-tasks-3_2.xsd"),
                 Charset.forName("utf-8"))) {
             Schema schema = schemaFactory.newSchema(new StreamSource(r));
