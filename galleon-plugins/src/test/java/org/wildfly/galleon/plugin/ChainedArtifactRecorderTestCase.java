@@ -97,6 +97,11 @@ public class ChainedArtifactRecorderTestCase {
         }
 
         @Override
+        public void recordExtractedJar(MavenArtifact artifact, Path jarSrc) throws MavenUniverseException, IOException {
+            recorded.add(new RecordedEntry(artifact, jarSrc));
+        }
+
+        @Override
         public void recordToolDependency(MavenArtifact artifact) throws IOException {
             toolDeps.add(artifact);
         }

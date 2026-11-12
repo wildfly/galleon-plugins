@@ -50,6 +50,10 @@ public class ErrorHandlingArtifactRecorderTestCase {
         }
 
         @Override
+        public void recordExtractedJar(MavenArtifact artifact, Path jarSrc) {
+        }
+
+        @Override
         public void writeManifest() throws IOException {
             writeCalls++;
             throw new IOException("write failed");
