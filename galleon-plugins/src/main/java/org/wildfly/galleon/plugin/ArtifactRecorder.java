@@ -41,6 +41,21 @@ public interface ArtifactRecorder {
     void record(MavenArtifact artifact, Path target) throws IOException;
 
     /**
+     * Records an extracted artifact that has been installed at the given target location.
+     *
+     * <p>If the same artifact is recorded more than once, the most recent
+     * {@code target} path takes precedence for implementations that track a
+     * single location per artifact. Implementations that track multiple
+     * locations (e.g. {@link SbomArtifactRecorder}) may retain all of them.</p>
+     *
+     * @param artifact the Maven artifact that was resolved and installed
+     * @param target   the path where the artifact was placed in the distribution
+     * @throws MavenUniverseException if artifact metadata cannot be resolved
+     * @throws IOException if an I/O error occurs while recording
+     */
+    void recordExtractedJar(MavenArtifact artifact, Path target) throws MavenUniverseException, IOException;
+
+    /**
      * Caches a copy of the artifact and records it.
      *
      * <p>Implementations may copy the artifact file from {@code jarSrc} into an
