@@ -94,4 +94,11 @@ public class ChainedArtifactRecorder implements ArtifactRecorder {
             delegate.writeManifest();
         }
     }
+
+    @Override
+    public void recordExtractedJar(MavenArtifact artifact, Path target) throws MavenUniverseException, IOException {
+        for (ArtifactRecorder delegate : delegates) {
+            delegate.recordExtractedJar(artifact, target);
+        }
+    }
 }

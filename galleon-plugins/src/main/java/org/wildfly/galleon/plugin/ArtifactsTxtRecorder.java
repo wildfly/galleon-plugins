@@ -97,6 +97,10 @@ public class ArtifactsTxtRecorder implements ArtifactRecorder {
         }
     }
 
+    @Override
+    public void recordExtractedJar(MavenArtifact artifact, Path target) throws MavenUniverseException, IOException {
+        cache(artifact, artifact.getPath());
+    }
     /**
      * {@inheritDoc}
      *
