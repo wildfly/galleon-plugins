@@ -158,6 +158,16 @@ compact form. Only used when `jboss-cyclonedx` or `jboss-cyclonedx-only` is set 
 |NONE
 |Overrides the CPE of the SBOM's main component. Normally the CPE is read from the distribution's product manifest; set this only in the exceptional case where that CPE is wrong and must be corrected, or where the distribution carries none. Only used when `jboss-cyclonedx` or `jboss-cyclonedx-only` is set to `true`.
 
+|jboss-cyclonedx-component-name
+|String
+|NONE
+|Overrides the `name` of the SBOM's main component (`metadata.component`). By default it is the product name read from the distribution (e.g. `WildFly`). Only used when `jboss-cyclonedx` or `jboss-cyclonedx-only` is set to `true`.
+
+|jboss-cyclonedx-component-purl
+|String (purl)
+|NONE
+|Overrides the `purl` and `bom-ref` of the SBOM's main component (`metadata.component`). By default it is `pkg:generic/<product>@<version>`. Only used when `jboss-cyclonedx` or `jboss-cyclonedx-only` is set to `true`.
+
 |jboss-cyclonedx-fail-on-error
 |Boolean
 |false
@@ -255,6 +265,12 @@ each artifact resides in the distribution.
 
 |`jboss-cyclonedx-product-cpe`
 |Override the main component CPE (exceptional cases only; see below).
+
+|`jboss-cyclonedx-component-name`
+|Override the `name` of the main component.
+
+|`jboss-cyclonedx-component-purl`
+|Override the `purl` and `bom-ref` of the main component.
 |===
 
 See the options table above for full descriptions, types, and defaults.
