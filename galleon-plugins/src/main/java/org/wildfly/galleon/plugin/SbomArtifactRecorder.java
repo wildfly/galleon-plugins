@@ -92,6 +92,8 @@ public class SbomArtifactRecorder implements ArtifactRecorder {
     private LicenseSource licenseSource;
     private Version schemaVersion;
     private String productCpe;
+    private String componentName;
+    private String componentPurl;
 
     private final List<RecordedArtifact> recorded = new ArrayList<>();
     private final List<ShadedComponent> shaded = new ArrayList<>();
@@ -148,6 +150,28 @@ public class SbomArtifactRecorder implements ArtifactRecorder {
      */
     public void setProductCpe(String cpe) {
         this.productCpe = cpe != null && !cpe.isBlank() ? cpe : null;
+    }
+
+    /**
+     * Overrides the {@code name} of the SBOM's main component (by default the product
+     * name read from the distribution, e.g. {@code WildFly}). This gives the installation
+     * an organization-specific identity.
+     *
+     * @param name the component name to force, or {@code null} to use the product name
+     */
+    public void setComponentName(String name) {
+        this.componentName = name != null && !name.isBlank() ? name : null;
+    }
+
+    /**
+     * Overrides the {@code purl} (and therefore the {@code bom-ref}) of the SBOM's main
+     * component (by default {@code pkg:generic/<product>@<version>}). This gives the
+     * installation a stable identity that application SBOMs can reference.
+     *
+     * @param purl the package URL to force, or {@code null} to use the product purl
+     */
+    public void setComponentPurl(String purl) {
+        this.componentPurl = purl != null && !purl.isBlank() ? purl : null;
     }
 
     @Override
@@ -310,6 +334,13 @@ public class SbomArtifactRecorder implements ArtifactRecorder {
             // fall back to a generic distribution identity.
             md.setProjectArtifactId("wildfly");
             md.setMainComponentPurl("pkg:generic/wildfly");
+        }
+        // Configured identity overrides whatever was derived from the distribution.
+        if (componentName != null) {
+            md.setProjectArtifactId(componentName);
+        }
+        if (componentPurl != null) {
+            md.setMainComponentPurl(componentPurl);
         }
         return md;
     }
