@@ -31,6 +31,7 @@ import org.jboss.galleon.ProvisioningException;
 import org.jboss.galleon.maven.plugin.util.MavenArtifactRepositoryManager;
 import org.jboss.galleon.universe.maven.MavenArtifact;
 import org.wildfly.galleon.plugin.ArtifactCoords;
+import org.wildfly.galleon.plugin.SecureXMLInputFactories;
 
 /**
  * Generate Artifact list in offliner format: checksum,artifact path
@@ -39,7 +40,7 @@ import org.wildfly.galleon.plugin.ArtifactCoords;
  */
 public class ArtifactListBuilder {
 
-    private static final XMLInputFactory XML_INPUT_FACTORY = XMLInputFactory.newInstance();
+    private static final XMLInputFactory XML_INPUT_FACTORY = SecureXMLInputFactories.newFactory();
 
     private final Path localMvnRepoPath;
     private final Map<String, String> map = new TreeMap<>();
