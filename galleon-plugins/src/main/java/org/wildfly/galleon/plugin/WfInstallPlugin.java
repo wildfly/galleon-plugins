@@ -129,29 +129,38 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     class PluginComponentsFilter implements ComponentsFilter {
 
         @Override
-        public boolean includeMavenArtifact(MavenArtifact artifact, ProductRelease release) {
-            if (isNullCpe(release)) {
-                return true;
-            }
-            return isIncluded(artifact.getMetadata().get(ARTIFACT_FP_PRODUCER_SPEC));
+        public Placement placeMavenArtifact(MavenArtifact artifact, ProductRelease release) {
+            return place(release, artifact.getMetadata().get(ARTIFACT_FP_PRODUCER_SPEC), featurePackSboms);
         }
 
         @Override
-        public boolean includeShaded(String shadedName, ProductRelease release) {
-            if (isNullCpe(release)) {
-                return true;
-            }
-            return isIncluded(shadedToProducers.get(shadedName));
+        public Placement placeShaded(String shadedName, ProductRelease release) {
+            return place(release, shadedToProducers.get(shadedName), featurePackSboms);
         }
+    }
 
-        private boolean isNullCpe(ProductRelease release) {
-           return release == null || release.cpe() == null;
+    /*
+     * When the release has no CPE, everything belongs to the product.
+     * When the release has a CPE:
+     * - Feature-packs whose CPE resolution mode is not local share the product CPE and belong to the product.
+     * - Local (or no mode) feature-packs with their own identity are frameworks that provide their artifacts.
+     * - Other local (or no mode) feature-packs are not reported.
+     * - Components whose feature-pack is unknown (no producer spec, or no SBOM information) are not reported.
+     */
+    static ComponentsFilter.Placement place(ProductRelease release, String spec,
+            Map<String, FeaturePackSbom> featurePackSboms) {
+        if (release == null || release.cpe() == null) {
+            return ComponentsFilter.Placement.PRODUCT;
         }
-
-        private boolean isIncluded(String spec) {
-            CpeResolutionMode mode = cpeResolutionModes.get(spec);
-            return mode != null && !mode.equals(CpeResolutionMode.LOCAL);
+        final FeaturePackSbom sbom = spec == null ? null : featurePackSboms.get(spec);
+        if (sbom == null) {
+            return ComponentsFilter.Placement.EXCLUDED;
         }
+        if (sbom.mode() != null && !CpeResolutionMode.LOCAL.equals(sbom.mode())) {
+            return ComponentsFilter.Placement.PRODUCT;
+        }
+        return sbom.framework() == null ? ComponentsFilter.Placement.EXCLUDED
+                : ComponentsFilter.Placement.framework(sbom.framework());
     }
 
     private static final String CONFIG_GEN_METHOD = "generate";
@@ -281,7 +290,15 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     private final Map<String, String> resolvedVersionsProperties = new HashMap<>();
     private Map<ProducerSpec, WildFlyChannelResolutionMode> channelResolutionModes = new LinkedHashMap<>();
     private Map<ProducerSpec, Boolean> sbomIncludeIncompleteArtifacts = new LinkedHashMap<>();
-    private Map<String, CpeResolutionMode> cpeResolutionModes = new LinkedHashMap<>();
+    /**
+     * The SBOM information of a feature-pack, as set when it was built.
+     * @param mode the CPE resolution mode, null if not set.
+     * @param framework the identity of the feature-pack when it is reported as a framework, null otherwise.
+     * Only a {@link CpeResolutionMode#LOCAL} feature-pack can have one.
+     */
+    record FeaturePackSbom(CpeResolutionMode mode, FrameworkInfo framework) {
+    }
+    private Map<String, FeaturePackSbom> featurePackSboms = new LinkedHashMap<>();
     private final Map<String, String> shadedToProducers = new HashMap<>();
     private Map<String, ProducerSpec> gaToProducer = new HashMap<>();
     private final Map<String, ShadedModel> shadedPackages = new HashMap<>();
@@ -634,16 +651,23 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
             final Path sbomPropsPath = wfRes.resolve(WfConstants.WILDFLY_SBOM_PROPERTIES);
             if (Files.exists(sbomPropsPath)) {
-                final Map<String, String> sbomProps = Utils.readProperties(sbomPropsPath);
+                    final Map<String, String> sbomProps = readSbomProperties(sbomPropsPath);
                 if (Boolean.parseBoolean(sbomProps.get(WfConstants.WILDFLY_SBOM_INCLUDE_INCOMPLETE_COORDS_ARTIFACTS))) {
                     sbomIncludeIncompleteArtifacts = CollectionUtils.put(sbomIncludeIncompleteArtifacts,
                             fp.getFPID().getProducer(), true);
                 }
                 String mode = sbomProps.get(WfConstants.WILDFLY_SBOM_CPE_RESOLUTION_MODE);
+                    CpeResolutionMode resMode = null;
                 if (mode != null) {
-                    cpeResolutionModes = CollectionUtils.put(cpeResolutionModes,
-                            fp.getFPID().getProducer().toString(), CpeResolutionMode.valueOf(mode));
+                        resMode = CpeResolutionMode.valueOf(mode);
                 }
+                    String cpe = sbomProps.get(WfConstants.WILDFLY_SBOM_CPE);
+                    String name = sbomProps.get(WfConstants.WILDFLY_SBOM_NAME);
+                    String purl = sbomProps.get(WfConstants.WILDFLY_SBOM_PURL);
+                    String publisher = sbomProps.get(WfConstants.WILDFLY_SBOM_PUBLISHER);
+                    featurePackSboms = CollectionUtils.put(featurePackSboms, fp.getFPID().getProducer().toString(),
+                            new FeaturePackSbom(resMode,
+                                    FrameworkInfo.of(resMode, cpe, name, purl, publisher, fp.getFPID().getBuild())));
             }
 
             if(fp.containsPackage(WfConstants.DOCS_SCHEMA)) {
@@ -1410,6 +1434,24 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
     private boolean requireChannel(String artifactGA) {
         return requireChannel(gaToProducer.get(artifactGA));
+    }
+
+    /*
+     * The file is written with Properties.store, that escapes characters such as ':' or '='.
+     * Properties.load is required to get the original values (e.g.: for cpe and purl).
+     */
+    private static Map<String, String> readSbomProperties(Path propsFile) throws ProvisioningException {
+        final Properties props = new Properties();
+        try (BufferedReader reader = Files.newBufferedReader(propsFile)) {
+            props.load(reader);
+        } catch (IOException e) {
+            throw new ProvisioningException(Errors.readFile(propsFile), e);
+        }
+        final Map<String, String> map = new HashMap<>();
+        for (String key : props.stringPropertyNames()) {
+            map.put(key, props.getProperty(key));
+        }
+        return map;
     }
 
     boolean requireChannel(ProducerSpec spec) {
