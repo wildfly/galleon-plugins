@@ -342,6 +342,84 @@ If the manifest lacks `JBoss-Product-Release-Name` or `-Version`, or no matching
 plugin falls back to the provisioned product module manifest described under _Main component_ above; failing
 that — or in SBOM-only mode, where that file is not installed — the generic `wildfly` fallback is used.
 
+##### Feature-pack identity (frameworks)
+
+IMPORTANT: Everything described in this section only makes sense when a CPE is set at the server level, that is
+when the server's product-conf artifact carries a `JBoss-Product-CPE` entry (see _Main component_ above).
+When the server has no CPE, all the components are reported as part of the main component, and the
+feature-pack build parameters below, as well as `sbom-cpe-resolution-mode`, have no effect on the SBOM.
+The `jboss-cyclonedx-product-cpe` option does not enable this behavior, it only overrides the CPE of the main component.
+
+When the server has a CPE, the SBOM reports each feature-pack according to the `sbom-cpe-resolution-mode`
+that was set when the feature-pack was built with the `wildfly-galleon-maven-plugin`:
+
+[cols="1,3"]
+|===
+|Feature-pack |Reported as
+
+|`sbom-cpe-resolution-mode` is `SERVER_PRODUCT_CONF`
+|Part of the server. Its components belong to the main component. Use it for feature-packs that are in the scope of the server CPE.
+
+|`sbom-cpe-resolution-mode` is `LOCAL` (the default), and `sbom-cpe` is set
+|A `framework` component with its own CPE, name, purl and, optionally, publisher. The framework `provides` the components the feature-pack contributes, and the main component depends on the framework rather than on these components directly.
+The framework component is excluded from the scope of the installation.
+
+|`sbom-cpe-resolution-mode` is `LOCAL` (the default), and `sbom-cpe` is not set
+|Not reported. The components contributed by the feature-pack are not added to the SBOM.
+|===
+
+Components that come from a feature-pack built without any SBOM information (for example a feature-pack built
+with an older version of the plugin) remain part of the main component.
+
+The identity of a `LOCAL` feature-pack is set with the following parameters of the `build-feature-pack` goal.
+Only `sbom-cpe` is needed, and it can only be set when `sbom-cpe-resolution-mode` is `LOCAL`, otherwise the build fails.
+
+[cols="1,3"]
+|===
+|Parameter |Description
+
+|`sbom-cpe`
+|The CPE of the feature-pack.
+
+|`sbom-name`
+|The name of the framework component. Defaults to the `artifactId` of the feature-pack.
+
+|`sbom-purl`
+|The package URL of the framework component. Defaults to `pkg:maven/<groupId>/<artifactId>` of the feature-pack. The version of the purl is the version of the framework component. When the purl contains no version (no `@`), as in the default, the version of the feature-pack is appended when the SBOM is generated, in lower case (`unknown` if the feature-pack has no version).
+
+|`sbom-publisher`
+|The publisher of the framework component. Not set by default.
+|===
+
+For example, the feature-pack `org.jboss.eap.xp:eap-xp-galleon-pack:6.0.0.GA` built with this configuration is reported with the
+name `eap-xp-galleon-pack` and the purl `pkg:maven/org.jboss.eap.xp/eap-xp-galleon-pack@6.0.0.GA`:
+
+```
+<plugin>
+  <groupId>org.wildfly.galleon-plugins</groupId>
+  <artifactId>wildfly-galleon-maven-plugin</artifactId>
+  <configuration>
+    <sbom-cpe>cpe:/a:redhat:jboss_enterprise_application_platform_xp:6.0</sbom-cpe>
+  </configuration>
+</plugin>
+```
+
+The name, the purl and the publisher can be set explicitly:
+
+```
+<plugin>
+  <groupId>org.wildfly.galleon-plugins</groupId>
+  <artifactId>wildfly-galleon-maven-plugin</artifactId>
+  <configuration>
+    <sbom-cpe-resolution-mode>LOCAL</sbom-cpe-resolution-mode>
+    <sbom-cpe>cpe:/a:redhat:jboss_enterprise_application_platform_xp:6.0</sbom-cpe>
+    <sbom-name>JBoss EAP XP</sbom-name>
+    <sbom-purl>pkg:generic/jboss-eap-xp</sbom-purl>
+    <sbom-publisher>Red Hat</sbom-publisher>
+  </configuration>
+</plugin>
+```
+
 ##### License information
 
 Component licenses are collected according to `jboss-cyclonedx-licenses`:
