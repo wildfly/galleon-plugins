@@ -778,6 +778,91 @@ public class SbomArtifactRecorderTestCase {
     }
 
     @Test
+    public void componentNameAndPurlOptionsOverrideProductIdentity() throws Exception {
+        final Path confJar = createProductConfJar(
+                "modules/system/layers/base/org/jboss/as/product/main/wildfly-feature-pack-product-conf-40.0.0.Final.jar",
+                "WildFly", "40.0.0.Final", "WildFly", "40.0.0.Final");
+        final MavenArtifact confArtifact =
+                mavenArtifact("org.wildfly", "wildfly-feature-pack-product-conf", "40.0.0.Final");
+        confArtifact.setExtension("jar");
+        confArtifact.setPath(confJar);
+
+        final Path outputFile = installBase.resolve("sbom.cdx.json");
+        final SbomArtifactRecorder recorder = createRecorder(outputFile, "json");
+        recorder.setComponentName("Acme Corp Middleware");
+        recorder.setComponentPurl("pkg:generic/acme-middleware@1.0");
+        recorder.record(confArtifact, confJar);
+        recorder.writeManifest();
+
+        final Bom bom = new JsonParser().parse(outputFile.toFile());
+        final Component main = bom.getMetadata().getComponent();
+        assertEquals("Acme Corp Middleware", main.getName());
+        assertEquals("pkg:generic/acme-middleware@1.0", main.getPurl());
+        assertEquals("pkg:generic/acme-middleware@1.0", main.getBomRef());
+        // the product version still comes from the distribution
+        assertEquals("40.0.0.Final", main.getVersion());
+        assertTrue("dependency root should use the overridden bom-ref",
+                bom.getDependencies().stream()
+                        .anyMatch(d -> "pkg:generic/acme-middleware@1.0".equals(d.getRef())));
+    }
+
+    @Test
+    public void componentNameOptionAloneKeepsProductPurl() throws Exception {
+        final Path confJar = createProductConfJar(
+                "modules/system/layers/base/org/jboss/as/product/main/wildfly-feature-pack-product-conf-40.0.0.Final.jar",
+                "WildFly", "40.0.0.Final", "WildFly", "40.0.0.Final");
+        final MavenArtifact confArtifact =
+                mavenArtifact("org.wildfly", "wildfly-feature-pack-product-conf", "40.0.0.Final");
+        confArtifact.setExtension("jar");
+        confArtifact.setPath(confJar);
+
+        final Path outputFile = installBase.resolve("sbom.cdx.json");
+        final SbomArtifactRecorder recorder = createRecorder(outputFile, "json");
+        recorder.setComponentName("Acme Corp Middleware");
+        recorder.record(confArtifact, confJar);
+        recorder.writeManifest();
+
+        final Component main = new JsonParser().parse(outputFile.toFile()).getMetadata().getComponent();
+        assertEquals("Acme Corp Middleware", main.getName());
+        assertEquals("pkg:generic/wildfly@40.0.0.final", main.getPurl());
+    }
+
+    @Test
+    public void componentPurlOptionAloneKeepsProductName() throws Exception {
+        final Path confJar = createProductConfJar(
+                "modules/system/layers/base/org/jboss/as/product/main/wildfly-feature-pack-product-conf-40.0.0.Final.jar",
+                "WildFly", "40.0.0.Final", "WildFly", "40.0.0.Final");
+        final MavenArtifact confArtifact =
+                mavenArtifact("org.wildfly", "wildfly-feature-pack-product-conf", "40.0.0.Final");
+        confArtifact.setExtension("jar");
+        confArtifact.setPath(confJar);
+
+        final Path outputFile = installBase.resolve("sbom.cdx.json");
+        final SbomArtifactRecorder recorder = createRecorder(outputFile, "json");
+        recorder.setComponentPurl("pkg:generic/acme-middleware@1.0");
+        recorder.record(confArtifact, confJar);
+        recorder.writeManifest();
+
+        final Component main = new JsonParser().parse(outputFile.toFile()).getMetadata().getComponent();
+        assertEquals("WildFly", main.getName());
+        assertEquals("pkg:generic/acme-middleware@1.0", main.getPurl());
+    }
+
+    @Test
+    public void blankComponentNameAndPurlOptionsAreIgnored() throws Exception {
+        final Path outputFile = installBase.resolve("sbom.cdx.json");
+        final SbomArtifactRecorder recorder = createRecorder(outputFile, "json");
+        recorder.setComponentName(" ");
+        recorder.setComponentPurl("");
+        recorder.record(mavenArtifact("org.test", "test", "1.0"), createArtifactFile("lib/test-1.0.jar"));
+        recorder.writeManifest();
+
+        final Component main = new JsonParser().parse(outputFile.toFile()).getMetadata().getComponent();
+        assertEquals("wildfly", main.getName());
+        assertEquals("pkg:generic/wildfly", main.getPurl());
+    }
+
+    @Test
     public void generateCompressedJsonSbom() throws Exception {
         final Path outputFile = installBase.resolve("sbom.cdx.json");
         final Path gzFile = installBase.resolve("sbom.cdx.json.gz");

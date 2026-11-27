@@ -213,6 +213,12 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
     /* Overrides the product CPE in the SBOM's main component for the exceptional case where the manifest-derived CPE is wrong or absent */
     private static final ProvisioningOption OPTION_CYCLONEDX_PRODUCT_CPE = ProvisioningOption.builder("jboss-cyclonedx-product-cpe")
             .build();
+    /* Overrides the name of the SBOM's main component, to give the installation an organization-specific identity */
+    private static final ProvisioningOption OPTION_CYCLONEDX_COMPONENT_NAME = ProvisioningOption.builder("jboss-cyclonedx-component-name")
+            .build();
+    /* Overrides the purl (and bom-ref) of the SBOM's main component, to give the installation a stable identity */
+    private static final ProvisioningOption OPTION_CYCLONEDX_COMPONENT_PURL = ProvisioningOption.builder("jboss-cyclonedx-component-purl")
+            .build();
     /**
      * When {@code true}, a failure to generate the CycloneDX SBOM aborts provisioning.
      * When {@code false} (the default), such a failure is logged as a warning and
@@ -287,6 +293,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
                              OPTION_CYCLONEDX_LICENSES, OPTION_CYCLONEDX_PRETTY_PRINT,
                              OPTION_CYCLONEDX_COMPRESS,
                              OPTION_CYCLONEDX_SCHEMA_VERSION, OPTION_CYCLONEDX_PRODUCT_CPE,
+                             OPTION_CYCLONEDX_COMPONENT_NAME, OPTION_CYCLONEDX_COMPONENT_PURL,
                              OPTION_CYCLONEDX_FAIL_ON_ERROR);
     }
 
@@ -427,6 +434,8 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
             throw new ProvisioningException("Unsupported value for jboss-cyclonedx-schema-version: " + e.getMessage(), e);
         }
         recorder.setProductCpe(runtime.getOptionValue(OPTION_CYCLONEDX_PRODUCT_CPE));
+        recorder.setComponentName(runtime.getOptionValue(OPTION_CYCLONEDX_COMPONENT_NAME));
+        recorder.setComponentPurl(runtime.getOptionValue(OPTION_CYCLONEDX_COMPONENT_PURL));
         return recorder;
     }
 
