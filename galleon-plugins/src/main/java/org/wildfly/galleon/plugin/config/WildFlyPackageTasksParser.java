@@ -13,6 +13,7 @@ import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 
 import org.jboss.staxmapper.XMLMapper;
+import org.wildfly.galleon.plugin.SecureXMLInputFactories;
 import org.wildfly.galleon.plugin.WildFlyPackageTasks;
 
 /**
@@ -29,7 +30,11 @@ public class WildFlyPackageTasksParser {
     private static final QName ROOT_3_1 = new QName(NAMESPACE_3_1, WildFlyPackageTasksParser31.Element.TASKS.getLocalName());
     private static final QName ROOT_3_2 = new QName(NAMESPACE_3_2, WildFlyPackageTasksParser32.Element.TASKS.getLocalName());
 
-    private static final XMLInputFactory INPUT_FACTORY = XMLInputFactory.newInstance();
+    private static final XMLInputFactory INPUT_FACTORY;
+    static {
+        INPUT_FACTORY = SecureXMLInputFactories.newFactory();
+        INPUT_FACTORY.setProperty(XMLInputFactory.IS_VALIDATING, Boolean.FALSE);
+    }
 
     private final XMLMapper mapper;
 
@@ -43,18 +48,10 @@ public class WildFlyPackageTasksParser {
 
     public WildFlyPackageTasks parse(final InputStream input) throws XMLStreamException {
 
-        final XMLInputFactory inputFactory = INPUT_FACTORY;
-        setIfSupported(inputFactory, XMLInputFactory.IS_VALIDATING, Boolean.FALSE);
-        setIfSupported(inputFactory, XMLInputFactory.SUPPORT_DTD, Boolean.FALSE);
-        final XMLStreamReader streamReader = inputFactory.createXMLStreamReader(input);
+        final XMLStreamReader streamReader = INPUT_FACTORY.createXMLStreamReader(input);
         final WildFlyPackageTasks.Builder builder = WildFlyPackageTasks.builder();
         mapper.parseDocument(builder, streamReader);
         return builder.build();
     }
 
-    private void setIfSupported(final XMLInputFactory inputFactory, final String property, final Object value) {
-        if (inputFactory.isPropertySupported(property)) {
-            inputFactory.setProperty(property, value);
-        }
-    }
 }

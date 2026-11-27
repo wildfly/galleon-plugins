@@ -40,7 +40,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerFactory;
@@ -1356,7 +1355,7 @@ public class WfInstallPlugin extends ProvisioningPluginWithOptions implements In
 
     public DocumentBuilderFactory getXmlDocumentBuilderFactory() {
         if(docBuilderFactory == null) {
-            docBuilderFactory = DocumentBuilderFactory.newInstance();
+            docBuilderFactory = SecureDocumentBuilderFactories.newInstance();
         }
         return docBuilderFactory;
     }
